@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  operator
+  viewer
+}
+
+enum DetectionStatus {
+  critical
+  warning
+  info
+}
+
+enum CameraStatus {
+  online
+  offline
+  error
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(operator)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Camera {
+  id        String       @id @default(uuid())
+  name      String
+  url       String
+  location  String?
+  status    CameraStatus @default(offline)
+  lastSeen  DateTime     @default(now()) @map("last_seen")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  detections Detection[]
+
+  @@map("cameras")
+}
+
+model Detection {
+  id         String           @id @default(uuid())
+  cameraId   String           @map("camera_id")
+  label      String
+  confidence Float
+  status     DetectionStatus  @default(info)
+  imageUrl   String           @map("image_url")
+  metadata   Json?
+  timestamp  DateTime         @default(now())
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId])
+  @@index([status])
+  @@index([timestamp])
+  @@map("detections")
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  detectionId String   @unique @map("detection_id")
+  message     String
+  acknowledged Boolean @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
