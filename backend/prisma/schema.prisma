@@ -127,3 +127,34 @@ model Alert {
   @@index([createdAt])
   @@map("alerts")
 }
+
+enum ReportType {
+  daily
+  weekly
+  monthly
+  camera
+  detection
+  alert
+}
+
+enum ReportStatus {
+  generating
+  completed
+  failed
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  title       String
+  type        ReportType
+  generatedBy String       @map("generated_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  dateRange   Json         @map("date_range")
+  reportUrl   String?      @map("report_url")
+  status      ReportStatus @default(generating)
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reports")
+}
