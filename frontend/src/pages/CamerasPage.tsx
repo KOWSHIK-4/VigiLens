@@ -3,13 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
 import type { Camera } from "@/types";
 import { AddCameraDialog, EditCameraDialog, DeleteCameraDialog } from "@/components/CameraDialogs";
+import { CameraPreview } from "@/components/CameraPreview";
 import {
   Plus,
   Search,
   Monitor,
-  Video,
-  Webcam,
-  FileVideo,
   Edit3,
   Trash2,
   Play,
@@ -24,13 +22,6 @@ const statusConfig = {
   offline: { dot: "bg-gray-400", bg: "bg-gray-100 text-gray-800", label: "Offline" },
   connecting: { dot: "bg-yellow-500 animate-pulse", bg: "bg-yellow-100 text-yellow-800", label: "Connecting" },
   error: { dot: "bg-red-500", bg: "bg-red-100 text-red-800", label: "Error" },
-};
-
-const typeIcons = {
-  usb: Webcam,
-  rtsp: Monitor,
-  ip: Video,
-  video_file: FileVideo,
 };
 
 const typeLabels: Record<string, string> = {
@@ -171,13 +162,11 @@ export default function CamerasPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cameras.map((camera) => {
               const status = statusConfig[camera.status];
-              const Icon = typeIcons[camera.cameraType];
               return (
                 <CameraCard
                   key={camera.id}
                   camera={camera}
                   status={status}
-                  Icon={Icon}
                   onEdit={() => setEditCamera(camera)}
                   onDelete={() => setDeleteCamera(camera)}
                   onStart={() => startMutation.mutate(camera.id)}
@@ -239,7 +228,6 @@ export default function CamerasPage() {
 function CameraCard({
   camera,
   status,
-  Icon,
   onEdit,
   onDelete,
   onStart,
@@ -251,7 +239,6 @@ function CameraCard({
 }: {
   camera: Camera;
   status: { dot: string; bg: string; label: string };
-  Icon: React.ComponentType<{ className?: string }>;
   onEdit: () => void;
   onDelete: () => void;
   onStart: () => void;
@@ -261,36 +248,18 @@ function CameraCard({
   isStopping: boolean;
   isChecking: boolean;
 }) {
-  const isLive = camera.status === "online" || camera.status === "connecting";
+  const isLive = camera.status === "online";
 
   return (
     <div className="card hover:shadow-md transition-shadow">
-      <div className="aspect-video bg-gray-900 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden group">
-        {camera.thumbnail ? (
-          <img src={camera.thumbnail} alt={camera.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-600">
-            <Icon className="w-10 h-10" />
-            <span className="text-xs">Preview</span>
-          </div>
-        )}
-        <span className="absolute top-2 right-2 text-xs font-medium px-2 py-0.5 rounded-full bg-black/60 text-white">
-          {camera.resolution || "N/A"}
-        </span>
-        {isLive && (
-          <span className="absolute top-2 left-2 flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-600/80 text-white">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            LIVE
-          </span>
-        )}
+      <div className="mb-4">
+        <CameraPreview camera={camera} />
       </div>
 
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-gray-900 truncate flex items-center gap-2">
           {camera.name}
-          {camera.isHealthy !== undefined && (
-            <span className={`inline-block w-2 h-2 rounded-full ${camera.isHealthy ? "bg-green-500" : "bg-red-500"}`} title={camera.isHealthy ? "Healthy" : "Unhealthy"} />
-          )}
+          <span className={`inline-block w-2 h-2 rounded-full ${camera.isHealthy ? "bg-green-500" : "bg-red-500"}`} title={camera.isHealthy ? "Healthy" : "Unhealthy"} />
         </h3>
         <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${status.bg}`}>
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${status.dot}`} />
