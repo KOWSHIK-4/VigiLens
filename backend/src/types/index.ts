@@ -71,6 +71,31 @@ export const cameraQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
+export const reportTypeSchema = z.enum(["daily", "weekly", "monthly", "camera", "detection", "alert"]);
+export const reportStatusSchema = z.enum(["generating", "completed", "failed"]);
+
+export const generateReportSchema = z.object({
+  title: z.string().min(1).max(200),
+  type: reportTypeSchema,
+  dateRange: z.object({
+    from: z.string(),
+    to: z.string(),
+  }),
+});
+
+export const reportQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  type: reportTypeSchema.optional(),
+  status: reportStatusSchema.optional(),
+  sortBy: z.enum(["title", "type", "status", "createdAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export type GenerateReportInput = z.infer<typeof generateReportSchema>;
+export type ReportQueryInput = z.infer<typeof reportQuerySchema>;
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateCameraInput = z.infer<typeof createCameraSchema>;
