@@ -125,3 +125,59 @@ export interface DashboardStats {
   alertsByType: { label: string; count: number }[];
   recentDetections: Detection[];
 }
+
+export interface AnalyticsOverview {
+  totalDetections: number;
+  todayDetections: number;
+  activeCameras: number;
+  offlineCameras: number;
+  totalCameras: number;
+  averageConfidence: number;
+  detectionRate: number;
+  mostActiveCamera: { name: string; count: number };
+  mostCommonDetectionType: string;
+  severityDistribution: { name: string; value: number }[];
+}
+
+export interface DailyDetection {
+  date: string;
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface CameraAnalytics {
+  id: string;
+  name: string;
+  location: string | null;
+  status: string;
+  detectionCount: number;
+  percentageOfMax: number;
+}
+
+export interface DetectorStat {
+  label: string;
+  count: number;
+  percentage: number;
+  avgConfidence: number;
+  minConfidence: number;
+  maxConfidence: number;
+}
+
+export interface TimelineHour {
+  hour: string;
+  value: number;
+}
+
+export interface ConfidenceBucket {
+  range: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AnalyticsParams {
+  period?: "7" | "30" | "90";
+  from?: string;
+  to?: string;
+}
