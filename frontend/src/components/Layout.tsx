@@ -13,6 +13,7 @@ const navItems = [
   { path: "/cameras", label: "Cameras" },
   { path: "/detections", label: "Detections" },
   { path: "/analytics", label: "Analytics" },
+  { path: "/reports", label: "Reports" },
 ];
 
 export default function Layout() {

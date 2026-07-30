@@ -315,9 +315,6 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
       {showGenerate && (
         <GenerateReportDialog onClose={() => setShowGenerate(false)} />
