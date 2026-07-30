@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
-import { Download, RefreshCw, Calendar } from "lucide-react";
+import { Download, RefreshCw, Calendar, Clock } from "lucide-react";
 import { analyticsService } from "@/services/analytics";
 import StatsCard from "@/components/StatsCard";
 import type { AnalyticsParams } from "@/types";
@@ -53,6 +53,7 @@ function CustomTooltip({ active, payload, label }: any) {
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("7");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   const params: AnalyticsParams = useMemo(() => ({ period }), [period]);
 
@@ -103,15 +104,33 @@ export default function AnalyticsPage() {
   const timelineData = timelineQuery.data ?? [];
   const confidenceData = confidenceQuery.data ?? [];
 
-  const handleExport = useCallback(() => {
-    if (dailyData.length > 0) {
+  useEffect(() => {
+    if (overviewQuery.data) setLastRefreshed(new Date());
+  }, [overviewQuery.data]);
+
+  const handleExport = useCallback((dataset: "daily" | "cameras" | "detectors") => {
+    if (dataset === "daily" && dailyData.length > 0) {
       downloadCSV(
         `detection-trend-${period}d`,
         ["Date", "Total", "Critical", "Warning", "Info"],
         dailyData.map((d) => [d.date, String(d.total), String(d.critical), String(d.warning), String(d.info)]),
       );
     }
-  }, [dailyData, period]);
+    if (dataset === "cameras" && camerasData.length > 0) {
+      downloadCSV(
+        `camera-activity-${period}d`,
+        ["Camera", "Location", "Status", "Detections"],
+        camerasData.map((c) => [c.name, c.location ?? "", c.status, String(c.detectionCount)]),
+      );
+    }
+    if (dataset === "detectors" && detectorsData.length > 0) {
+      downloadCSV(
+        `detector-types-${period}d`,
+        ["Label", "Count", "Percentage", "Avg Confidence", "Min Confidence", "Max Confidence"],
+        detectorsData.map((d) => [d.label, String(d.count), String(d.percentage), String(d.avgConfidence), String(d.minConfidence), String(d.maxConfidence)]),
+      );
+    }
+  }, [dailyData, camerasData, detectorsData, period]);
 
   const severityData = useMemo(
     () => overview?.severityDistribution ?? [],
@@ -160,19 +179,29 @@ export default function AnalyticsPage() {
             <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
             Auto
           </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          <div className="relative group">
+            <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium">
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 min-w-[180px]">
+              <button onClick={() => handleExport("daily")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Detection Trend</button>
+              <button onClick={() => handleExport("cameras")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Camera Activity</button>
+              <button onClick={() => handleExport("detectors")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Detection Types</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="text-sm text-gray-500 flex items-center gap-1">
-        <Calendar className="w-4 h-4" />
-        {periodLabels[period]}
+      <div className="text-sm text-gray-500 flex items-center gap-3">
+        <span className="flex items-center gap-1">
+          <Calendar className="w-4 h-4" />
+          {periodLabels[period]}
+        </span>
+        <span className="flex items-center gap-1">
+          <Clock className="w-4 h-4" />
+          Last updated: {lastRefreshed.toLocaleTimeString()}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -191,7 +220,12 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Detection Trend ({periodLabels[period]})</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Detection Trend ({periodLabels[period]})</h3>
+            <button onClick={() => handleExport("daily")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <AreaChart data={dailyData}>
               <defs>
@@ -212,7 +246,12 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Detection Type Distribution</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Detection Type Distribution</h3>
+            <button onClick={() => handleExport("detectors")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
@@ -235,7 +274,12 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Camera Activity</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Camera Activity</h3>
+            <button onClick={() => handleExport("cameras")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={camerasData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
