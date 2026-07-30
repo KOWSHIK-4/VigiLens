@@ -104,11 +104,16 @@ export default function AnalyticsPage() {
   const timelineData = timelineQuery.data ?? [];
   const confidenceData = confidenceQuery.data ?? [];
 
+  const severityData = useMemo(
+    () => overview?.severityDistribution ?? [],
+    [overview],
+  );
+
   useEffect(() => {
     if (overviewQuery.data) setLastRefreshed(new Date());
   }, [overviewQuery.data]);
 
-  const handleExport = useCallback((dataset: "daily" | "cameras" | "detectors") => {
+  const handleExport = useCallback((dataset: string) => {
     if (dataset === "daily" && dailyData.length > 0) {
       downloadCSV(
         `detection-trend-${period}d`,
@@ -130,12 +135,28 @@ export default function AnalyticsPage() {
         detectorsData.map((d) => [d.label, String(d.count), String(d.percentage), String(d.avgConfidence), String(d.minConfidence), String(d.maxConfidence)]),
       );
     }
-  }, [dailyData, camerasData, detectorsData, period]);
-
-  const severityData = useMemo(
-    () => overview?.severityDistribution ?? [],
-    [overview],
-  );
+    if (dataset === "timeline" && timelineData.length > 0) {
+      downloadCSV(
+        `hourly-timeline-${period}d`,
+        ["Hour", "Detections"],
+        timelineData.map((t) => [t.hour, String(t.value)]),
+      );
+    }
+    if (dataset === "severity" && severityData.length > 0) {
+      downloadCSV(
+        `severity-distribution-${period}d`,
+        ["Severity", "Count"],
+        severityData.map((s) => [s.name, String(s.value)]),
+      );
+    }
+    if (dataset === "confidence" && confidenceData.length > 0) {
+      downloadCSV(
+        `confidence-distribution-${period}d`,
+        ["Range", "Count", "Percentage"],
+        confidenceData.map((c) => [c.range, String(c.count), String(c.percentage)]),
+      );
+    }
+  }, [dailyData, camerasData, detectorsData, timelineData, severityData, confidenceData, period]);
 
   if (isLoading) {
     return (
@@ -184,10 +205,14 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
               Export
             </button>
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 min-w-[180px]">
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 min-w-[200px]">
+              <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Charts</div>
               <button onClick={() => handleExport("daily")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Detection Trend</button>
               <button onClick={() => handleExport("cameras")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Camera Activity</button>
               <button onClick={() => handleExport("detectors")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Detection Types</button>
+              <button onClick={() => handleExport("timeline")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Hourly Timeline</button>
+              <button onClick={() => handleExport("severity")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Severity Distribution</button>
+              <button onClick={() => handleExport("confidence")} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Confidence Distribution</button>
             </div>
           </div>
         </div>
@@ -302,7 +327,12 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Hourly Detection Timeline</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Hourly Detection Timeline</h3>
+            <button onClick={() => handleExport("timeline")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={timelineData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -322,7 +352,12 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Severity Distribution</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Severity Distribution</h3>
+            <button onClick={() => handleExport("severity")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
@@ -352,7 +387,12 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Confidence Distribution</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Confidence Distribution</h3>
+            <button onClick={() => handleExport("confidence")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={confidenceData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
