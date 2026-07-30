@@ -1,20 +1,9 @@
 import api from "./api";
-import type { PaginatedResponse } from "@/types";
-
-export interface Report {
-  id: string;
-  title: string;
-  type: "daily" | "weekly" | "monthly" | "camera" | "detection" | "alert";
-  generatedBy: string;
-  createdAt: string;
-  dateRange: { from: string; to: string };
-  reportUrl: string | null;
-  status: "generating" | "completed" | "failed";
-}
+import type { PaginatedResponse, Report, ReportType } from "@/types";
 
 export interface GenerateReportInput {
   title: string;
-  type: Report["type"];
+  type: ReportType;
   dateRange: { from: string; to: string };
 }
 

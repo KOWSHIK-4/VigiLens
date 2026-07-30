@@ -48,6 +48,20 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export type ReportType = "daily" | "weekly" | "monthly" | "camera" | "detection" | "alert";
+export type ReportStatus = "generating" | "completed" | "failed";
+
+export interface Report {
+  id: string;
+  title: string;
+  type: ReportType;
+  generatedBy: string;
+  createdAt: string;
+  dateRange: { from: string; to: string };
+  reportUrl: string | null;
+  status: ReportStatus;
+}
+
 export type CameraStatus = "online" | "offline" | "connecting" | "error";
 export type CameraType = "usb" | "rtsp" | "ip" | "video_file";
 
