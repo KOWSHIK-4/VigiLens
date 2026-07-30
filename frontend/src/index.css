@@ -6,6 +6,10 @@
   body {
     @apply min-h-screen;
   }
+
+  input[type="checkbox"] {
+    @apply accent-brand-600;
+  }
 }
 
 @layer components {
@@ -14,7 +18,7 @@
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors;
+    @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .card {
@@ -23,5 +27,48 @@
 
   .input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent;
+  }
+
+  /* Drawer slide-in animation */
+  .drawer-enter {
+    animation: drawer-slide-in 0.25s ease-out;
+  }
+
+  @keyframes drawer-slide-in {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  /* Backdrop fade-in animation */
+  .backdrop-enter {
+    animation: backdrop-fade-in 0.2s ease-out;
+  }
+
+  @keyframes backdrop-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 }

@@ -22,6 +22,32 @@ export interface Detection {
   status: "critical" | "warning" | "info";
 }
 
+export interface DetectionWithCamera extends Detection {
+  camera?: Camera;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DetectionFilters {
+  search?: string;
+  status?: string;
+  cameraId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  confidenceMin?: string;
+  confidenceMax?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface Camera {
   id: string;
   name: string;
@@ -29,6 +55,17 @@ export interface Camera {
   status: "online" | "offline" | "error";
   location: string;
   lastSeen: string;
+}
+
+export interface Alert {
+  id: string;
+  detectionId: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  detection?: DetectionWithCamera;
 }
 
 export interface DashboardStats {

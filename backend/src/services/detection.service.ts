@@ -1,18 +1,149 @@
 import { prisma } from "@/config/prisma";
+import type { AlertSeverity } from "@prisma/client";
+
+interface CreateDetectionInput {
+  cameraId: string;
+  label: string;
+  confidence: number;
+  imageUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+function getAlertSeverity(status: string): AlertSeverity {
+  switch (status) {
+    case "critical":
+      return "critical";
+    case "warning":
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
+function getAlertTitle(label: string, status: string): string {
+  const prefix =
+    status === "critical"
+      ? "Critical"
+      : status === "warning"
+        ? "Warning"
+        : "Info";
+  return `${prefix} Detection: ${label}`;
+}
+
+function getAlertMessage(
+  label: string,
+  confidence: number,
+  cameraName?: string,
+): string {
+  const location = cameraName ? ` at ${cameraName}` : "";
+  return `${label} detected${location} with ${(confidence * 100).toFixed(1)}% confidence.`;
+}
+
+interface FindAllParams {
+  page: number;
+  limit: number;
+  search?: string;
+  status?: string;
+  cameraId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  confidenceMin?: string;
+  confidenceMax?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+function buildWhereClause(params: Partial<FindAllParams>) {
+  const where: Record<string, unknown> = {};
+
+  if (params.status) {
+    where.status = params.status;
+  }
+
+  if (params.cameraId) {
+    where.cameraId = params.cameraId;
+  }
+
+  if (params.search) {
+    where.label = { contains: params.search, mode: "insensitive" };
+  }
+
+  if (params.dateFrom || params.dateTo) {
+    const timestampFilter: Record<string, Date> = {};
+    if (params.dateFrom) {
+      timestampFilter.gte = new Date(params.dateFrom);
+    }
+    if (params.dateTo) {
+      const end = new Date(params.dateTo);
+      end.setHours(23, 59, 59, 999);
+      timestampFilter.lte = end;
+    }
+    where.timestamp = timestampFilter;
+  }
+
+  if (params.confidenceMin || params.confidenceMax) {
+    const confidenceFilter: Record<string, number> = {};
+    if (params.confidenceMin) {
+      confidenceFilter.gte = parseFloat(params.confidenceMin);
+    }
+    if (params.confidenceMax) {
+      confidenceFilter.lte = parseFloat(params.confidenceMax);
+    }
+    where.confidence = confidenceFilter;
+  }
+
+  return where;
+}
 
 export const detectionService = {
-  async findAll(params: { page: number; limit: number; status?: string }) {
-    const where = params.status ? { status: params.status } : {};
+  async create(input: CreateDetectionInput) {
+    const detection = await prisma.detection.create({
+      data: {
+        cameraId: input.cameraId,
+        label: input.label,
+        confidence: input.confidence,
+        imageUrl: input.imageUrl || "",
+        metadata: (input.metadata || {}) as any,
+      },
+      include: { camera: true },
+    }) as any;
+
+    const severity = getAlertSeverity(detection.status);
+    const title = getAlertTitle(detection.label, detection.status);
+    const message = getAlertMessage(
+      detection.label,
+      detection.confidence,
+      detection.camera?.name,
+    );
+
+    await prisma.alert.create({
+      data: {
+        detectionId: detection.id,
+        severity,
+        title,
+        message,
+      },
+    });
+
+    return detection;
+  },
+
+  async findAll(params: FindAllParams) {
+    const where = buildWhereClause(params);
+
+    const orderBy: Record<string, string> = {};
+    const sortField = params.sortBy || "timestamp";
+    orderBy[sortField] = params.sortOrder || "desc";
 
     const [data, total] = await Promise.all([
       prisma.detection.findMany({
-        where,
+        where: where as any,
         include: { camera: true },
-        orderBy: { timestamp: "desc" },
+        orderBy: [orderBy],
         skip: (params.page - 1) * params.limit,
         take: params.limit,
       }),
-      prisma.detection.count({ where }),
+      prisma.detection.count({ where: where as any }),
     ]);
 
     return { data, total };
@@ -29,6 +160,35 @@ export const detectionService = {
     }
 
     return detection;
+  },
+
+  async exportCSV(params: Partial<FindAllParams>) {
+    const where = buildWhereClause(params);
+
+    const detections = await prisma.detection.findMany({
+      where: where as any,
+      include: { camera: true },
+      orderBy: { timestamp: "desc" },
+    });
+
+    const headers = ["ID", "Timestamp", "Label", "Confidence", "Status", "Camera", "Location", "Image URL"];
+    const rows = detections.map((d: { id: string; timestamp: Date; label: string; confidence: number; status: string; imageUrl: string; camera?: { name: string; location: string | null } | null }) => [
+      d.id,
+      d.timestamp.toISOString(),
+      d.label,
+      d.confidence.toString(),
+      d.status,
+      d.camera?.name || "",
+      d.camera?.location || "",
+      d.imageUrl,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+
+    return csvContent;
   },
 
   async getStats() {
@@ -69,7 +229,7 @@ export const detectionService = {
       totalDetections > 0
         ? await prisma.detection
             .aggregate({ _avg: { confidence: true } })
-            .then((r) => r._avg.confidence ?? 0)
+            .then((r: { _avg: { confidence: number | null } }) => r._avg.confidence ?? 0)
         : 0;
 
     return {

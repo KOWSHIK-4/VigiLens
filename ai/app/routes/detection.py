@@ -1,19 +1,75 @@
 import logging
 import os
+import threading
+import time
 import uuid
 from pathlib import Path
 
 import cv2
+import httpx
 import numpy as np
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.config import settings
 from app.services.detector import detector_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/detect", tags=["detection"])
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+
+
+# --- Shared webcam stats (single-user) ---
+_webcam_stats: dict = {}
+_stats_lock = threading.Lock()
+
+
+def _update_stats(fps: float, persons: int, confidence: float, total_persons: int) -> None:
+    with _stats_lock:
+        _webcam_stats.update(
+            fps=round(fps, 1),
+            persons=persons,
+            confidence=round(confidence, 4),
+            total_persons=total_persons,
+        )
+
+
+class _FPSCounter:
+    def __init__(self):
+        self._start = time.perf_counter()
+        self._count = 0
+        self._fps = 0.0
+
+    def update(self) -> float:
+        self._count += 1
+        elapsed = time.perf_counter() - self._start
+        if elapsed >= 1.0:
+            self._fps = self._count / elapsed
+            self._count = 0
+            self._start = time.perf_counter()
+        return self._fps
+
+
+def _draw_overlay(
+    image: np.ndarray,
+    fps: float,
+    person_count: int,
+    max_conf: float,
+) -> None:
+    overlay = image.copy()
+    cv2.rectangle(overlay, (0, 0), (260, 105), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.4, image, 0.6, 0, image)
+    cv2.putText(image, f"FPS: {fps:.1f}", (10, 28),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+    cv2.putText(image, f"Persons: {person_count}", (10, 52),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+    if max_conf > 0:
+        cv2.putText(image, f"Conf: {max_conf:.0%}", (10, 76),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+
+    cv2.putText(image, "VigiLens Live", (10, 98),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
 
 @router.post("/image")
@@ -88,22 +144,94 @@ async def detect_video(
             os.remove(tmp_path)
 
 
+@router.get("/webcam/stats")
+async def webcam_stats():
+    return _webcam_stats
+
+
 @router.get("/webcam")
-async def detect_webcam():
+async def detect_webcam(
+    camera_id: str = "default",
+    snapshot_enabled: bool = True,
+):
+    def save_detection(
+        cam_id: str,
+        label: str,
+        confidence: float,
+        count: int,
+        image_path: str,
+    ) -> None:
+        try:
+            with httpx.Client(timeout=3.0) as client:
+                client.post(
+                    f"{settings.backend_url}/api/detections/internal",
+                    json={
+                        "camera_id": cam_id,
+                        "label": label,
+                        "confidence": confidence,
+                        "image_url": image_path,
+                        "metadata": {
+                            "detector_type": label,
+                            "count": count,
+                            "source": "webcam",
+                        },
+                    },
+                )
+        except Exception:
+            logger.debug("Failed to save detection to backend", exc_info=True)
+
     def generate():
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         if not cap.isOpened():
             cap = cv2.VideoCapture(0)
-        detector = detector_service.get("person_detector")
+        if not cap.isOpened():
+            logger.error("Could not open webcam")
+            return
+
+        person_detector = detector_service.get("person_detector")
+        fps_counter = _FPSCounter()
+        frame_no = 0
+        total_persons = 0
+        snapshot_interval = 30
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
         try:
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                detections = detector.detect(frame)
-                annotated = detector.draw(frame, detections)
+
+                frame_no += 1
+                detections = person_detector.detect(frame)
+                annotated = person_detector.draw(frame, detections)
+
+                fps = fps_counter.update()
+                person_count = len(detections)
+                total_persons += person_count
+                max_conf = max((d.confidence for d in detections), default=0.0)
+
+                _update_stats(fps, person_count, max_conf, total_persons)
+                _draw_overlay(annotated, fps, person_count, max_conf)
+
+                if detections and frame_no % snapshot_interval == 0:
+                    image_path = ""
+                    if snapshot_enabled:
+                        snapshot_name = f"webcam_{int(time.time())}_{frame_no}.jpg"
+                        image_path = str(OUTPUT_DIR / snapshot_name)
+                        cv2.imwrite(image_path, annotated)
+
+                    threading.Thread(
+                        target=save_detection,
+                        args=(camera_id, "person", max_conf, person_count, image_path),
+                        daemon=True,
+                    ).start()
+
                 _, buffer = cv2.imencode(".jpg", annotated)
-                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+                yield (
+                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                    + buffer.tobytes()
+                    + b"\r\n"
+                )
         finally:
             cap.release()
 

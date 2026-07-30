@@ -19,6 +19,12 @@ enum DetectionStatus {
   info
 }
 
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
 enum CameraStatus {
   online
   offline
@@ -64,6 +70,7 @@ model Detection {
   createdAt  DateTime         @default(now()) @map("created_at")
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  alert  Alert?
 
   @@index([cameraId])
   @@index([status])
@@ -72,13 +79,18 @@ model Detection {
 }
 
 model Alert {
-  id          String   @id @default(uuid())
-  detectionId String   @unique @map("detection_id")
+  id          String        @id @default(uuid())
+  detectionId String        @unique @map("detection_id")
+  severity    AlertSeverity @default(info)
+  title       String
   message     String
-  acknowledged Boolean @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
+  isRead      Boolean       @default(false) @map("is_read")
+  createdAt   DateTime      @default(now()) @map("created_at")
 
   detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
 
+  @@index([severity])
+  @@index([isRead])
+  @@index([createdAt])
   @@map("alerts")
 }

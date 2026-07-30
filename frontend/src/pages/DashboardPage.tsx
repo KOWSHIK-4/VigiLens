@@ -14,6 +14,7 @@ import {
 import { detectionService } from "@/services/detections";
 import StatsCard from "@/components/StatsCard";
 import DetectionCard from "@/components/DetectionCard";
+import type { Detection } from "@/types";
 
 const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6"];
 
@@ -98,7 +99,7 @@ export default function DashboardPage() {
                 outerRadius={100}
                 label
               >
-                {(stats?.alertsByType ?? []).map((_, index) => (
+                {(stats?.alertsByType ?? []).map((_: unknown, index: number) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={COLORS[index % COLORS.length]}
@@ -116,7 +117,7 @@ export default function DashboardPage() {
           Recent Detections
         </h3>
         <div className="space-y-4">
-          {(stats?.recentDetections ?? []).map((detection) => (
+          {(stats?.recentDetections ?? []).map((detection: Detection) => (
             <DetectionCard key={detection.id} detection={detection} />
           ))}
         </div>

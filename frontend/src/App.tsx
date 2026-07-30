@@ -7,6 +7,8 @@ import DashboardPage from "@/pages/DashboardPage";
 import CamerasPage from "@/pages/CamerasPage";
 import DetectionsPage from "@/pages/DetectionsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import LiveCameraPage from "@/pages/LiveCameraPage";
+import AlertsPage from "@/pages/AlertsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +37,8 @@ export default function App() {
             <Route path="cameras" element={<CamerasPage />} />
             <Route path="detections" element={<DetectionsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="live-camera" element={<LiveCameraPage />} />
+            <Route path="alerts" element={<AlertsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
