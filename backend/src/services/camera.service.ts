@@ -113,6 +113,10 @@ export const cameraService = {
     const camera = await prisma.camera.findUnique({ where: { id } });
     if (!camera) return null;
 
+    if (camera.status === "online") {
+      throw new Error("Camera is already online");
+    }
+
     return prisma.camera.update({
       where: { id },
       data: {
@@ -125,6 +129,10 @@ export const cameraService = {
   async stopCamera(id: string) {
     const camera = await prisma.camera.findUnique({ where: { id } });
     if (!camera) return null;
+
+    if (camera.status === "offline") {
+      throw new Error("Camera is already offline");
+    }
 
     return prisma.camera.update({
       where: { id },

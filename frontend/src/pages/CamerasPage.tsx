@@ -41,7 +41,7 @@ export default function CamerasPage() {
   const [editCamera, setEditCamera] = useState<Camera | null>(null);
   const [deleteCamera, setDeleteCamera] = useState<Camera | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error: queryError } = useQuery({
     queryKey: ["cameras", search, statusFilter, typeFilter, page],
     queryFn: () =>
       cameraService.getAll({
@@ -147,7 +147,16 @@ export default function CamerasPage() {
         </select>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="text-center py-16">
+          <Monitor className="w-12 h-12 text-red-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-red-600">Failed to load cameras</h3>
+          <p className="text-gray-500 mt-1">{(queryError as any)?.message || "Something went wrong"}</p>
+          <button onClick={() => window.location.reload()} className="btn-primary mt-4">
+            Retry
+          </button>
+        </div>
+      ) : isLoading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
         </div>

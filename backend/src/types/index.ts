@@ -31,7 +31,14 @@ export const detectionQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
-export const createCameraSchema = z.object({
+const urlByType = {
+  usb: { pattern: /^(\/dev\/|[a-zA-Z]:\\)/, message: "USB camera URL should start with /dev/ or a drive letter" },
+  rtsp: { pattern: /^rtsp:\/\//, message: "RTSP URL must start with rtsp://" },
+  ip: { pattern: /^https?:\/\//, message: "IP camera URL must start with http:// or https://" },
+  video_file: { pattern: /\.(mp4|avi|mkv|mov)$/i, message: "Video file URL should end with .mp4, .avi, .mkv, or .mov" },
+};
+
+const cameraBaseSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   url: z.string().min(1, "URL is required"),
   cameraType: z.enum(["usb", "rtsp", "ip", "video_file"]).default("rtsp"),
@@ -43,7 +50,16 @@ export const createCameraSchema = z.object({
   password: z.string().max(100).optional().nullable(),
 });
 
-export const updateCameraSchema = createCameraSchema.partial();
+export const createCameraSchema = cameraBaseSchema.refine(
+  (data) => {
+    const check = urlByType[data.cameraType];
+    if (!check) return true;
+    return check.pattern.test(data.url);
+  },
+  (data) => ({ message: urlByType[data.cameraType]?.message || "Invalid URL for selected camera type", path: ["url"] }),
+);
+
+export const updateCameraSchema = cameraBaseSchema.partial();
 
 export const cameraQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
