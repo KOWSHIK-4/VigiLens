@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { reportService } from "@/services/reports";
 import type { Report } from "@/types";
+import GenerateReportDialog from "@/components/GenerateReportDialog";
 
 const typeConfig: Record<string, { label: string; color: string }> = {
   daily: { label: "Daily", color: "bg-blue-100 text-blue-700" },
@@ -50,6 +51,7 @@ export default function ReportsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [showGenerate, setShowGenerate] = useState(false);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -91,6 +93,13 @@ export default function ReportsPage() {
             Generate and manage security reports
           </p>
         </div>
+        <button
+          onClick={() => setShowGenerate(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Generate Report
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -306,6 +315,13 @@ export default function ReportsPage() {
             </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+      {showGenerate && (
+        <GenerateReportDialog onClose={() => setShowGenerate(false)} />
       )}
     </div>
   );
