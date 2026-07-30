@@ -28,7 +28,15 @@ enum AlertSeverity {
 enum CameraStatus {
   online
   offline
+  connecting
   error
+}
+
+enum CameraType {
+  usb
+  rtsp
+  ip
+  video_file
 }
 
 model User {
@@ -44,18 +52,43 @@ model User {
 }
 
 model Camera {
-  id        String       @id @default(uuid())
-  name      String
-  url       String
-  location  String?
-  status    CameraStatus @default(offline)
-  lastSeen  DateTime     @default(now()) @map("last_seen")
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid())
+  name           String
+  url            String
+  cameraType     CameraType   @default(rtsp) @map("camera_type")
+  sourceURL      String?      @map("source_url")
+  location       String?
+  resolution     String?
+  fps            Int?
+  username       String?
+  password       String?
+  thumbnail      String?
+  isHealthy      Boolean      @default(true) @map("is_healthy")
+  lastHealthCheck DateTime?   @map("last_health_check")
+  status         CameraStatus @default(offline)
+  lastSeen       DateTime     @default(now()) @map("last_seen")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  detections Detection[]
+  detections     Detection[]
+  healthLogs     CameraHealthLog[]
 
   @@map("cameras")
+}
+
+model CameraHealthLog {
+  id           String       @id @default(uuid())
+  cameraId     String       @map("camera_id")
+  status       CameraStatus
+  message      String?
+  responseTime Int?         @map("response_time")
+  checkedAt    DateTime     @default(now()) @map("checked_at")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId])
+  @@index([checkedAt])
+  @@map("camera_health_logs")
 }
 
 model Detection {

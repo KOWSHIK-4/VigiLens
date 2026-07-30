@@ -1,15 +1,22 @@
 import type { Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
-import { prisma } from "@/config/prisma";
-import { success } from "@/utils/apiResponse";
+import { cameraService } from "@/services/camera.service";
+import { success, paginated, error } from "@/utils/apiResponse";
 
 export const cameraController = {
-  async getAll(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const cameras = await prisma.camera.findMany({
-        orderBy: { createdAt: "desc" },
+      const result = await cameraService.findAll({
+        page: Number(req.query.page) || 1,
+        limit: Number(req.query.limit) || 20,
+        search: req.query.search as string | undefined,
+        status: req.query.status as any,
+        cameraType: req.query.cameraType as any,
+        sortBy: req.query.sortBy as string | undefined,
+        sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
       });
-      success(res, cameras);
+
+      paginated(res, result.data, result.total, result.page, result.limit);
     } catch (err) {
       next(err);
     }
@@ -17,24 +24,111 @@ export const cameraController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const camera = await prisma.camera.findUnique({
-        where: { id: req.params.id },
-        include: {
-          detections: {
-            orderBy: { timestamp: "desc" },
-            take: 20,
-          },
-        },
-      });
+      const id = req.params.id as string;
+      const camera = await cameraService.findById(id);
 
       if (!camera) {
-        return res.status(404).json({
-          success: false,
-          error: "Camera not found",
-        });
+        return error(res, "Camera not found", 404);
       }
 
       success(res, camera);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async create(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const camera = await cameraService.create(req.body);
+      success(res, camera, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async update(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const camera = await cameraService.update(id, req.body);
+
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
+
+      success(res, camera);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const deleted = await cameraService.remove(id);
+
+      if (!deleted) {
+        return error(res, "Camera not found", 404);
+      }
+
+      success(res, { message: "Camera deleted successfully" });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async start(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const camera = await cameraService.startCamera(id);
+
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
+
+      success(res, camera);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async stop(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const camera = await cameraService.stopCamera(id);
+
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
+
+      success(res, camera);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async healthCheck(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const camera = await cameraService.healthCheck(id);
+
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
+
+      success(res, camera);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getHealthLogs(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const logs = await cameraService.getHealthLogs(
+        id,
+        Number(req.query.limit) || 50,
+      );
+      success(res, logs);
     } catch (err) {
       next(err);
     }

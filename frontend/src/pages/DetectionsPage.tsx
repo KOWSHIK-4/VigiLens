@@ -62,10 +62,11 @@ export default function DetectionsPage() {
     refetchInterval: autoRefresh ? 10000 : false,
   });
 
-  const { data: cameras } = useQuery({
+  const { data: camerasData } = useQuery({
     queryKey: ["cameras"],
-    queryFn: () => cameraService.getAll(),
+    queryFn: () => cameraService.getAll({ limit: 100 }),
   });
+  const cameras = camerasData?.data ?? [];
 
   const updateFilter = useCallback(
     (key: keyof DetectionFilters, value: string | undefined) => {
