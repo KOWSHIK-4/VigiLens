@@ -1,10 +1,10 @@
 import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
 
 interface GenerateReportInput {
   title: string;
-  type: "daily" | "weekly" | "monthly" | "camera" | "detection" | "alert";
+  type: ReportType;
   generatedBy: string;
   dateRange: { from: string; to: string };
 }
@@ -135,7 +135,7 @@ export const reportService = {
     const report = await prisma.report.create({
       data: {
         title: input.title,
-        type: input.type as any,
+        type: input.type,
         generatedBy: input.generatedBy,
         dateRange: input.dateRange,
         status: "generating",
@@ -150,14 +150,14 @@ export const reportService = {
 
         await prisma.report.update({
           where: { id: report.id },
-          data: { status: "completed", reportUrl },
+          data: { status: "completed" as ReportStatus, reportUrl },
         });
         logger.info("Report generated", { reportId: report.id });
       } catch (error) {
         logger.error("Report generation failed", { reportId: report.id, error });
         await prisma.report.update({
           where: { id: report.id },
-          data: { status: "failed" },
+          data: { status: "failed" as ReportStatus },
         });
       }
     });
