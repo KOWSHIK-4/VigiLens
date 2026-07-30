@@ -4,6 +4,7 @@ import detectionRoutes from "./detection.routes";
 import cameraRoutes from "./camera.routes";
 import alertRoutes from "./alert.routes";
 import analyticsRoutes from "./analytics.routes";
+import reportRoutes from "./report.routes";
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use("/detections", detectionRoutes);
 router.use("/cameras", cameraRoutes);
 router.use("/alerts", alertRoutes);
 router.use("/analytics", analyticsRoutes);
+router.use("/reports", reportRoutes);
 
 export default router;
