@@ -14,6 +14,7 @@ const navItems = [
   { path: "/detections", label: "Detections" },
   { path: "/analytics", label: "Analytics" },
   { path: "/reports", label: "Reports" },
+  { path: "/models", label: "AI Models" },
 ];
 
 export default function Layout() {
