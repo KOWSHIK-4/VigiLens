@@ -96,6 +96,40 @@ export const reportQuerySchema = z.object({
 export type GenerateReportInput = z.infer<typeof generateReportSchema>;
 export type ReportQueryInput = z.infer<typeof reportQuerySchema>;
 
+export const modelStatusSchema = z.enum(["loaded", "loading", "disabled", "error"]);
+
+export const modelQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  status: modelStatusSchema.optional(),
+  enabled: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
+  sortBy: z
+    .enum(["name", "status", "confidenceThreshold", "enabled", "createdAt"])
+    .optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export const updateModelSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100).optional(),
+  version: z.string().min(1, "Version is required").max(50).optional(),
+  description: z.string().max(500).optional(),
+  confidenceThreshold: z.number().min(0).max(100).optional(),
+  enabled: z.boolean().optional(),
+  gpuSupported: z.boolean().optional(),
+  modelPath: z.string().min(1, "Model path is required").max(500).optional(),
+});
+
+export const modelIdSchema = z.object({
+  id: z.string().uuid("Invalid model id"),
+});
+
+export type UpdateModelInput = z.infer<typeof updateModelSchema>;
+export type ModelQueryInput = z.infer<typeof modelQuerySchema>;
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateCameraInput = z.infer<typeof createCameraSchema>;
