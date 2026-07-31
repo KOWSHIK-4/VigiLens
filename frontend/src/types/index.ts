@@ -195,3 +195,51 @@ export interface AnalyticsParams {
   from?: string;
   to?: string;
 }
+
+export type ModelStatus = "loaded" | "loading" | "disabled" | "error";
+
+export interface AIModel {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  detectorKey: string;
+  confidenceThreshold: number;
+  enabled: boolean;
+  status: ModelStatus;
+  gpuSupported: boolean;
+  modelPath: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModelFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: ModelStatus;
+  enabled?: boolean;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface UpdateModelInput {
+  name?: string;
+  version?: string;
+  description?: string;
+  confidenceThreshold?: number;
+  enabled?: boolean;
+  gpuSupported?: boolean;
+  modelPath?: string;
+}
+
+export interface ModelTestResult {
+  success: boolean;
+  modelId: string;
+  modelName: string;
+  message: string;
+  inferenceTimeMs: number;
+  framesProcessed: number;
+  detections: number;
+  thresholdApplied: number;
+}
