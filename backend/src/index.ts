@@ -8,6 +8,7 @@ import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
 import { errorHandler } from "@/middleware/errorHandler";
 import routes from "@/routes";
+import { modelService } from "@/services/model.service";
 
 const app = express();
 
@@ -41,6 +42,12 @@ async function start() {
   try {
     await prisma.$connect();
     logger.info("Database connected");
+
+    try {
+      await modelService.syncRegisteredDetectors();
+    } catch (error) {
+      logger.error("Failed to sync AI model registry", { error });
+    }
 
     app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port}`);

@@ -45,6 +45,33 @@ GET /cameras
 GET /cameras/:id
 ```
 
+## AI Models
+
+Manage detection models independently of cameras. Model statuses: `loaded`, `loading`, `disabled`, `error`.
+
+```bash
+GET   /models?page=1&limit=20&search=fire&status=loaded&enabled=true&sortBy=name&sortOrder=asc
+GET   /models/:id
+PATCH /models/:id
+POST  /models/:id/load
+POST  /models/:id/unload
+POST  /models/:id/test
+```
+
+PATCH body (all fields optional):
+
+```json
+{
+  "name": "Person Detection",
+  "version": "2.0.0",
+  "description": "Updated description",
+  "confidenceThreshold": 62,
+  "enabled": true,
+  "gpuSupported": true,
+  "modelPath": "/models/person/yolo11n.pt"
+}
+```
+
 ## AI Service
 
 ```bash
