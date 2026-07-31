@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { prisma } from "@/config/prisma";
 import { config } from "@/config";
 import type { RegisterInput, LoginInput } from "@/types";
@@ -74,7 +74,7 @@ export const authService = {
 
   generateToken(userId: string, role: string): string {
     return jwt.sign({ userId, role }, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn,
+      expiresIn: config.jwt.expiresIn as SignOptions["expiresIn"],
     });
   },
 };
