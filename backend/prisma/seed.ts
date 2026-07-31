@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { defaultDetectorDefinitions } from "../src/detectors/defaults";
 
 const prisma = new PrismaClient();
 
@@ -99,9 +100,35 @@ async function main() {
     },
   });
 
-  console.log({ admin, entrance, parking, lobby, warehouse, demoFile });
+  for (const model of defaultDetectorDefinitions) {
+    await prisma.aIModel.upsert({
+      where: { detectorKey: model.key },
+      update: {
+        name: model.name,
+        version: model.version,
+        description: model.description,
+        confidenceThreshold: model.defaultConfidenceThreshold,
+        gpuSupported: model.gpuSupported,
+        modelPath: model.modelPath,
+        enabled: true,
+        status: "disabled",
+      },
+      create: {
+        name: model.name,
+        version: model.version,
+        description: model.description,
+        detectorKey: model.key,
+        confidenceThreshold: model.defaultConfidenceThreshold,
+        gpuSupported: model.gpuSupported,
+        modelPath: model.modelPath,
+        enabled: true,
+        status: "disabled",
+      },
+    });
+  }
 
-  console.log({ admin, camera });
+  console.log({ admin, entrance, parking, lobby, warehouse, demoFile });
+  console.log(`Seeded ${defaultDetectorDefinitions.length} default AI models`);
 }
 
 main()
