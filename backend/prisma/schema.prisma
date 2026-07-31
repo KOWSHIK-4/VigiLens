@@ -158,3 +158,29 @@ model Report {
   @@index([createdAt])
   @@map("reports")
 }
+
+enum ModelStatus {
+  loaded
+  loading
+  disabled
+  error
+}
+
+model AIModel {
+  id                 String      @id @default(uuid())
+  name               String
+  version            String
+  description        String
+  detectorKey        String      @unique @map("detector_key")
+  confidenceThreshold Float      @default(50) @map("confidence_threshold")
+  enabled            Boolean     @default(true)
+  status             ModelStatus @default(disabled)
+  gpuSupported       Boolean     @default(false) @map("gpu_supported")
+  modelPath          String      @map("model_path")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([enabled])
+  @@map("ai_models")
+}
