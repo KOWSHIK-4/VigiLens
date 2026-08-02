@@ -11,6 +11,17 @@ import type {
   Prisma,
 } from "@prisma/client";
 
+export interface CreateModelInput {
+  name: string;
+  version: string;
+  detectorKey: string;
+  confidenceThreshold?: number;
+  enabled?: boolean;
+  gpuSupported?: boolean;
+  description?: string;
+  modelPath?: string;
+}
+
 const LOAD_DELAY_MS = 900;
 
 const pendingLoads = new Map<string, NodeJS.Timeout>();
@@ -57,7 +68,11 @@ interface FindAllParams {
 
 export const modelService = {
   async syncRegisteredDetectors() {
-    for (const def of getDetectorDefinitions()) {
+    const definitions = getDetectorDefinitions();
+    const existingCount = await prisma.aIModel.count();
+
+    for (let index = 0; index < definitions.length; index += 1) {
+      const def = definitions[index];
       await prisma.aIModel.upsert({
         where: { detectorKey: def.key },
         update: {
@@ -76,13 +91,27 @@ export const modelService = {
           gpuSupported: def.gpuSupported,
           modelPath: def.modelPath,
           enabled: true,
-          status: "disabled",
+          status: index === 0 ? "loaded" : "disabled",
         },
       });
     }
-    logger.info("AI model registry synchronized", {
-      count: getDetectorDefinitions().length,
+
+    const registeredKeys = definitions.map((d) => d.key);
+    await prisma.aIModel.deleteMany({
+      where: { detectorKey: { notIn: registeredKeys } },
     });
+
+    const defaultModel = await prisma.aIModel.findFirst({
+      where: { detectorKey: definitions[0]?.key },
+    });
+    if (defaultModel && existingCount === 0) {
+      await prisma.aIModel.update({
+        where: { id: defaultModel.id },
+        data: { status: "loaded", enabled: true },
+      });
+    }
+
+    logger.info("AI model registry synchronized", { count: definitions.length });
   },
 
   async findAll(params: FindAllParams) {
@@ -132,12 +161,88 @@ export const modelService = {
     return model;
   },
 
+  async create(input: CreateModelInput) {
+    const existing = await prisma.aIModel.findUnique({
+      where: { detectorKey: input.detectorKey },
+    });
+    if (existing) {
+      throw new ApiError(409, `A model with detector key "${input.detectorKey}" already exists`);
+    }
+
+    const def = getDetectorDefinition(input.detectorKey);
+
+    return prisma.aIModel.create({
+      data: {
+        name: input.name,
+        version: input.version,
+        description: input.description ?? def?.description ?? "",
+        detectorKey: input.detectorKey,
+        confidenceThreshold:
+          input.confidenceThreshold ?? def?.defaultConfidenceThreshold ?? 50,
+        enabled: input.enabled ?? true,
+        gpuSupported: input.gpuSupported ?? def?.gpuSupported ?? false,
+        modelPath: input.modelPath ?? def?.modelPath ?? `/models/${input.detectorKey}/model.pt`,
+        status: "disabled",
+      },
+    });
+  },
+
+  async getActive() {
+    const loaded = await prisma.aIModel.findFirst({
+      where: { enabled: true, status: "loaded" },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (loaded) {
+      return loaded;
+    }
+
+    const model = await prisma.aIModel.findFirst({
+      where: { enabled: true },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!model) {
+      throw new ApiError(404, "No active AI model found");
+    }
+    return model;
+  },
+
+  async setEnabled(id: string, enabled: boolean) {
+    return this.update(id, { enabled });
+  },
+
+  async setConfidenceThreshold(id: string, confidenceThreshold: number) {
+    return this.update(id, { confidenceThreshold });
+  },
+
+  async remove(id: string) {
+    await this.findById(id);
+    clearPendingLoad(id);
+    await prisma.aIModel.delete({ where: { id } });
+    logger.info("AI model deleted", { modelId: id });
+    return { success: true, id };
+  },
+
   async update(id: string, input: Partial<AIModel>) {
     const existing = await this.findById(id);
 
-    const data: Prisma.AIModelUpdateInput = { ...input };
+    const data: Prisma.AIModelUpdateInput = {};
+    const allowed: Array<keyof AIModel> = [
+      "name",
+      "version",
+      "description",
+      "confidenceThreshold",
+      "enabled",
+      "gpuSupported",
+      "modelPath",
+    ];
+    for (const key of allowed) {
+      const value = input[key];
+      if (value !== undefined) {
+        (data as Record<string, unknown>)[key] = value;
+      }
+    }
 
-    if (input.enabled === false) {
+    if (data.enabled === false) {
       clearPendingLoad(id);
       if (existing.status === "loaded" || existing.status === "loading") {
         data.status = "disabled";

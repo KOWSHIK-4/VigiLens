@@ -100,7 +100,9 @@ async function main() {
     },
   });
 
-  for (const model of defaultDetectorDefinitions) {
+  for (let index = 0; index < defaultDetectorDefinitions.length; index += 1) {
+    const model = defaultDetectorDefinitions[index];
+    const isDefaultActive = index === 0;
     await prisma.aIModel.upsert({
       where: { detectorKey: model.key },
       update: {
@@ -111,7 +113,7 @@ async function main() {
         gpuSupported: model.gpuSupported,
         modelPath: model.modelPath,
         enabled: true,
-        status: "disabled",
+        status: isDefaultActive ? "loaded" : "disabled",
       },
       create: {
         name: model.name,
@@ -122,13 +124,26 @@ async function main() {
         gpuSupported: model.gpuSupported,
         modelPath: model.modelPath,
         enabled: true,
-        status: "disabled",
+        status: isDefaultActive ? "loaded" : "disabled",
       },
+    });
+  }
+
+  const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);
+  const staleModels = await prisma.aIModel.findMany({
+    where: { detectorKey: { notIn: registeredKeys } },
+  });
+  if (staleModels.length > 0) {
+    await prisma.aIModel.deleteMany({
+      where: { detectorKey: { notIn: registeredKeys } },
     });
   }
 
   console.log({ admin, entrance, parking, lobby, warehouse, demoFile });
   console.log(`Seeded ${defaultDetectorDefinitions.length} default AI models`);
+  if (staleModels.length > 0) {
+    console.log(`Removed ${staleModels.length} stale AI models`);
+  }
 }
 
 main()
