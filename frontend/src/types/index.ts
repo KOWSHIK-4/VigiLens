@@ -233,6 +233,17 @@ export interface UpdateModelInput {
   modelPath?: string;
 }
 
+export interface CreateModelInput {
+  name: string;
+  version: string;
+  description?: string;
+  detectorKey: string;
+  confidenceThreshold?: number;
+  enabled?: boolean;
+  gpuSupported?: boolean;
+  modelPath?: string;
+}
+
 export interface ModelTestResult {
   success: boolean;
   modelId: string;
