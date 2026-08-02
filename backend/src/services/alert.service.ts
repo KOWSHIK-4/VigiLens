@@ -1,5 +1,5 @@
 import { prisma } from "@/config/prisma";
-import type { AlertSeverity } from "@prisma/client";
+import type { AlertSeverity, Prisma } from "@prisma/client";
 
 interface CreateAlertInput {
   detectionId: string;
@@ -30,10 +30,10 @@ export const alertService = {
   },
 
   async findAll(params: FindAllParams) {
-    const where: Record<string, unknown> = {};
+    const where: Prisma.AlertWhereInput = {};
 
     if (params.severity) {
-      where.severity = params.severity;
+      where.severity = params.severity as AlertSeverity;
     }
 
     if (params.isRead !== undefined && params.isRead !== "") {
@@ -49,13 +49,13 @@ export const alertService = {
 
     const [data, total] = await Promise.all([
       prisma.alert.findMany({
-        where: where as any,
+        where,
         include: { detection: { include: { camera: true } } },
         orderBy: { createdAt: "desc" },
         skip: (params.page - 1) * params.limit,
         take: params.limit,
       }),
-      prisma.alert.count({ where: where as any }),
+      prisma.alert.count({ where }),
     ]);
 
     return { data, total };

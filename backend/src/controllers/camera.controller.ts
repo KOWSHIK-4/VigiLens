@@ -1,5 +1,6 @@
 import type { Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
+import type { CameraStatus, CameraType } from "@prisma/client";
 import { cameraService } from "@/services/camera.service";
 import { success, paginated, error } from "@/utils/apiResponse";
 
@@ -10,8 +11,8 @@ export const cameraController = {
         page: Number(req.query.page) || 1,
         limit: Number(req.query.limit) || 20,
         search: req.query.search as string | undefined,
-        status: req.query.status as any,
-        cameraType: req.query.cameraType as any,
+        status: req.query.status as CameraStatus | undefined,
+        cameraType: req.query.cameraType as CameraType | undefined,
         sortBy: req.query.sortBy as string | undefined,
         sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
       });

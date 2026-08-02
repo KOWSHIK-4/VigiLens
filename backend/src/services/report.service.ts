@@ -19,6 +19,38 @@ interface FindAllParams {
   sortOrder?: "asc" | "desc";
 }
 
+interface DetectionRow {
+  id: string;
+  label: string;
+  confidence: number;
+  status: string;
+  cameraId: string;
+  timestamp: Date;
+  camera?: { name: string | null } | null;
+}
+
+interface StatusCountRow {
+  status: string;
+  _count: { id: number };
+}
+
+interface CameraRow {
+  id: string;
+  name: string;
+  location: string | null;
+  status: string;
+  _count: { detections: number };
+}
+
+interface AlertRow {
+  id: string;
+  severity: string;
+  title: string;
+  message: string;
+  createdAt: Date;
+  detection?: { camera?: { name: string | null } | null } | null;
+}
+
 async function buildReportData(type: string, dateRange: { from: string; to: string }, format: "pdf" | "csv"): Promise<string> {
   const from = new Date(dateRange.from);
   const to = new Date(dateRange.to);
@@ -63,14 +95,14 @@ async function buildReportData(type: string, dateRange: { from: string; to: stri
   }
 }
 
-function buildCsv(detections: any[], counts: any[]): string {
+function buildCsv(detections: DetectionRow[], counts: StatusCountRow[]): string {
   const header = "ID,Label,Confidence,Status,Camera ID,Timestamp";
   const rows = detections.map((d) => `${d.id},${d.label},${d.confidence},${d.status},${d.cameraId},${d.timestamp}`);
   const summary = `\n\nSummary\nStatus,Count\n${counts.map((c) => `${c.status},${c._count.id}`).join("\n")}`;
   return header + "\n" + rows.join("\n") + summary;
 }
 
-function buildPdf(type: string, dateRange: { from: string; to: string }, detections: any[], counts: any[]): string {
+function buildPdf(type: string, dateRange: { from: string; to: string }, detections: DetectionRow[], counts: StatusCountRow[]): string {
   const summary = counts.map((c) => `  ${c.status}: ${c._count.id}`).join("\n");
   return [
     `${type.charAt(0).toUpperCase() + type.slice(1)} Report`,
@@ -84,13 +116,13 @@ function buildPdf(type: string, dateRange: { from: string; to: string }, detecti
   ].join("\n");
 }
 
-function buildCameraCsv(cameras: any[]): string {
+function buildCameraCsv(cameras: CameraRow[]): string {
   const header = "Camera Name,Location,Status,Detection Count";
   const rows = cameras.map((c) => `${c.name},${c.location || "N/A"},${c.status},${c._count.detections}`);
   return header + "\n" + rows.join("\n");
 }
 
-function buildCameraPdf(cameras: any[]): string {
+function buildCameraPdf(cameras: CameraRow[]): string {
   return [
     "Camera Report",
     "",
@@ -98,13 +130,13 @@ function buildCameraPdf(cameras: any[]): string {
   ].join("\n");
 }
 
-function buildDetectionCsv(detections: any[]): string {
+function buildDetectionCsv(detections: DetectionRow[]): string {
   const header = "ID,Label,Confidence,Status,Camera,Timestamp";
   const rows = detections.map((d) => `${d.id},${d.label},${d.confidence},${d.status},${d.camera?.name || d.cameraId},${d.timestamp}`);
   return header + "\n" + rows.join("\n");
 }
 
-function buildDetectionPdf(detections: any[]): string {
+function buildDetectionPdf(detections: DetectionRow[]): string {
   return [
     "Detection Report",
     "",
@@ -112,13 +144,13 @@ function buildDetectionPdf(detections: any[]): string {
   ].join("\n");
 }
 
-function buildAlertCsv(alerts: any[]): string {
+function buildAlertCsv(alerts: AlertRow[]): string {
   const header = "ID,Severity,Title,Message,Camera,Created At";
   const rows = alerts.map((a) => `${a.id},${a.severity},${a.title},${a.message},${a.detection?.camera?.name || "N/A"},${a.createdAt}`);
   return header + "\n" + rows.join("\n");
 }
 
-function buildAlertPdf(alerts: any[]): string {
+function buildAlertPdf(alerts: AlertRow[]): string {
   return [
     "Alert Report",
     "",
@@ -145,7 +177,7 @@ export const reportService = {
     process.nextTick(async () => {
       try {
         const format: "pdf" | "csv" = "pdf";
-        const content = await buildReportData(input.type, input.dateRange, format);
+        await buildReportData(input.type, input.dateRange, format);
         const reportUrl = generateReportUrl(input.type, report.id, format);
 
         await prisma.report.update({
@@ -166,7 +198,7 @@ export const reportService = {
   },
 
   async findAll(params: FindAllParams) {
-    const where: Record<string, unknown> = {};
+    const where: Prisma.ReportWhereInput = {};
 
     if (params.search) {
       where.OR = [
@@ -175,28 +207,28 @@ export const reportService = {
     }
 
     if (params.type) {
-      where.type = params.type;
+      where.type = params.type as ReportType;
     }
 
     if (params.status) {
-      where.status = params.status;
+      where.status = params.status as ReportStatus;
     }
 
-    const orderBy: Record<string, string> = {};
+    const orderBy: Prisma.ReportOrderByWithRelationInput = {};
     if (params.sortBy) {
-      orderBy[params.sortBy] = params.sortOrder || "desc";
+      (orderBy as Record<string, string>)[params.sortBy] = params.sortOrder || "desc";
     } else {
       orderBy.createdAt = "desc";
     }
 
     const [data, total] = await Promise.all([
       prisma.report.findMany({
-        where: where as any,
-        orderBy: orderBy as any,
+        where,
+        orderBy,
         skip: (params.page - 1) * params.limit,
         take: params.limit,
       }),
-      prisma.report.count({ where: where as any }),
+      prisma.report.count({ where }),
     ]);
 
     return { data, total };

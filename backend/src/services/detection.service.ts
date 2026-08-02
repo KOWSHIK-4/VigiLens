@@ -1,5 +1,9 @@
 import { prisma } from "@/config/prisma";
-import type { AlertSeverity } from "@prisma/client";
+import type {
+  AlertSeverity,
+  DetectionStatus,
+  Prisma,
+} from "@prisma/client";
 
 interface CreateDetectionInput {
   cameraId: string;
@@ -53,11 +57,11 @@ interface FindAllParams {
   sortOrder?: string;
 }
 
-function buildWhereClause(params: Partial<FindAllParams>) {
-  const where: Record<string, unknown> = {};
+function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhereInput {
+  const where: Prisma.DetectionWhereInput = {};
 
   if (params.status) {
-    where.status = params.status;
+    where.status = params.status as DetectionStatus;
   }
 
   if (params.cameraId) {
@@ -69,7 +73,7 @@ function buildWhereClause(params: Partial<FindAllParams>) {
   }
 
   if (params.dateFrom || params.dateTo) {
-    const timestampFilter: Record<string, Date> = {};
+    const timestampFilter: Prisma.DateTimeFilter = {};
     if (params.dateFrom) {
       timestampFilter.gte = new Date(params.dateFrom);
     }
@@ -82,7 +86,7 @@ function buildWhereClause(params: Partial<FindAllParams>) {
   }
 
   if (params.confidenceMin || params.confidenceMax) {
-    const confidenceFilter: Record<string, number> = {};
+    const confidenceFilter: Prisma.FloatFilter = {};
     if (params.confidenceMin) {
       confidenceFilter.gte = parseFloat(params.confidenceMin);
     }
@@ -103,10 +107,10 @@ export const detectionService = {
         label: input.label,
         confidence: input.confidence,
         imageUrl: input.imageUrl || "",
-        metadata: (input.metadata || {}) as any,
+        metadata: (input.metadata || {}) as Prisma.InputJsonValue,
       },
       include: { camera: true },
-    }) as any;
+    });
 
     const severity = getAlertSeverity(detection.status);
     const title = getAlertTitle(detection.label, detection.status);
@@ -131,19 +135,19 @@ export const detectionService = {
   async findAll(params: FindAllParams) {
     const where = buildWhereClause(params);
 
-    const orderBy: Record<string, string> = {};
+    const orderBy: Prisma.DetectionOrderByWithRelationInput = {};
     const sortField = params.sortBy || "timestamp";
-    orderBy[sortField] = params.sortOrder || "desc";
+    (orderBy as Record<string, string>)[sortField] = params.sortOrder || "desc";
 
     const [data, total] = await Promise.all([
       prisma.detection.findMany({
-        where: where as any,
+        where,
         include: { camera: true },
         orderBy: [orderBy],
         skip: (params.page - 1) * params.limit,
         take: params.limit,
       }),
-      prisma.detection.count({ where: where as any }),
+      prisma.detection.count({ where }),
     ]);
 
     return { data, total };
@@ -166,7 +170,7 @@ export const detectionService = {
     const where = buildWhereClause(params);
 
     const detections = await prisma.detection.findMany({
-      where: where as any,
+      where,
       include: { camera: true },
       orderBy: { timestamp: "desc" },
     });
