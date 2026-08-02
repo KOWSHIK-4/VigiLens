@@ -113,6 +113,24 @@ export const modelQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
+export const createModelSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  version: z.string().min(1, "Version is required").max(50),
+  description: z.string().max(500).optional(),
+  detectorKey: z.string().min(1, "Detector key is required").max(100),
+  confidenceThreshold: z.number().min(0).max(100).optional(),
+  enabled: z.boolean().optional(),
+  gpuSupported: z.boolean().optional(),
+  modelPath: z.string().min(1, "Model path is required").max(500).optional(),
+});
+
+export const modelThresholdSchema = z.object({
+  confidenceThreshold: z
+    .number()
+    .min(0, "Confidence threshold must be between 0 and 100")
+    .max(100, "Confidence threshold must be between 0 and 100"),
+});
+
 export const updateModelSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).optional(),
   version: z.string().min(1, "Version is required").max(50).optional(),
@@ -128,6 +146,7 @@ export const modelIdSchema = z.object({
 });
 
 export type UpdateModelInput = z.infer<typeof updateModelSchema>;
+export type CreateModelInput = z.infer<typeof createModelSchema>;
 export type ModelQueryInput = z.infer<typeof modelQuerySchema>;
 
 export type RegisterInput = z.infer<typeof registerSchema>;

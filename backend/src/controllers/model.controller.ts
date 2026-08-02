@@ -1,5 +1,10 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest, ModelQueryInput } from "@/types";
+import type {
+  AuthRequest,
+  ModelQueryInput,
+  CreateModelInput,
+  UpdateModelInput,
+} from "@/types";
 import { modelService } from "@/services/model.service";
 import { success, paginated } from "@/utils/apiResponse";
 
@@ -22,6 +27,15 @@ export const modelController = {
     }
   },
 
+  async create(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const model = await modelService.create(req.body as CreateModelInput);
+      success(res, model, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.findById(req.params.id as string);
@@ -31,10 +45,61 @@ export const modelController = {
     }
   },
 
+  async getActive(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const model = await modelService.getActive();
+      success(res, model);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const model = await modelService.update(req.params.id as string, req.body);
+      const model = await modelService.update(
+        req.params.id as string,
+        req.body as UpdateModelInput,
+      );
       success(res, model);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async enable(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const model = await modelService.setEnabled(req.params.id as string, true);
+      success(res, model);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async disable(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const model = await modelService.setEnabled(req.params.id as string, false);
+      success(res, model);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateThreshold(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const model = await modelService.setConfidenceThreshold(
+        req.params.id as string,
+        req.body.confidenceThreshold as number,
+      );
+      success(res, model);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await modelService.remove(req.params.id as string);
+      success(res, result);
     } catch (err) {
       next(err);
     }
