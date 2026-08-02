@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -11,9 +12,12 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { ArrowRight, Brain, Cpu } from "lucide-react";
 import { detectionService } from "@/services/detections";
+import { modelService } from "@/services/models";
 import StatsCard from "@/components/StatsCard";
 import DetectionCard from "@/components/DetectionCard";
+import ModelStatusBadge from "@/components/ModelStatusBadge";
 import type { Detection } from "@/types";
 
 const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6"];
@@ -24,6 +28,21 @@ export default function DashboardPage() {
     queryFn: () => detectionService.getStats(),
     refetchInterval: 30000,
   });
+
+  const { data: activeModel } = useQuery({
+    queryKey: ["models", "active"],
+    queryFn: () => modelService.getActive().catch(() => null),
+    refetchInterval: 30000,
+  });
+
+  const { data: modelStats } = useQuery({
+    queryKey: ["models", "stats"],
+    queryFn: () => modelService.getAll({ page: 1, limit: 100 }),
+    refetchInterval: 60000,
+  });
+
+  const enabledModels =
+    modelStats?.data.filter((m) => m.enabled).length ?? 0;
 
   if (isLoading) {
     return (
@@ -61,6 +80,57 @@ export default function DashboardPage() {
           title="Avg Confidence"
           value={`${((stats?.avgConfidence ?? 0) * 100).toFixed(1)}%`}
         />
+      </div>
+
+      <div className="card flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+            <Brain className="w-6 h-6 text-brand-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-500">
+              Active AI Model
+            </p>
+            {activeModel ? (
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                <p className="font-semibold text-gray-900 truncate">
+                  {activeModel.name}{" "}
+                  <span className="text-gray-400 font-normal">v{activeModel.version}</span>
+                </p>
+                <ModelStatusBadge status={activeModel.status} />
+                {activeModel.gpuSupported && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    <Cpu className="w-3 h-3" />
+                    GPU
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 mt-0.5">
+                No model is currently active
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">
+              {modelStats?.total ?? 0}
+            </p>
+            <p className="text-xs text-gray-500">Total Models</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-green-600">{enabledModels}</p>
+            <p className="text-xs text-gray-500">Enabled</p>
+          </div>
+          <Link
+            to="/models"
+            className="btn-secondary inline-flex items-center gap-1.5"
+          >
+            Manage Models
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
