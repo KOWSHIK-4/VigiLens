@@ -1,16 +1,18 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LoginPage from "@/pages/LoginPage";
-import DashboardPage from "@/pages/DashboardPage";
-import CamerasPage from "@/pages/CamerasPage";
-import DetectionsPage from "@/pages/DetectionsPage";
-import AnalyticsPage from "@/pages/AnalyticsPage";
-import LiveCameraPage from "@/pages/LiveCameraPage";
-import AlertsPage from "@/pages/AlertsPage";
-import ReportsPage from "@/pages/ReportsPage";
-import ModelsPage from "@/pages/ModelsPage";
+
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const CamerasPage = lazy(() => import("@/pages/CamerasPage"));
+const DetectionsPage = lazy(() => import("@/pages/DetectionsPage"));
+const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
+const LiveCameraPage = lazy(() => import("@/pages/LiveCameraPage"));
+const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
+const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,6 +23,14 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -35,14 +45,70 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
-            <Route path="cameras" element={<CamerasPage />} />
-            <Route path="detections" element={<DetectionsPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="live-camera" element={<LiveCameraPage />} />
-            <Route path="alerts" element={<AlertsPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="models" element={<ModelsPage />} />
+            <Route
+              index
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <DashboardPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="cameras"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <CamerasPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="detections"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <DetectionsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="analytics"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <AnalyticsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="live-camera"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <LiveCameraPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="alerts"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <AlertsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <ReportsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="models"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <ModelsPage />
+                </Suspense>
+              }
+            />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -49,16 +49,39 @@ GET /cameras/:id
 
 Manage detection models independently of cameras. Model statuses: `loaded`, `loading`, `disabled`, `error`.
 
+The database is seeded with 8 default models: Person Detection, Fire Detection, Smoking Detection, Helmet Detection, Face Mask Detection, Vehicle Detection, Intrusion Detection, and Drowsiness Detection. The first model (Person Detection) is kept as the default active model.
+
 ```bash
-GET   /models?page=1&limit=20&search=fire&status=loaded&enabled=true&sortBy=name&sortOrder=asc
-GET   /models/:id
-PATCH /models/:id
-POST  /models/:id/load
-POST  /models/:id/unload
-POST  /models/:id/test
+GET    /models?page=1&limit=20&search=fire&status=loaded&enabled=true&sortBy=name&sortOrder=asc
+GET    /models/active                 # currently active model
+GET    /models/:id
+POST   /models                        # create a model
+PATCH  /models/:id                    # update a model
+PATCH  /models/:id/enable             # enable a model
+PATCH  /models/:id/disable            # disable a model
+PATCH  /models/:id/threshold          # update confidence threshold
+DELETE /models/:id                    # delete a model
+POST   /models/:id/load
+POST   /models/:id/unload
+POST   /models/:id/test
 ```
 
-PATCH body (all fields optional):
+POST /models body:
+
+```json
+{
+  "name": "Fire Detection",
+  "version": "1.0.0",
+  "detectorKey": "fire",
+  "description": "Detects fire and open flames",
+  "confidenceThreshold": 45,
+  "enabled": true,
+  "gpuSupported": true,
+  "modelPath": "/models/fire/fire.pt"
+}
+```
+
+PATCH /models/:id body (all fields optional):
 
 ```json
 {
@@ -69,6 +92,14 @@ PATCH body (all fields optional):
   "enabled": true,
   "gpuSupported": true,
   "modelPath": "/models/person/yolo11n.pt"
+}
+```
+
+PATCH /models/:id/threshold body:
+
+```json
+{
+  "confidenceThreshold": 62
 }
 ```
 
