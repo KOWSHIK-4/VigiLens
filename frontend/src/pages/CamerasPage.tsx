@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
-import type { Camera } from "@/types";
+import type { Camera, CameraStatus, CameraType } from "@/types";
+import { getApiErrorMessage } from "@/utils/apiError";
 import { AddCameraDialog, EditCameraDialog, DeleteCameraDialog } from "@/components/CameraDialogs";
 import { CameraPreview } from "@/components/CameraPreview";
 import {
@@ -15,7 +16,7 @@ import {
   Activity,
   Loader2,
 } from "lucide-react";
-import { showToast } from "@/components/Toast";
+import { showToast } from "@/utils/toast";
 
 const statusConfig = {
   online: { dot: "bg-green-500", bg: "bg-green-100 text-green-800", label: "Online" },
@@ -46,8 +47,8 @@ export default function CamerasPage() {
     queryFn: () =>
       cameraService.getAll({
         search: search || undefined,
-        status: (statusFilter || undefined) as any,
-        cameraType: (typeFilter || undefined) as any,
+        status: (statusFilter || undefined) as CameraStatus | undefined,
+        cameraType: (typeFilter || undefined) as CameraType | undefined,
         page,
         limit: 12,
       }),
@@ -59,8 +60,8 @@ export default function CamerasPage() {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       showToast({ severity: "info", title: "Camera started", message: "Camera is connecting..." });
     },
-    onError: (err: any) => {
-      showToast({ severity: "critical", title: "Failed to start", message: err.response?.data?.error || err.message });
+    onError: (err: unknown) => {
+      showToast({ severity: "critical", title: "Failed to start", message: getApiErrorMessage(err, "Failed to start camera") });
     },
   });
 
@@ -70,8 +71,8 @@ export default function CamerasPage() {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       showToast({ severity: "info", title: "Camera stopped", message: "Camera has been disconnected" });
     },
-    onError: (err: any) => {
-      showToast({ severity: "critical", title: "Failed to stop", message: err.response?.data?.error || err.message });
+    onError: (err: unknown) => {
+      showToast({ severity: "critical", title: "Failed to stop", message: getApiErrorMessage(err, "Failed to stop camera") });
     },
   });
 
@@ -85,8 +86,8 @@ export default function CamerasPage() {
         message: camera.isHealthy ? "Health check passed" : "Health check failed",
       });
     },
-    onError: (err: any) => {
-      showToast({ severity: "critical", title: "Health check failed", message: err.response?.data?.error || err.message });
+    onError: (err: unknown) => {
+      showToast({ severity: "critical", title: "Health check failed", message: getApiErrorMessage(err, "Health check failed") });
     },
   });
 
@@ -151,7 +152,7 @@ export default function CamerasPage() {
         <div className="text-center py-16">
           <Monitor className="w-12 h-12 text-red-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-red-600">Failed to load cameras</h3>
-          <p className="text-gray-500 mt-1">{(queryError as any)?.message || "Something went wrong"}</p>
+          <p className="text-gray-500 mt-1">{queryError instanceof Error ? queryError.message : "Something went wrong"}</p>
           <button onClick={() => window.location.reload()} className="btn-primary mt-4">
             Retry
           </button>

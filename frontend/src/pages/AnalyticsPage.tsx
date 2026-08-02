@@ -36,12 +36,14 @@ function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+import type { TooltipProps } from "recharts";
+
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-gray-200 shadow-lg rounded-lg p-3 text-sm">
       <p className="font-semibold text-gray-900 mb-1">{label}</p>
-      {payload.map((entry: any, i: number) => (
+      {payload.map((entry, i) => (
         <p key={i} style={{ color: entry.color }} className="font-medium">
           {entry.name}: {typeof entry.value === "number" ? entry.value.toLocaleString() : entry.value}
         </p>
@@ -98,11 +100,11 @@ export default function AnalyticsPage() {
   const isLoading = overviewQuery.isLoading || dailyQuery.isLoading;
 
   const overview = overviewQuery.data;
-  const dailyData = dailyQuery.data ?? [];
-  const camerasData = camerasQuery.data ?? [];
-  const detectorsData = detectorsQuery.data ?? [];
-  const timelineData = timelineQuery.data ?? [];
-  const confidenceData = confidenceQuery.data ?? [];
+  const dailyData = useMemo(() => dailyQuery.data ?? [], [dailyQuery.data]);
+  const camerasData = useMemo(() => camerasQuery.data ?? [], [camerasQuery.data]);
+  const detectorsData = useMemo(() => detectorsQuery.data ?? [], [detectorsQuery.data]);
+  const timelineData = useMemo(() => timelineQuery.data ?? [], [timelineQuery.data]);
+  const confidenceData = useMemo(() => confidenceQuery.data ?? [], [confidenceQuery.data]);
 
   const severityData = useMemo(
     () => overview?.severityDistribution ?? [],

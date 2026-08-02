@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
 import type { Camera, CreateCameraInput, CameraType } from "@/types";
+import { getApiErrorMessage } from "@/utils/apiError";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 
 interface AddCameraDialogProps {
@@ -184,9 +185,8 @@ export function AddCameraDialog({ open, onClose }: AddCameraDialogProps) {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       onClose();
     },
-    onError: (err: any) => {
-      const msg = err.response?.data?.error || err.message || "Failed to create camera";
-      setServerError(msg);
+    onError: (err: unknown) => {
+      setServerError(getApiErrorMessage(err, "Failed to create camera"));
     },
   });
 
@@ -274,8 +274,8 @@ export function EditCameraDialog({ open, onClose, camera }: EditCameraDialogProp
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       onClose();
     },
-    onError: (err: any) => {
-      setServerError(err.response?.data?.error || err.message || "Failed to update camera");
+    onError: (err: unknown) => {
+      setServerError(getApiErrorMessage(err, "Failed to update camera"));
     },
   });
 
@@ -361,8 +361,8 @@ export function DeleteCameraDialog({ open, onClose, camera }: DeleteCameraDialog
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       onClose();
     },
-    onError: (err: any) => {
-      setError(err.response?.data?.error || err.message || "Failed to delete camera");
+    onError: (err: unknown) => {
+      setError(getApiErrorMessage(err, "Failed to delete camera"));
     },
   });
 
