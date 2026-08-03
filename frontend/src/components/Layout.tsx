@@ -80,7 +80,7 @@ export default function Layout() {
           <p className="text-sm text-gray-400 mt-1">Security Monitoring</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;

@@ -238,7 +238,7 @@ function RoleCard({ role, canManage, onEdit }: RoleCardProps) {
   const protectedRole = role.name === "super_admin";
 
   return (
-    <div className="card flex flex-col">
+    <div className="card flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div
@@ -248,9 +248,15 @@ function RoleCard({ role, canManage, onEdit }: RoleCardProps) {
           </div>
           <div className="min-w-0">
             <RoleBadge role={role.name} />
-            <p className="text-xs text-gray-500 mt-1.5">
-              {role.userCount} user{role.userCount === 1 ? "" : "s"}
-            </p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-xs text-gray-500">
+                {role.userCount} user{role.userCount === 1 ? "" : "s"}
+              </span>
+              <span className="text-xs text-gray-300">•</span>
+              <span className="text-xs text-gray-500">
+                {role.permissions.length} permission{role.permissions.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
         </div>
         {canManage && !protectedRole ? (
