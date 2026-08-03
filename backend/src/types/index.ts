@@ -4,6 +4,7 @@ import type { Request } from "express";
 export interface AuthRequest extends Request {
   userId?: string;
   userRole?: string;
+  permissions?: Set<string>;
 }
 
 export const registerSchema = z.object({
@@ -153,3 +154,57 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateCameraInput = z.infer<typeof createCameraSchema>;
 export type UpdateCameraInput = z.infer<typeof updateCameraSchema>;
+
+export const userRoleSchema = z.enum(["super_admin", "admin", "operator", "viewer"]);
+export const userStatusSchema = z.enum(["active", "disabled"]);
+
+export const createUserSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters").max(100),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters").max(100),
+  role: userRoleSchema.default("operator"),
+});
+
+export const updateUserSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters").max(100).optional(),
+  email: z.string().email("Invalid email address").optional(),
+  avatar: z.string().url("Invalid avatar URL").max(500).optional().nullable(),
+});
+
+export const assignRoleSchema = z.object({
+  role: userRoleSchema,
+});
+
+export const userStatusUpdateSchema = z.object({
+  status: userStatusSchema,
+});
+
+export const userQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  role: userRoleSchema.optional(),
+  status: userStatusSchema.optional(),
+  sortBy: z
+    .enum(["name", "email", "role", "status", "lastLogin", "createdAt"])
+    .optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export const userIdSchema = z.object({
+  id: z.string().uuid("Invalid user id"),
+});
+
+export const roleNameSchema = z.object({
+  name: userRoleSchema,
+});
+
+export const updateRolePermissionsSchema = z.object({
+  permissionKeys: z.array(z.string().min(1, "Permission key cannot be empty")).max(100),
+});
+
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
+export type UserQueryInput = z.infer<typeof userQuerySchema>;
+export type UpdateRolePermissionsInput = z.infer<typeof updateRolePermissionsSchema>;
