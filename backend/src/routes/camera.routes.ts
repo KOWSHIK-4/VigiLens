@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { cameraController } from "@/controllers/camera.controller";
-import { authenticate, authorize } from "@/middleware/auth";
+import { authenticate } from "@/middleware/auth";
+import { requirePermission } from "@/middleware/permissions";
 import { validate } from "@/middleware/validate";
 import { createCameraSchema, updateCameraSchema, cameraQuerySchema } from "@/types";
 
@@ -8,14 +9,14 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get("/", validate(cameraQuerySchema, "query"), cameraController.getAll);
-router.get("/:id", cameraController.getById);
-router.post("/", authorize("admin", "operator"), validate(createCameraSchema), cameraController.create);
-router.patch("/:id", authorize("admin", "operator"), validate(updateCameraSchema), cameraController.update);
-router.delete("/:id", authorize("admin"), cameraController.remove);
-router.post("/:id/start", authorize("admin", "operator"), cameraController.start);
-router.post("/:id/stop", authorize("admin", "operator"), cameraController.stop);
-router.post("/:id/health", cameraController.healthCheck);
-router.get("/:id/health-logs", cameraController.getHealthLogs);
+router.get("/", requirePermission("cameras.read"), validate(cameraQuerySchema, "query"), cameraController.getAll);
+router.get("/:id", requirePermission("cameras.read"), cameraController.getById);
+router.post("/", requirePermission("cameras.manage"), validate(createCameraSchema), cameraController.create);
+router.patch("/:id", requirePermission("cameras.manage"), validate(updateCameraSchema), cameraController.update);
+router.delete("/:id", requirePermission("cameras.manage"), cameraController.remove);
+router.post("/:id/start", requirePermission("cameras.control"), cameraController.start);
+router.post("/:id/stop", requirePermission("cameras.control"), cameraController.stop);
+router.post("/:id/health", requirePermission("cameras.read"), cameraController.healthCheck);
+router.get("/:id/health-logs", requirePermission("cameras.read"), cameraController.getHealthLogs);
 
 export default router;
