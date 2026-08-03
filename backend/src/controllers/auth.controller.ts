@@ -24,7 +24,11 @@ export const authController = {
       logger.info(`User logged in: ${result.user.email}`);
       success(res, result);
     } catch (err) {
-      if (err instanceof Error && err.message === "Invalid email or password") {
+      if (
+        err instanceof Error &&
+        (err.message === "Invalid email or password" ||
+          err.message === "Account disabled. Contact your administrator")
+      ) {
         return error(res, err.message, 401);
       }
       next(err);

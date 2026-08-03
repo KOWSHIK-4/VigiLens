@@ -39,11 +39,20 @@ export const authService = {
       throw new Error("Invalid email or password");
     }
 
+    if (user.status === "disabled") {
+      throw new Error("Account disabled. Contact your administrator");
+    }
+
     const valid = await bcrypt.compare(input.password, user.password);
 
     if (!valid) {
       throw new Error("Invalid email or password");
     }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
 
     const token = this.generateToken(user.id, user.role);
 
@@ -53,6 +62,9 @@ export const authService = {
         email: user.email,
         name: user.name,
         role: user.role,
+        status: user.status,
+        avatar: user.avatar,
+        lastLogin: user.lastLogin,
         createdAt: user.createdAt,
       },
       token,
@@ -62,7 +74,16 @@ export const authService = {
   async me(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        avatar: true,
+        lastLogin: true,
+        createdAt: true,
+      },
     });
 
     if (!user) {

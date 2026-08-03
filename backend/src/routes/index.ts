@@ -6,6 +6,7 @@ import alertRoutes from "./alert.routes";
 import analyticsRoutes from "./analytics.routes";
 import reportRoutes from "./report.routes";
 import modelRoutes from "./model.routes";
+import userRoutes from "./user.routes";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/alerts", alertRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/reports", reportRoutes);
 router.use("/models", modelRoutes);
+router.use("/users", userRoutes);
 
 export default router;
