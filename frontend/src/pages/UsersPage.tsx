@@ -6,8 +6,14 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  KeyRound,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
+  Trash2,
+  UserRoundX,
   Users,
 } from "lucide-react";
 import { userService } from "@/services/users";
@@ -15,7 +21,17 @@ import UserAvatar from "@/components/UserAvatar";
 import RoleBadge from "@/components/RoleBadge";
 import UserStatusBadge from "@/components/UserStatusBadge";
 import UserStatsCards, { UserStatsSkeleton } from "@/components/UserStats";
-import type { UserRole, UserStatus } from "@/types";
+import {
+  AddUserDialog,
+  AssignRoleDialog,
+  DeleteUserDialog,
+  EditUserDialog,
+  ResetPasswordDialog,
+  ToggleStatusDialog,
+} from "@/components/UserDialogs";
+import { can } from "@/utils/permissions";
+import { useAuth } from "@/hooks/useAuth";
+import type { User, UserRole, UserStatus } from "@/types";
 
 const PAGE_SIZE = 10;
 
@@ -73,12 +89,24 @@ function TableSkeleton() {
 }
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"" | UserRole>("");
   const [statusFilter, setStatusFilter] = useState<"" | UserStatus>("");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState<User | null>(null);
+  const [assigning, setAssigning] = useState<User | null>(null);
+  const [toggling, setToggling] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+
+  const canManage = can(currentUser?.role, "users:write");
+  const canAssignRole = can(currentUser?.role, "users:assign-role");
+  const canToggleStatus = can(currentUser?.role, "users:toggle-status");
+  const canResetPassword = can(currentUser?.role, "users:reset-password");
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["users", { search, roleFilter, statusFilter, sortBy, sortOrder, page }],
@@ -132,6 +160,15 @@ export default function UsersPage() {
             Manage accounts, roles and access across your organisation
           </p>
         </div>
+        {canManage && (
+          <button
+            className="btn-primary inline-flex items-center gap-2"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="w-4 h-4" />
+            Add User
+          </button>
+        )}
       </div>
 
       {statsLoading || !stats ? (
@@ -240,6 +277,12 @@ export default function UsersPage() {
                       </span>
                     </th>
                   ))}
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
@@ -267,6 +310,64 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                       {formatDateTime(user.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        {canAssignRole && (
+                          <button
+                            onClick={() => setAssigning(user)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            aria-label={`Assign role to ${user.name}`}
+                            title="Assign Role"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canResetPassword && (
+                          <button
+                            onClick={() => setResetting(user)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            aria-label={`Reset password for ${user.name}`}
+                            title="Reset Password"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canToggleStatus && (
+                          <button
+                            onClick={() => setToggling(user)}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              user.status === "active"
+                                ? "text-gray-400 hover:text-amber-600 hover:bg-amber-50"
+                                : "text-gray-400 hover:text-green-600 hover:bg-green-50"
+                            }`}
+                            aria-label={`${user.status === "active" ? "Disable" : "Enable"} ${user.name}`}
+                            title={user.status === "active" ? "Disable User" : "Enable User"}
+                          >
+                            <UserRoundX className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setEditing(user)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            aria-label={`Edit ${user.name}`}
+                            title="Edit User"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setDeleting(user)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            aria-label={`Delete ${user.name}`}
+                            title="Delete User"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -334,6 +435,33 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      <AddUserDialog open={addOpen} onClose={() => setAddOpen(false)} />
+      <EditUserDialog
+        open={Boolean(editing)}
+        user={editing}
+        onClose={() => setEditing(null)}
+      />
+      <DeleteUserDialog
+        open={Boolean(deleting)}
+        user={deleting as User}
+        onClose={() => setDeleting(null)}
+      />
+      <AssignRoleDialog
+        open={Boolean(assigning)}
+        user={assigning as User}
+        onClose={() => setAssigning(null)}
+      />
+      <ToggleStatusDialog
+        open={Boolean(toggling)}
+        user={toggling as User}
+        onClose={() => setToggling(null)}
+      />
+      <ResetPasswordDialog
+        open={Boolean(resetting)}
+        user={resetting as User}
+        onClose={() => setResetting(null)}
+      />
     </div>
   );
 }
