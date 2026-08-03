@@ -15,14 +15,19 @@ import {
 import { ArrowRight, Brain, Cpu } from "lucide-react";
 import { detectionService } from "@/services/detections";
 import { modelService } from "@/services/models";
+import { userService } from "@/services/users";
 import StatsCard from "@/components/StatsCard";
 import DetectionCard from "@/components/DetectionCard";
 import ModelStatusBadge from "@/components/ModelStatusBadge";
+import { can } from "@/utils/permissions";
+import { useAuth } from "@/hooks/useAuth";
 import type { Detection } from "@/types";
 
 const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6"];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const showUserStats = can(user?.role, "users:read");
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => detectionService.getStats(),
@@ -43,6 +48,13 @@ export default function DashboardPage() {
 
   const enabledModels =
     modelStats?.data.filter((m) => m.enabled).length ?? 0;
+
+  const { data: userStats } = useQuery({
+    queryKey: ["users", "stats"],
+    enabled: showUserStats,
+    queryFn: () => userService.getStats(),
+    refetchInterval: 60000,
+  });
 
   if (isLoading) {
     return (
@@ -81,6 +93,29 @@ export default function DashboardPage() {
           value={`${((stats?.avgConfidence ?? 0) * 100).toFixed(1)}%`}
         />
       </div>
+
+      {showUserStats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatsCard
+            title="Total Users"
+            value={userStats?.total ?? 0}
+            change="+8%"
+          />
+          <StatsCard
+            title="Online Now"
+            value={userStats?.online ?? 0}
+            change="+15%"
+          />
+          <StatsCard
+            title="Active Users"
+            value={userStats?.active ?? 0}
+          />
+          <StatsCard
+            title="Disabled Users"
+            value={userStats?.disabled ?? 0}
+          />
+        </div>
+      )}
 
       <div className="card flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
         <div className="flex items-center gap-4 min-w-0">

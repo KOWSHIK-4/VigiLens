@@ -13,6 +13,8 @@ const LiveCameraPage = lazy(() => import("@/pages/LiveCameraPage"));
 const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
 const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const RolesPage = lazy(() => import("@/pages/RolesPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,6 +108,22 @@ export default function App() {
               element={
                 <Suspense fallback={<PageFallback />}>
                   <ModelsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <UsersPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="roles"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <RolesPage />
                 </Suspense>
               }
             />

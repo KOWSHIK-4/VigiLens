@@ -9,12 +9,16 @@ import {
   ScanEye,
   BarChart3,
   MonitorPlay,
+  Shield,
+  Users,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { alertService } from "@/services/alerts";
 import ToastItem from "./Toast";
 import { showToast, useToast } from "@/utils/toast";
 import { useEffect, useRef } from "react";
+import { can } from "@/utils/permissions";
+import { useAuth } from "@/hooks/useAuth";
 import type { Alert } from "@/types";
 
 const navItems = [
@@ -27,10 +31,17 @@ const navItems = [
   { path: "/models", label: "AI Models", icon: Brain },
 ];
 
+const adminNavItems = [
+  { path: "/users", label: "Users", icon: Users },
+  { path: "/roles", label: "Roles", icon: Shield },
+];
+
 export default function Layout() {
   const location = useLocation();
   const { toasts, dismiss } = useToast();
+  const { user } = useAuth();
   const prevAlertIds = useRef<Set<string>>(new Set());
+  const showAdminNav = can(user?.role, "users:read");
 
   const { data: unreadData } = useQuery({
     queryKey: ["alerts", "unread-count"],
@@ -88,6 +99,31 @@ export default function Layout() {
               </Link>
             );
           })}
+          {showAdminNav && (
+            <>
+              <div className="pt-3 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Administration
+              </div>
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                const active = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-brand-600 text-white"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </>
+          )}
           <Link
             to="/alerts"
             className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
