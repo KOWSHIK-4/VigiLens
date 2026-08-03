@@ -3,12 +3,15 @@ import type { AuthResponse, User } from "@/types";
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthResponse> {
-    const { data } = await api.post<AuthResponse>("/auth/login", {
-      email,
-      password,
-    });
-    localStorage.setItem("token", data.token);
-    return data;
+    const { data } = await api.post<{ success: boolean; data: AuthResponse }>(
+      "/auth/login",
+      {
+        email,
+        password,
+      },
+    );
+    localStorage.setItem("token", data.data.token);
+    return data.data;
   },
 
   async register(
@@ -16,18 +19,23 @@ export const authService = {
     email: string,
     password: string,
   ): Promise<AuthResponse> {
-    const { data } = await api.post<AuthResponse>("/auth/register", {
-      name,
-      email,
-      password,
-    });
-    localStorage.setItem("token", data.token);
-    return data;
+    const { data } = await api.post<{ success: boolean; data: AuthResponse }>(
+      "/auth/register",
+      {
+        name,
+        email,
+        password,
+      },
+    );
+    localStorage.setItem("token", data.data.token);
+    return data.data;
   },
 
   async me(): Promise<User> {
-    const { data } = await api.get<User>("/auth/me");
-    return data;
+    const { data } = await api.get<{ success: boolean; data: User }>(
+      "/auth/me",
+    );
+    return data.data;
   },
 
   logout(): void {
