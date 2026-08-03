@@ -7,10 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
+enum RoleValue {
+  super_admin
   admin
   operator
   viewer
+}
+
+enum UserStatus {
+  active
+  disabled
 }
 
 enum DetectionStatus {
@@ -40,15 +46,52 @@ enum CameraType {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String     @id @default(uuid())
+  email     String     @unique
   password  String
   name      String
-  role      Role     @default(operator)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  role      RoleValue  @default(operator)
+  status    UserStatus @default(active)
+  avatar    String?
+  lastLogin DateTime?  @map("last_login")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
+  @@index([role])
+  @@index([status])
+  @@index([lastLogin])
   @@map("users")
+}
+
+model Role {
+  name        RoleValue        @id
+  description String           @default("")
+  isSystem    Boolean          @default(true) @map("is_system")
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  name        String
+  description String           @default("")
+  category    String           @default("general")
+  roles       RolePermission[]
+
+  @@index([category])
+  @@map("permissions")
+}
+
+model RolePermission {
+  role         RoleValue    @map("role_name")
+  permissionId String       @map("permission_id")
+  roleRelation Role         @relation(fields: [role], references: [name], onDelete: Cascade)
+  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([role, permissionId])
+  @@map("role_permissions")
 }
 
 model Camera {
