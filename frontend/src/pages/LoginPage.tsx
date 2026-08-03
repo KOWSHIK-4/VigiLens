@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { authService } from "@/services/auth";
 
 export default function LoginPage() {
@@ -23,8 +24,11 @@ export default function LoginPage() {
         await authService.login(email, password);
       }
       navigate("/");
-    } catch {
-      setError("Invalid credentials. Please try again.");
+    } catch (err) {
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error
+        : undefined;
+      setError(message || "Invalid credentials. Please try again.");
     } finally {
       setLoading(false);
     }

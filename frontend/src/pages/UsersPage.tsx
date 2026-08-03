@@ -294,6 +294,11 @@ export default function UsersPage() {
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate">
                             {user.name}
+                            {user.id === currentUser?.id && (
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide bg-brand-50 text-brand-700 border border-brand-100 align-middle">
+                                You
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
@@ -313,7 +318,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
-                        {canAssignRole && (
+                        {canAssignRole && user.id !== currentUser?.id && (
                           <button
                             onClick={() => setAssigning(user)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
@@ -333,7 +338,7 @@ export default function UsersPage() {
                             <KeyRound className="w-4 h-4" />
                           </button>
                         )}
-                        {canToggleStatus && (
+                        {canToggleStatus && user.id !== currentUser?.id && (
                           <button
                             onClick={() => setToggling(user)}
                             className={`p-1.5 rounded-lg transition-colors ${
@@ -357,7 +362,7 @@ export default function UsersPage() {
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
-                        {canManage && (
+                        {canManage && user.id !== currentUser?.id && (
                           <button
                             onClick={() => setDeleting(user)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"

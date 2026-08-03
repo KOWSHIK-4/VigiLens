@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AuthProvider from "@/components/AuthProvider";
 import LoginPage from "@/pages/LoginPage";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -43,7 +44,9 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <Layout />
+                <AuthProvider>
+                  <Layout />
+                </AuthProvider>
               </ProtectedRoute>
             }
           >
