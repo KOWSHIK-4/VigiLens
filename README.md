@@ -86,7 +86,10 @@ uvicorn app.main:app --reload
 - **Real-time Detection** — Process live camera streams with low latency
 - **Multi-model Support** — Pluggable architecture for custom detection models
 - **Dashboard & Analytics** — Recharts-powered visualizations and trends
-- **User Management** — JWT authentication with role-based access
+- **User & Role Management** — 4 built-in roles with 19 granular permissions, a
+  full users page (search, filters, sorting, pagination, status toggles,
+  role assignment) and a role page with a permission editor; disabled accounts
+  are blocked at login and on every request
 - **Alert System** — Configurable thresholds and notification channels
 - **RESTful API** — Fully documented API with Zod validation
 - **Dockerized** — One-command deployment with compose

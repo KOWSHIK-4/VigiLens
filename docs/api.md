@@ -30,6 +30,38 @@ POST /auth/login
 
 All subsequent requests require the `Authorization: Bearer <token>` header.
 
+## Users & Roles (RBAC)
+
+Access to every resource is governed by role-based permissions. The database is
+seeded with 19 permissions across 8 categories and 4 roles: `super_admin`
+(full access), `admin` (manage users, cameras and models), `operator`
+(monitor cameras, detections and alerts) and `viewer` (read-only). Accounts
+with status `disabled` cannot log in (401). Seed accounts (password
+`admin123`): `super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
+`viewer@vigilens.io`, `disabled@vigilens.io`.
+
+```bash
+GET    /users?page=1&limit=10&search=jane&role=admin&status=active&sortBy=name&sortOrder=asc
+GET    /users/stats                          # total, active, disabled, online
+GET    /users/:id
+POST   /users                                # create a user (email must be unique)
+PATCH  /users/:id                            # update name / avatar
+PATCH  /users/:id/role                       # { "role": "operator" }
+PATCH  /users/:id/status                     # { "status": "disabled" }
+DELETE /users/:id                            # self-delete and last super-admin are blocked
+```
+
+Role management:
+
+```bash
+GET    /roles                                # roles with permissions and user counts
+PATCH  /roles/:name/permissions              # { "permissionKeys": ["cameras.read", "..."] }
+```
+
+- Disabled accounts are rejected with 403 on every authenticated request.
+- Editing `super_admin` permissions is always blocked (400).
+- Permission changes take effect immediately (per-role cache is invalidated).
+
 ## Detections
 
 ```bash
