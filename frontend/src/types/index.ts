@@ -1,14 +1,67 @@
+export type UserRole = "super_admin" | "admin" | "operator" | "viewer";
+export type UserStatus = "active" | "disabled";
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "operator" | "viewer";
+  role: UserRole;
+  status: UserStatus;
+  avatar: string | null;
+  lastLogin: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+export interface Permission {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface Role {
+  name: UserRole;
+  description: string;
+  isSystem: boolean;
+  userCount: number;
+  permissions: Permission[];
+}
+
+export interface UserStats {
+  total: number;
+  active: number;
+  disabled: number;
+  online: number;
+}
+
+export interface UserFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role?: UserRole;
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  email?: string;
+  avatar?: string | null;
 }
 
 export interface Detection {
