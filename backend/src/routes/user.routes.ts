@@ -6,6 +6,7 @@ import { validate } from "@/middleware/validate";
 import {
   assignRoleSchema,
   createUserSchema,
+  resetPasswordSchema,
   updateUserSchema,
   userIdSchema,
   userQuerySchema,
@@ -59,6 +60,13 @@ router.patch(
   validate(userIdSchema, "params"),
   validate(userStatusUpdateSchema),
   userController.setStatus,
+);
+router.patch(
+  "/:id/password",
+  requirePermission("users.reset_password"),
+  validate(userIdSchema, "params"),
+  validate(resetPasswordSchema),
+  userController.resetPassword,
 );
 router.delete(
   "/:id",

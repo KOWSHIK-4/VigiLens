@@ -4,6 +4,7 @@ import { logger } from "@/config/logger";
 import { ApiError } from "@/utils/errors";
 import type {
   CreateUserInput,
+  ResetPasswordInput,
   UpdateUserInput,
   UserQueryInput,
 } from "@/types";
@@ -195,6 +196,17 @@ export const userService = {
       data: { status },
       select: safeSelect,
     });
+  },
+
+  async resetPassword(id: string, input: ResetPasswordInput) {
+    await this.findById(id);
+    const hashedPassword = await bcrypt.hash(input.password, 12);
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword },
+    });
+    logger.info("Password reset", { userId: id });
+    return { success: true };
   },
 
   async stats() {

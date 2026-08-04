@@ -195,6 +195,10 @@ export const userIdSchema = z.object({
   id: z.string().uuid("Invalid user id"),
 });
 
+export const resetPasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters").max(100),
+});
+
 export const roleNameSchema = z.object({
   name: userRoleSchema,
 });
@@ -208,3 +212,4 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
 export type UserQueryInput = z.infer<typeof userQuerySchema>;
 export type UpdateRolePermissionsInput = z.infer<typeof updateRolePermissionsSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

@@ -2,6 +2,7 @@ import type { Response, NextFunction } from "express";
 import type {
   AuthRequest,
   CreateUserInput,
+  ResetPasswordInput,
   UpdateUserInput,
   UserQueryInput,
 } from "@/types";
@@ -99,6 +100,18 @@ export const userController = {
         req.userId,
       );
       success(res, user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await userService.resetPassword(
+        req.params.id as string,
+        req.body as ResetPasswordInput,
+      );
+      success(res, result);
     } catch (err) {
       next(err);
     }
