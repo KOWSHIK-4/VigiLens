@@ -306,6 +306,59 @@ async function run() {
     fail("GET /users filters", search);
   }
 
+  const reenable = await request(
+    `/users/${userId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status: "active" }) },
+    superToken,
+  );
+  if (reenable.status !== 200) {
+    fail("re-enable user for password reset test", reenable);
+    return;
+  }
+
+  const resetPw = await request(
+    `/users/${userId}/password`,
+    { method: "PATCH", body: JSON.stringify({ password: "newpass1234" }) },
+    superToken,
+  );
+  if (resetPw.status === 200 && (resetPw.body as { data: { success: boolean } }).data.success === true) {
+    ok("PATCH /users/:id/password resets the password");
+  } else {
+    fail("PATCH /users/:id/password", resetPw);
+  }
+
+  const resetLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password: "newpass1234" }),
+  });
+  if (resetLogin.status === 200) {
+    ok("user can log in with new password after reset");
+  } else {
+    fail("reset password login", resetLogin);
+  }
+
+  const resetPwShort = await request(
+    `/users/${userId}/password`,
+    { method: "PATCH", body: JSON.stringify({ password: "short" }) },
+    superToken,
+  );
+  if (resetPwShort.status === 400) {
+    ok("PATCH /users/:id/password rejects short passwords (400)");
+  } else {
+    fail("password reset validation", resetPwShort);
+  }
+
+  const resetPwViewer = await request(
+    `/users/${userId}/password`,
+    { method: "PATCH", body: JSON.stringify({ password: "newpass5678" }) },
+    viewerToken,
+  );
+  if (resetPwViewer.status === 403) {
+    ok("viewer cannot reset passwords (403)");
+  } else {
+    fail("password reset permission guard", resetPwViewer);
+  }
+
   const selfDeleteReal = await request(
     `/users/${(login.body as { data: { user: { id: string } } }).data.user.id}`,
     { method: "DELETE" },
