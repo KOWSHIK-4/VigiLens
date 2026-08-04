@@ -41,7 +41,7 @@ export default function Layout() {
   const { toasts, dismiss } = useToast();
   const { user } = useAuth();
   const prevAlertIds = useRef<Set<string>>(new Set());
-  const showAdminNav = can(user?.role, "users:read");
+  const showAdminNav = can(user?.role, "users.read");
 
   const { data: unreadData } = useQuery({
     queryKey: ["alerts", "unread-count"],

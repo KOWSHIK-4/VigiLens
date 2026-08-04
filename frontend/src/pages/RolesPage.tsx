@@ -326,7 +326,7 @@ function RolesSkeleton() {
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
   const [editing, setEditing] = useState<Role | null>(null);
-  const canManageRoles = can(currentUser?.role, "roles:manage");
+  const canManageRoles = can(currentUser?.role, "roles.manage");
 
   const { data: roles, isLoading, isError } = useQuery({
     queryKey: ["roles"],

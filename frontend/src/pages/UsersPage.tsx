@@ -103,10 +103,10 @@ export default function UsersPage() {
   const [toggling, setToggling] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
 
-  const canManage = can(currentUser?.role, "users:write");
-  const canAssignRole = can(currentUser?.role, "users:assign-role");
-  const canToggleStatus = can(currentUser?.role, "users:toggle-status");
-  const canResetPassword = can(currentUser?.role, "users:reset-password");
+  const canManage = can(currentUser?.role, "users.write");
+  const canAssignRole = can(currentUser?.role, "users.assign_role");
+  const canToggleStatus = can(currentUser?.role, "users.toggle_status");
+  const canResetPassword = can(currentUser?.role, "users.reset_password");
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["users", { search, roleFilter, statusFilter, sortBy, sortOrder, page }],

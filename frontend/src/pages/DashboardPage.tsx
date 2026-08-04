@@ -27,7 +27,7 @@ const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6"];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const showUserStats = can(user?.role, "users:read");
+  const showUserStats = can(user?.role, "users.read");
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => detectionService.getStats(),
