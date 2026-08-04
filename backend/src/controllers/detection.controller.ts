@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
 import { detectionService } from "@/services/detection.service";
 import { success, paginated } from "@/utils/apiResponse";
+import { logAudit } from "@/utils/auditLog";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -13,6 +14,17 @@ export const detectionController = {
         confidence,
         imageUrl: image_url,
         metadata,
+      });
+      const info = {
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+      };
+      await logAudit({
+        action: "detection_created",
+        module: "detections",
+        description: `Detection created: ${detection.label}`,
+        ...info,
+        metadata: { detectionId: detection.id, label: detection.label, cameraId: camera_id },
       });
       success(res, detection, 201);
     } catch (err) {

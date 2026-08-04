@@ -8,6 +8,7 @@ import reportRoutes from "./report.routes";
 import modelRoutes from "./model.routes";
 import userRoutes from "./user.routes";
 import roleRoutes from "./role.routes";
+import auditLogRoutes from "./auditLog.routes";
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use("/reports", reportRoutes);
 router.use("/models", modelRoutes);
 router.use("/users", userRoutes);
 router.use("/roles", roleRoutes);
+router.use("/audit-logs", auditLogRoutes);
 
 export default router;

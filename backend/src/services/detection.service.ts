@@ -4,6 +4,7 @@ import type {
   DetectionStatus,
   Prisma,
 } from "@prisma/client";
+import { logAudit } from "@/utils/auditLog";
 
 interface CreateDetectionInput {
   cameraId: string;
@@ -120,13 +121,20 @@ export const detectionService = {
       detection.camera?.name,
     );
 
-    await prisma.alert.create({
+    const alert = await prisma.alert.create({
       data: {
         detectionId: detection.id,
         severity,
         title,
         message,
       },
+    });
+
+    await logAudit({
+      action: "alert_created",
+      module: "alerts",
+      description: `Alert created: ${title}`,
+      metadata: { alertId: alert.id, detectionId: detection.id, severity },
     });
 
     return detection;

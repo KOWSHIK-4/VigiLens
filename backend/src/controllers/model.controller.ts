@@ -6,7 +6,16 @@ import type {
   UpdateModelInput,
 } from "@/types";
 import { modelService } from "@/services/model.service";
+import { userService } from "@/services/user.service";
 import { success, paginated } from "@/utils/apiResponse";
+import { logAudit } from "@/utils/auditLog";
+
+function getClientInfo(req: AuthRequest) {
+  return {
+    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+    userAgent: req.headers["user-agent"] || "",
+  };
+}
 
 export const modelController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -30,6 +39,18 @@ export const modelController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.create(req.body as CreateModelInput);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_updated",
+        module: "models",
+        description: `AI model created: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name, detectorKey: model.detectorKey },
+      });
       success(res, model, 201);
     } catch (err) {
       next(err);
@@ -60,6 +81,18 @@ export const modelController = {
         req.params.id as string,
         req.body as UpdateModelInput,
       );
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_updated",
+        module: "models",
+        description: `AI model updated: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name, fields: Object.keys(req.body) },
+      });
       success(res, model);
     } catch (err) {
       next(err);
@@ -69,6 +102,18 @@ export const modelController = {
   async enable(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.setEnabled(req.params.id as string, true);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_enabled",
+        module: "models",
+        description: `AI model enabled: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name },
+      });
       success(res, model);
     } catch (err) {
       next(err);
@@ -78,6 +123,18 @@ export const modelController = {
   async disable(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.setEnabled(req.params.id as string, false);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_disabled",
+        module: "models",
+        description: `AI model disabled: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name },
+      });
       success(res, model);
     } catch (err) {
       next(err);
@@ -90,6 +147,18 @@ export const modelController = {
         req.params.id as string,
         req.body.confidenceThreshold as number,
       );
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_updated",
+        module: "models",
+        description: `Confidence threshold updated for ${model.name}: ${req.body.confidenceThreshold}%`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name, threshold: req.body.confidenceThreshold },
+      });
       success(res, model);
     } catch (err) {
       next(err);
@@ -98,7 +167,20 @@ export const modelController = {
 
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const existingModel = await modelService.findById(req.params.id as string).catch(() => null);
       const result = await modelService.remove(req.params.id as string);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_updated",
+        module: "models",
+        description: `AI model deleted: ${existingModel?.name || req.params.id}`,
+        ...info,
+        metadata: { modelId: req.params.id, name: existingModel?.name },
+      });
       success(res, result);
     } catch (err) {
       next(err);
@@ -108,6 +190,18 @@ export const modelController = {
   async load(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.load(req.params.id as string);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_enabled",
+        module: "models",
+        description: `AI model loading: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name },
+      });
       success(res, model);
     } catch (err) {
       next(err);
@@ -117,6 +211,18 @@ export const modelController = {
   async unload(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const model = await modelService.unload(req.params.id as string);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "ai_model_disabled",
+        module: "models",
+        description: `AI model unloaded: ${model.name}`,
+        ...info,
+        metadata: { modelId: model.id, name: model.name },
+      });
       success(res, model);
     } catch (err) {
       next(err);

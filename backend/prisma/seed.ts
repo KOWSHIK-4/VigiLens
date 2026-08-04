@@ -25,6 +25,8 @@ export const permissionDefinitions = [
   { key: "reports.manage", name: "Manage Reports", description: "Generate and delete reports", category: "reports" },
   { key: "alerts.read", name: "View Alerts", description: "View alert notifications", category: "alerts" },
   { key: "alerts.manage", name: "Manage Alerts", description: "Acknowledge, mark and delete alerts", category: "alerts" },
+  { key: "audit.read", name: "View Audit Logs", description: "View system audit logs and activity history", category: "audit" },
+  { key: "audit.export", name: "Export Audit Logs", description: "Export audit logs to CSV format", category: "audit" },
 ] as const;
 
 export const rolePermissionMap: Record<RoleValue, string[]> = {
@@ -47,6 +49,8 @@ export const rolePermissionMap: Record<RoleValue, string[]> = {
     "reports.read",
     "reports.manage",
     "alerts.read",
+    "audit.read",
+    "audit.export",
   ],
   operator: [
     "cameras.read",

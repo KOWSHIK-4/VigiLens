@@ -213,3 +213,25 @@ export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
 export type UserQueryInput = z.infer<typeof userQuerySchema>;
 export type UpdateRolePermissionsInput = z.infer<typeof updateRolePermissionsSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const auditLogQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  userId: z.string().uuid().optional(),
+  action: z.enum([
+    "user_login", "user_logout", "password_reset", "user_created",
+    "user_updated", "user_deleted", "role_changed", "camera_added",
+    "camera_updated", "camera_deleted", "camera_started", "camera_stopped",
+    "ai_model_enabled", "ai_model_disabled", "ai_model_updated",
+    "detection_created", "alert_created", "report_generated", "settings_changed",
+  ]).optional(),
+  module: z.string().optional(),
+  status: z.enum(["success", "failed"]).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  sortBy: z.enum(["timestamp", "action", "module", "status", "username", "email"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;

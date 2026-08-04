@@ -1,7 +1,16 @@
 import type { Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
 import { reportService } from "@/services/report.service";
+import { userService } from "@/services/user.service";
 import { success, paginated } from "@/utils/apiResponse";
+import { logAudit } from "@/utils/auditLog";
+
+function getClientInfo(req: AuthRequest) {
+  return {
+    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+    userAgent: req.headers["user-agent"] || "",
+  };
+}
 
 export const reportController = {
   async generate(req: AuthRequest, res: Response, next: NextFunction) {
@@ -12,6 +21,18 @@ export const reportController = {
         type,
         generatedBy: req.userId!,
         dateRange,
+      });
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "report_generated",
+        module: "reports",
+        description: `Report generated: ${title} (${type})`,
+        ...info,
+        metadata: { reportId: report.id, title, type, dateRange },
       });
       success(res, report, 201);
     } catch (err) {

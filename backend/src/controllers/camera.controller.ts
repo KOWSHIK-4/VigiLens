@@ -2,7 +2,16 @@ import type { Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
 import type { CameraStatus, CameraType } from "@prisma/client";
 import { cameraService } from "@/services/camera.service";
+import { userService } from "@/services/user.service";
 import { success, paginated, error } from "@/utils/apiResponse";
+import { logAudit } from "@/utils/auditLog";
+
+function getClientInfo(req: AuthRequest) {
+  return {
+    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+    userAgent: req.headers["user-agent"] || "",
+  };
+}
 
 export const cameraController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -41,6 +50,18 @@ export const cameraController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const camera = await cameraService.create(req.body);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_added",
+        module: "cameras",
+        description: `Camera added: ${camera.name}`,
+        ...info,
+        metadata: { cameraId: camera.id, name: camera.name, type: camera.cameraType },
+      });
       success(res, camera, 201);
     } catch (err) {
       next(err);
@@ -56,6 +77,18 @@ export const cameraController = {
         return error(res, "Camera not found", 404);
       }
 
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_updated",
+        module: "cameras",
+        description: `Camera updated: ${camera.name}`,
+        ...info,
+        metadata: { cameraId: camera.id, name: camera.name, fields: Object.keys(req.body) },
+      });
       success(res, camera);
     } catch (err) {
       next(err);
@@ -65,12 +98,25 @@ export const cameraController = {
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+      const existingCamera = await cameraService.findById(id);
       const deleted = await cameraService.remove(id);
 
       if (!deleted) {
         return error(res, "Camera not found", 404);
       }
 
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_deleted",
+        module: "cameras",
+        description: `Camera deleted: ${existingCamera?.name || id}`,
+        ...info,
+        metadata: { cameraId: id, name: existingCamera?.name },
+      });
       success(res, { message: "Camera deleted successfully" });
     } catch (err) {
       next(err);
@@ -86,6 +132,18 @@ export const cameraController = {
         return error(res, "Camera not found", 404);
       }
 
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_started",
+        module: "cameras",
+        description: `Camera started: ${camera.name}`,
+        ...info,
+        metadata: { cameraId: camera.id, name: camera.name },
+      });
       success(res, camera);
     } catch (err) {
       next(err);
@@ -101,6 +159,18 @@ export const cameraController = {
         return error(res, "Camera not found", 404);
       }
 
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_stopped",
+        module: "cameras",
+        description: `Camera stopped: ${camera.name}`,
+        ...info,
+        metadata: { cameraId: camera.id, name: camera.name },
+      });
       success(res, camera);
     } catch (err) {
       next(err);

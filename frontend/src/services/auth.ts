@@ -38,7 +38,12 @@ export const authService = {
     return data.data;
   },
 
-  logout(): void {
+  async logout(): Promise<void> {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // Ignore logout API failures — local cleanup still proceeds
+    }
     localStorage.removeItem("token");
     window.location.href = "/login";
   },

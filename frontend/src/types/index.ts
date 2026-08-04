@@ -307,3 +307,91 @@ export interface ModelTestResult {
   detections: number;
   thresholdApplied: number;
 }
+
+export type AuditLogAction =
+  | "user_login"
+  | "user_logout"
+  | "password_reset"
+  | "user_created"
+  | "user_updated"
+  | "user_deleted"
+  | "role_changed"
+  | "camera_added"
+  | "camera_updated"
+  | "camera_deleted"
+  | "camera_started"
+  | "camera_stopped"
+  | "ai_model_enabled"
+  | "ai_model_disabled"
+  | "ai_model_updated"
+  | "detection_created"
+  | "alert_created"
+  | "report_generated"
+  | "settings_changed";
+
+export type AuditLogStatus = "success" | "failed";
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string | null;
+  username: string;
+  email: string;
+  action: AuditLogAction;
+  module: string;
+  description: string;
+  ipAddress: string;
+  userAgent: string;
+  status: AuditLogStatus;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface AuditLogFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  userId?: string;
+  action?: AuditLogAction;
+  module?: string;
+  status?: AuditLogStatus;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface AuditLogStats {
+  totalLogs: number;
+  todayLogs: number;
+  failedLogs: number;
+  activeUsers: number;
+}
+
+export interface AuditLogChartData {
+  actionsPerDay: { date: string; count: number }[];
+  moduleUsage: { module: string; count: number }[];
+  statusDistribution: { status: string; count: number }[];
+  topUsers: { username: string; email: string; count: number }[];
+}
+
+export const AUDIT_ACTIONS: AuditLogAction[] = [
+  "user_login",
+  "user_logout",
+  "password_reset",
+  "user_created",
+  "user_updated",
+  "user_deleted",
+  "role_changed",
+  "camera_added",
+  "camera_updated",
+  "camera_deleted",
+  "camera_started",
+  "camera_stopped",
+  "ai_model_enabled",
+  "ai_model_disabled",
+  "ai_model_updated",
+  "detection_created",
+  "alert_created",
+  "report_generated",
+  "settings_changed",
+];

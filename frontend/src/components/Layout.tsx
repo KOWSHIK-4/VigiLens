@@ -9,6 +9,7 @@ import {
   ScanEye,
   BarChart3,
   MonitorPlay,
+  ScrollText,
   Shield,
   Users,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const navItems = [
 const adminNavItems = [
   { path: "/users", label: "Users", icon: Users },
   { path: "/roles", label: "Roles", icon: Shield },
+  { path: "/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 
 export default function Layout() {
