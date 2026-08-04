@@ -14,11 +14,3 @@ export function requirePermission(...keys: string[]) {
     next();
   };
 }
-
-export function hasAnyPermission(
-  req: AuthRequest,
-  keys: string[],
-): boolean {
-  if (!req.permissions) return false;
-  return keys.some((key) => req.permissions!.has(key));
-}

@@ -306,8 +306,6 @@ async function run() {
     fail("GET /users filters", search);
   }
 
-  const selfDelete = await request("/users/me-delete-guard", { method: "DELETE" }, superToken);
-  void selfDelete;
   const selfDeleteReal = await request(
     `/users/${(login.body as { data: { user: { id: string } } }).data.user.id}`,
     { method: "DELETE" },
