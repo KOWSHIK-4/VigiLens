@@ -33,7 +33,7 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 19 permissions across 8 categories and 4 roles: `super_admin`
+seeded with 20 permissions across 8 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras and models), `operator`
 (monitor cameras, detections and alerts) and `viewer` (read-only). Accounts
 with status `disabled` cannot log in (401). Seed accounts (password
@@ -48,6 +48,7 @@ POST   /users                                # create a user (email must be uniq
 PATCH  /users/:id                            # update name / avatar
 PATCH  /users/:id/role                       # { "role": "operator" }
 PATCH  /users/:id/status                     # { "status": "disabled" }
+PATCH  /users/:id/password                   # { "password": "newpass123" } (requires users.reset_password)
 DELETE /users/:id                            # self-delete and last super-admin are blocked
 ```
 
@@ -61,6 +62,16 @@ PATCH  /roles/:name/permissions              # { "permissionKeys": ["cameras.rea
 - Disabled accounts are rejected with 403 on every authenticated request.
 - Editing `super_admin` permissions is always blocked (400).
 - Permission changes take effect immediately (per-role cache is invalidated).
+
+## Reports
+
+```bash
+GET    /reports?page=1&limit=10&type=daily&status=completed
+GET    /reports/:id
+GET    /reports/download/:id
+POST   /reports/generate     # requires reports.manage
+DELETE /reports/:id          # requires reports.manage
+```
 
 ## Detections
 
