@@ -21,7 +21,8 @@ export const permissionDefinitions = [
   { key: "models.read", name: "View AI Models", description: "View AI model catalog", category: "models" },
   { key: "models.manage", name: "Manage AI Models", description: "Create, edit, load and test AI models", category: "models" },
   { key: "analytics.read", name: "View Analytics", description: "View analytics dashboards", category: "analytics" },
-  { key: "reports.read", name: "View Reports", description: "View and generate reports", category: "reports" },
+  { key: "reports.read", name: "View Reports", description: "View and download reports", category: "reports" },
+  { key: "reports.manage", name: "Manage Reports", description: "Generate and delete reports", category: "reports" },
   { key: "alerts.read", name: "View Alerts", description: "View alert notifications", category: "alerts" },
   { key: "alerts.manage", name: "Manage Alerts", description: "Acknowledge, mark and delete alerts", category: "alerts" },
 ] as const;
@@ -44,6 +45,7 @@ export const rolePermissionMap: Record<RoleValue, string[]> = {
     "models.manage",
     "analytics.read",
     "reports.read",
+    "reports.manage",
     "alerts.read",
   ],
   operator: [
