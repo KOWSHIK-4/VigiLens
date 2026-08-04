@@ -112,7 +112,7 @@ function RolePermissionDialog({ open, onClose, role }: RolePermissionDialogProps
                   System Role
                 </h3>
                 <p className="text-sm text-gray-500">
-                  {role.name.replace("_", " ")} permissions cannot be edited
+                {role.name.replace(/_/g, " ")} permissions cannot be edited
                 </p>
               </div>
             </div>
@@ -150,7 +150,7 @@ function RolePermissionDialog({ open, onClose, role }: RolePermissionDialogProps
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">
-              Edit {role.name.replace("_", " ")} Permissions
+              Edit {role.name.replace(/_/g, " ")} Permissions
             </h3>
             <p className="text-sm text-gray-500 mt-0.5">
               Select the capabilities granted to this role
