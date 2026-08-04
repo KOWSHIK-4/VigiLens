@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { Loader2, Lock, Pencil, Shield, X } from "lucide-react";
 import { roleService } from "@/services/roles";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import RoleBadge from "@/components/RoleBadge";
 import { can } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,13 +34,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   alerts: "Alerts",
   general: "General",
 };
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 function permissionGroups(permissions: Permission[]): Array<{ category: string; items: Permission[] }> {
   const groups = new Map<string, Permission[]>();
@@ -98,7 +91,7 @@ function RolePermissionDialog({ open, onClose, role }: RolePermissionDialogProps
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 

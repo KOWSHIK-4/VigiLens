@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { userService } from "@/services/users";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import UserAvatar from "@/components/UserAvatar";
 import { ROLE_LABELS } from "@/utils/permissions";
 import type { CreateUserInput, User, UserRole } from "@/types";
@@ -23,13 +23,6 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: "operator", label: "Operator" },
   { value: "viewer", label: "Viewer" },
 ];
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 interface UserFormDialogProps {
   open: boolean;
@@ -84,7 +77,7 @@ function UserFormDialog({ open, onClose, user }: UserFormDialogProps) {
       onClose();
     },
     onError: (err) => {
-      setServerError(getErrorMessage(err));
+      setServerError(getApiErrorMessage(err));
     },
   });
 
@@ -258,7 +251,7 @@ export function DeleteUserDialog({ open, onClose, user }: DeleteUserDialogProps)
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 
@@ -343,7 +336,7 @@ export function AssignRoleDialog({ open, onClose, user }: AssignRoleDialogProps)
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 
@@ -436,7 +429,7 @@ export function ToggleStatusDialog({ open, onClose, user }: ToggleStatusDialogPr
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 
@@ -538,7 +531,7 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 
