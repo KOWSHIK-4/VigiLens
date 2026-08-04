@@ -70,4 +70,12 @@ export const userService = {
     );
     return data.data;
   },
+
+  async resetPassword(id: string, password: string) {
+    const { data } = await api.patch<{ success: boolean; data: { success: boolean } }>(
+      `/users/${id}/password`,
+      { password },
+    );
+    return data.data;
+  },
 };

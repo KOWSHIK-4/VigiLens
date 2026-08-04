@@ -513,13 +513,49 @@ interface ResetPasswordDialogProps {
 }
 
 export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialogProps) {
-  const [sent, setSent] = useState(false);
+  const queryClient = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
-      setSent(false);
+      setPassword("");
+      setError("");
+      setErrors({});
     }
   }, [open]);
+
+  const mutation = useMutation({
+    mutationFn: () => userService.resetPassword(user.id, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      showToast({
+        severity: "info",
+        title: "Password reset",
+        message: `Password updated for ${user.name}`,
+      });
+      onClose();
+    },
+    onError: (err) => {
+      setError(getErrorMessage(err));
+    },
+  });
+
+  const validate = () => {
+    const next: Record<string, string> = {};
+    if (password.length < 8) next.password = "Password must be at least 8 characters";
+    return next;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const fieldErrors = validate();
+    setErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return;
+    setError("");
+    mutation.mutate();
+  };
 
   if (!open) return null;
 
@@ -528,6 +564,13 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
       <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center flex-shrink-0">
               <KeyRound className="w-5 h-5 text-brand-600" />
@@ -544,42 +587,41 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
             </div>
           </div>
 
-          {sent ? (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2 text-green-700 font-medium">
-                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                Password reset requested
-              </div>
-              <p className="text-sm text-green-700 mt-1">
-                A password reset email has been sent to <strong>{user.email}</strong>.
-              </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors({});
+                  setError("");
+                }}
+                className={`input ${errors.password ? "border-red-400 focus:ring-red-500" : ""}`}
+                placeholder="Minimum 8 characters"
+                autoFocus
+              />
+              {errors.password && (
+                <p className="text-xs text-red-500 mt-1">{errors.password}</p>
+              )}
             </div>
-          ) : (
-            <p className="text-sm text-gray-500">
-              A secure reset link will be emailed to <strong>{user.email}</strong>.
-              The user&apos;s current session will be invalidated.
-            </p>
-          )}
 
-          <div className="flex justify-end gap-3 pt-4">
-            {sent ? (
-              <button onClick={onClose} className="btn-primary flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                Done
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+              <button
+                type="submit"
+                disabled={mutation.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                <RefreshCw className="w-4 h-4" />
+                Reset Password
               </button>
-            ) : (
-              <>
-                <button onClick={onClose} className="btn-secondary">Cancel</button>
-                <button
-                  onClick={() => setSent(true)}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Send Reset Email
-                </button>
-              </>
-            )}
-          </div>
+            </div>
+          </form>
         </div>
       </div>
     </div>
