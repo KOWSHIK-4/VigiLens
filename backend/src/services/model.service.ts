@@ -70,9 +70,10 @@ export const modelService = {
   async syncRegisteredDetectors() {
     const definitions = getDetectorDefinitions();
     const existingCount = await prisma.aIModel.count();
+    const installable = definitions.filter((def) => def.autoInstall !== false);
 
-    for (let index = 0; index < definitions.length; index += 1) {
-      const def = definitions[index];
+    for (let index = 0; index < installable.length; index += 1) {
+      const def = installable[index];
       await prisma.aIModel.upsert({
         where: { detectorKey: def.key },
         update: {
