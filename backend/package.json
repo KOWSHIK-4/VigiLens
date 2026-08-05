@@ -16,7 +16,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
-    "test": "npm run build && tsx tests/model-api.test.ts",
+    "test": "npm run build && tsx tests/model-api.test.ts && tsx tests/detector-api.test.ts",
     "test:e2e": "tsx tests/e2e.smoke.test.ts"
   },
   "dependencies": {
