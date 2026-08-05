@@ -3,9 +3,13 @@ export interface DetectorDefinition {
   name: string;
   version: string;
   description: string;
+  category: string;
+  icon: string;
   defaultConfidenceThreshold: number;
   gpuSupported: boolean;
   modelPath: string;
+  inferenceTimeMs: number;
+  autoInstall?: boolean;
 }
 
 const detectors = new Map<string, DetectorDefinition>();
@@ -24,4 +28,12 @@ export function getDetectorDefinition(key: string): DetectorDefinition | undefin
 
 export function hasDetector(key: string): boolean {
   return detectors.has(key);
+}
+
+export function getDetectorCategories(): string[] {
+  const categories = new Set<string>();
+  for (const def of detectors.values()) {
+    if (def.category) categories.add(def.category);
+  }
+  return Array.from(categories).sort();
 }
