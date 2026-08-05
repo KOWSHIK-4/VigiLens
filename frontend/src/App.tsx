@@ -14,6 +14,7 @@ const LiveCameraPage = lazy(() => import("@/pages/LiveCameraPage"));
 const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
 const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
+const DetectorsPage = lazy(() => import("@/pages/DetectorsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
@@ -112,6 +113,14 @@ export default function App() {
               element={
                 <Suspense fallback={<PageFallback />}>
                   <ModelsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="detectors"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <DetectorsPage />
                 </Suspense>
               }
             />

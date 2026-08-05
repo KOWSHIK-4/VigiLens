@@ -29,7 +29,7 @@ const navItems = [
   { path: "/detections", label: "Detections", icon: ScanEye },
   { path: "/analytics", label: "Analytics", icon: BarChart3 },
   { path: "/reports", label: "Reports", icon: FileText },
-  { path: "/models", label: "AI Models", icon: Brain },
+  { path: "/detectors", label: "Detectors", icon: Brain },
 ];
 
 const adminNavItems = [
