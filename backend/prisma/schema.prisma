@@ -115,6 +115,7 @@ model Camera {
 
   detections     Detection[]
   healthLogs     CameraHealthLog[]
+  detectorAssignments DetectorCamera[]
 
   @@map("cameras")
 }
@@ -236,6 +237,12 @@ enum ModelStatus {
   error
 }
 
+enum ProcessorPreference {
+  gpu
+  cpu
+  auto
+}
+
 model AIModel {
   id                 String      @id @default(uuid())
   name               String
@@ -247,12 +254,44 @@ model AIModel {
   status             ModelStatus @default(disabled)
   gpuSupported       Boolean     @default(false) @map("gpu_supported")
   modelPath          String      @map("model_path")
+  lastRestartAt      DateTime?   @map("last_restart_at")
   createdAt          DateTime    @default(now()) @map("created_at")
   updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  settings           DetectorSettings?
+  cameraAssignments  DetectorCamera[]
 
   @@index([status])
   @@index([enabled])
   @@map("ai_models")
+}
+
+model DetectorSettings {
+  id                  String              @id @default(uuid())
+  aiModelId           String              @unique @map("ai_model_id")
+  alertSeverity       AlertSeverity       @default(info) @map("alert_severity")
+  detectionIntervalMs Int                 @default(5000) @map("detection_interval_ms")
+  preferredProcessor  ProcessorPreference @default(auto) @map("preferred_processor")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  aiModel AIModel @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
+
+  @@map("detector_settings")
+}
+
+model DetectorCamera {
+  id          String   @id @default(uuid())
+  aiModelId   String   @map("ai_model_id")
+  cameraId    String   @map("camera_id")
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+
+  aiModel AIModel @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
+  camera  Camera  @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@unique([aiModelId, cameraId])
+  @@index([cameraId])
+  @@map("detector_cameras")
 }
 
 model AuditLog {
