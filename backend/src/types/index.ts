@@ -150,6 +150,60 @@ export type UpdateModelInput = z.infer<typeof updateModelSchema>;
 export type CreateModelInput = z.infer<typeof createModelSchema>;
 export type ModelQueryInput = z.infer<typeof modelQuerySchema>;
 
+export const detectorStatusSchema = z.enum(["running", "stopped", "error"]);
+export const alertSeveritySchema = z.enum(["info", "warning", "critical"]);
+export const processorPreferenceSchema = z.enum(["gpu", "cpu", "auto"]);
+
+export const detectorQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  status: detectorStatusSchema.optional(),
+  category: z.string().optional(),
+  installed: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
+  sortBy: z.enum(["name", "status", "confidenceThreshold", "enabled", "createdAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export const installDetectorSchema = z.object({
+  detectorKey: z.string().min(1, "Detector key is required").max(100),
+});
+
+export const detectorIdSchema = z.object({
+  id: z.string().uuid("Invalid detector id"),
+});
+
+export const detectorSettingsSchema = z.object({
+  confidenceThreshold: z
+    .number()
+    .min(0, "Confidence threshold must be between 0 and 100")
+    .max(100, "Confidence threshold must be between 0 and 100")
+    .optional(),
+  alertSeverity: alertSeveritySchema.optional(),
+  detectionIntervalMs: z
+    .number()
+    .int("Detection interval must be an integer")
+    .min(100, "Detection interval must be at least 100ms")
+    .max(3_600_000, "Detection interval must be at most 1 hour")
+    .optional(),
+  preferredProcessor: processorPreferenceSchema.optional(),
+});
+
+export const detectorCamerasSchema = z.object({
+  cameraIds: z
+    .array(z.string().min(1, "Camera id cannot be empty").max(100))
+    .min(0)
+    .max(100, "Cannot assign more than 100 cameras"),
+});
+
+export type DetectorQueryInput = z.infer<typeof detectorQuerySchema>;
+export type InstallDetectorInput = z.infer<typeof installDetectorSchema>;
+export type DetectorSettingsInput = z.infer<typeof detectorSettingsSchema>;
+export type DetectorCamerasInput = z.infer<typeof detectorCamerasSchema>;
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateCameraInput = z.infer<typeof createCameraSchema>;
