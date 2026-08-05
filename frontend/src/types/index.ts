@@ -308,6 +308,96 @@ export interface ModelTestResult {
   thresholdApplied: number;
 }
 
+export type DetectorStatus = "running" | "stopped" | "error";
+export type ProcessorPreference = "gpu" | "cpu" | "auto";
+
+export interface DetectorSettings {
+  alertSeverity: "info" | "warning" | "critical";
+  detectionIntervalMs: number;
+  preferredProcessor: ProcessorPreference;
+}
+
+export interface DetectorCameraRef {
+  id: string;
+  name: string;
+}
+
+export interface Detector {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  detectorKey: string;
+  category: string;
+  icon: string;
+  inferenceTimeMs: number;
+  confidenceThreshold: number;
+  enabled: boolean;
+  status: DetectorStatus;
+  gpuSupported: boolean;
+  modelPath: string;
+  lastRestartAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  settings: DetectorSettings;
+  cameras: DetectorCameraRef[];
+  cameraCount: number;
+}
+
+export interface MarketplaceDetector {
+  key: string;
+  name: string;
+  version: string;
+  description: string;
+  category: string;
+  icon: string;
+  defaultConfidenceThreshold: number;
+  gpuSupported: boolean;
+  modelPath: string;
+  inferenceTimeMs: number;
+  installed: boolean;
+  id: string | null;
+  enabled: boolean | null;
+  status: DetectorStatus | null;
+  confidenceThreshold: number | null;
+  alertSeverity: DetectorSettings["alertSeverity"] | null;
+  detectionIntervalMs: number | null;
+  preferredProcessor: ProcessorPreference | null;
+  cameraCount: number;
+}
+
+export interface DetectorHealth {
+  id: string;
+  name: string;
+  detectorKey: string;
+  status: DetectorStatus;
+  healthy: boolean;
+  message: string;
+  latencyMs: number;
+  uptimeSeconds: number;
+  lastHealthCheck: string;
+  assignedCameras: number;
+  framesProcessed: number;
+  throughputFps: number;
+}
+
+export interface DetectorFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: DetectorStatus;
+  category?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface DetectorSettingsInput {
+  confidenceThreshold?: number;
+  alertSeverity?: DetectorSettings["alertSeverity"];
+  detectionIntervalMs?: number;
+  preferredProcessor?: ProcessorPreference;
+}
+
 export type AuditLogAction =
   | "user_login"
   | "user_logout"
