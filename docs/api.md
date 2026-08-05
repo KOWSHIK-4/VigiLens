@@ -146,6 +146,57 @@ PATCH /models/:id/threshold body:
 }
 ```
 
+## AI Detector Marketplace
+
+Install, configure, and monitor detection detectors. Detector statuses: `running`, `stopped`, `error`. A detector is `running` when it is loaded and enabled; `error` when the engine is in an error state; `stopped` otherwise. After a restart the detector transitions through `loading` until it reports healthy.
+
+The marketplace ships 14 detector definitions across 6 categories. 8 are auto-installed on seed: Person Detection, Fire Detection, Smoking Detection, Helmet Detection, Face Mask Detection, Vehicle Detection, Intrusion Detection, and Drowsiness Detection. The remaining 6 (Weapon Detection, Abandoned Object Detection, PPE Detection, Crowd Detection, Violence Detection, License Plate Detection) are available for manual install.
+
+```bash
+GET    /detectors/marketplace          # all definitions + installed flag
+GET    /detectors/categories           # available category chips
+GET    /detectors?page=1&limit=20&search=fire&status=running&category=safety&sortBy=name&sortOrder=asc
+GET    /detectors/:id
+GET    /detectors/:id/health           # engine health + settings + cameras
+POST   /detectors                      # install a detector from the marketplace
+PATCH  /detectors/:id/enable           # enable a detector
+PATCH  /detectors/:id/disable          # disable a detector
+PATCH  /detectors/:id/settings         # update alert severity / interval / processor
+PUT    /detectors/:id/cameras          # assign monitored cameras
+POST   /detectors/:id/restart          # restart the detector engine
+DELETE /detectors/:id                  # uninstall the detector
+```
+
+POST /detectors body:
+
+```json
+{
+  "detectorKey": "weapon"
+}
+```
+
+PATCH /detectors/:id/settings body (all fields optional):
+
+```json
+{
+  "alertSeverity": "critical",
+  "detectionIntervalMs": 5000,
+  "preferredProcessor": "gpu"
+}
+```
+
+`alertSeverity`: `info` | `warning` | `critical`. `preferredProcessor`: `gpu` | `cpu` | `auto`. `detectionIntervalMs` must be between 1000 and 60000.
+
+PUT /detectors/:id/cameras body:
+
+```json
+{
+  "cameraIds": ["demo-camera-1", "demo-camera-2"]
+}
+```
+
+POST /detectors/:id/restart marks the detector as `loading`, then flips it to `loaded` (and `running` when enabled) after the engine warm-up delay. Restarting a disabled detector is rejected with 400.
+
 ## AI Service
 
 ```bash

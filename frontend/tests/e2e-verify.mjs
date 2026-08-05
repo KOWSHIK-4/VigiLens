@@ -175,6 +175,38 @@ async function run() {
   } else {
     fail("chart data", chartShape);
   }
+
+  const marketplace = await request("/detectors/marketplace", {}, token);
+  if (marketplace.status === 200) {
+    const installed = marketplace.body.data.filter((d) => d.installed).length;
+    const available = marketplace.body.data.filter((d) => !d.installed).length;
+    ok(`GET /detectors/marketplace through proxy returns ${installed} installed / ${available} available`);
+  } else {
+    fail("GET /detectors/marketplace through proxy", marketplace);
+  }
+
+  const categories = await request("/detectors/categories", {}, token);
+  if (categories.status === 200 && Array.isArray(categories.body.data)) {
+    ok(`GET /detectors/categories through proxy returns ${categories.body.data.length} categories`);
+  } else {
+    fail("GET /detectors/categories through proxy", categories);
+  }
+
+  const detectorList = await request("/detectors?page=1&limit=100", {}, token);
+  const validStatuses = new Set(["running", "stopped", "error"]);
+  if (
+    detectorList.status === 200 &&
+    detectorList.body.total === 8 &&
+    detectorList.body.data.every((d) => validStatuses.has(d.status))
+  ) {
+    ok("GET /detectors through proxy returns 8 installed detectors with valid statuses");
+  } else {
+    fail("GET /detectors through proxy", {
+      status: detectorList.status,
+      total: detectorList.body?.total,
+      statuses: detectorList.body?.data?.map((d) => d.status),
+    });
+  }
 }
 
 async function main() {
