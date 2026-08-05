@@ -247,8 +247,9 @@ async function main() {
 
   for (let index = 0; index < defaultDetectorDefinitions.length; index += 1) {
     const model = defaultDetectorDefinitions[index];
+    if (model.autoInstall === false) continue;
     const isDefaultActive = index === 0;
-    await prisma.aIModel.upsert({
+    const detector = await prisma.aIModel.upsert({
       where: { detectorKey: model.key },
       update: {
         name: model.name,
@@ -272,10 +273,14 @@ async function main() {
         status: isDefaultActive ? "loaded" : "disabled",
       },
     });
+    await prisma.detectorSettings.upsert({
+      where: { aiModelId: detector.id },
+      update: {},
+      create: { aiModelId: detector.id },
+    });
   }
 
-  const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);
-  const staleModels = await prisma.aIModel.findMany({
+  const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);  const staleModels = await prisma.aIModel.findMany({
     where: { detectorKey: { notIn: registeredKeys } },
   });
   if (staleModels.length > 0) {
@@ -285,7 +290,10 @@ async function main() {
   }
 
   console.log({ admin, superAdmin, operator, viewer, disabled });
-  console.log(`Seeded ${defaultDetectorDefinitions.length} default AI models`);
+  const seededModels = defaultDetectorDefinitions.filter(
+    (d) => d.autoInstall !== false,
+  ).length;
+  console.log(`Seeded ${seededModels} default AI models`);
   console.log(
     `Seeded ${permissionDefinitions.length} permissions across ${roleDefinitions.length} roles`,
   );
