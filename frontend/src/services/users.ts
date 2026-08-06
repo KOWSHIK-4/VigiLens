@@ -2,10 +2,10 @@ import api from "./api";
 import type {
   CreateUserInput,
   PaginatedResponse,
+  ResetPasswordInput,
   UpdateUserInput,
   User,
   UserFilters,
-  UserRole,
   UserStats,
   UserStatus,
 } from "@/types";
@@ -48,7 +48,7 @@ export const userService = {
     return data.data;
   },
 
-  async assignRole(id: string, role: UserRole) {
+  async assignRole(id: string, role: string) {
     const { data } = await api.patch<{ success: boolean; data: User }>(
       `/users/${id}/role`,
       { role },
@@ -64,17 +64,31 @@ export const userService = {
     return data.data;
   },
 
-  async remove(id: string) {
-    const { data } = await api.delete<{ success: boolean; data: unknown }>(
-      `/users/${id}`,
+  async lock(id: string) {
+    const { data } = await api.post<{ success: boolean; data: User }>(
+      `/users/${id}/lock`,
     );
     return data.data;
   },
 
-  async resetPassword(id: string, password: string) {
-    const { data } = await api.patch<{ success: boolean; data: { success: boolean } }>(
-      `/users/${id}/password`,
-      { password },
+  async unlock(id: string) {
+    const { data } = await api.post<{ success: boolean; data: User }>(
+      `/users/${id}/unlock`,
+    );
+    return data.data;
+  },
+
+  async resetPassword(id: string, input: ResetPasswordInput) {
+    const { data } = await api.post<{ success: boolean; data: { success: boolean } }>(
+      `/users/${id}/reset-password`,
+      input,
+    );
+    return data.data;
+  },
+
+  async remove(id: string) {
+    const { data } = await api.delete<{ success: boolean; data: unknown }>(
+      `/users/${id}`,
     );
     return data.data;
   },

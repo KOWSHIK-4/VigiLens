@@ -1,5 +1,5 @@
 import api from "./api";
-import type { AuthResponse, User } from "@/types";
+import type { AuthResponse, ChangePasswordInput, User } from "@/types";
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -46,6 +46,10 @@ export const authService = {
     }
     localStorage.removeItem("token");
     window.location.href = "/login";
+  },
+
+  async changePassword(input: ChangePasswordInput): Promise<void> {
+    await api.post("/auth/change-password", input);
   },
 
   getToken(): string | null {

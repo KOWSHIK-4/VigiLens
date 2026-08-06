@@ -1,4 +1,4 @@
-export type UserRole = "super_admin" | "admin" | "operator" | "viewer";
+export type UserRole = string;
 export type UserStatus = "active" | "disabled";
 
 export interface User {
@@ -9,6 +9,12 @@ export interface User {
   status: UserStatus;
   avatar: string | null;
   lastLogin: string | null;
+  isLocked: boolean;
+  failedLoginAttempts: number;
+  lockedAt: string | null;
+  mustChangePassword: boolean;
+  deletedAt: string | null;
+  permissions?: Permission[];
   createdAt: string;
   updatedAt: string;
 }
@@ -27,7 +33,7 @@ export interface Permission {
 }
 
 export interface Role {
-  name: UserRole;
+  name: string;
   description: string;
   isSystem: boolean;
   userCount: number;
@@ -39,13 +45,14 @@ export interface UserStats {
   active: number;
   disabled: number;
   online: number;
+  locked: number;
 }
 
 export interface UserFilters {
   page?: number;
   limit?: number;
   search?: string;
-  role?: UserRole;
+  role?: string;
   status?: UserStatus;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
@@ -55,13 +62,24 @@ export interface CreateUserInput {
   name: string;
   email: string;
   password: string;
-  role?: UserRole;
+  role?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface UpdateUserInput {
   name?: string;
   email?: string;
   avatar?: string | null;
+}
+
+export interface ResetPasswordInput {
+  password: string;
+  mustChangePassword: boolean;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface Detection {
@@ -402,10 +420,16 @@ export type AuditLogAction =
   | "user_login"
   | "user_logout"
   | "password_reset"
+  | "password_changed"
   | "user_created"
   | "user_updated"
   | "user_deleted"
+  | "user_locked"
+  | "user_unlocked"
   | "role_changed"
+  | "role_created"
+  | "role_updated"
+  | "role_deleted"
   | "camera_added"
   | "camera_updated"
   | "camera_deleted"
@@ -468,10 +492,16 @@ export const AUDIT_ACTIONS: AuditLogAction[] = [
   "user_login",
   "user_logout",
   "password_reset",
+  "password_changed",
   "user_created",
   "user_updated",
   "user_deleted",
+  "user_locked",
+  "user_unlocked",
   "role_changed",
+  "role_created",
+  "role_updated",
+  "role_deleted",
   "camera_added",
   "camera_updated",
   "camera_deleted",
