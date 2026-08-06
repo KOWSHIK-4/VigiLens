@@ -8,7 +8,7 @@ import type {
   UpdateUserInput,
   UserQueryInput,
 } from "@/types";
-import type { Prisma, RoleValue, UserStatus } from "@prisma/client";
+import type { Prisma, UserStatus } from "@prisma/client";
 
 const ONLINE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -19,6 +19,10 @@ const safeSelect = {
   role: true,
   status: true,
   avatar: true,
+  isLocked: true,
+  failedLoginAttempts: true,
+  lockedAt: true,
+  mustChangePassword: true,
   lastLogin: true,
   createdAt: true,
   updatedAt: true,
@@ -30,8 +34,16 @@ interface FindAllParams extends UserQueryInput {
 }
 
 export const userService = {
+  async ensureRoleExists(role: string) {
+    const found = await prisma.role.findUnique({ where: { name: role } });
+    if (!found) {
+      throw new ApiError(400, `Unknown role: ${role}`);
+    }
+    return found;
+  },
+
   async findAll(params: FindAllParams) {
-    const where: Prisma.UserWhereInput = {};
+    const where: Prisma.UserWhereInput = { deletedAt: null };
 
     if (params.search) {
       where.OR = [
@@ -70,14 +82,21 @@ export const userService = {
   },
 
   async findById(id: string) {
-    const user = await prisma.user.findUnique({
-      where: { id },
+    const user = await prisma.user.findFirst({
+      where: { id, deletedAt: null },
       select: safeSelect,
     });
     if (!user) {
       throw new ApiError(404, "User not found");
     }
     return user;
+  },
+
+  async findByEmail(email: string) {
+    return prisma.user.findFirst({
+      where: { email, deletedAt: null },
+      select: safeSelect,
+    });
   },
 
   async create(input: CreateUserInput) {
@@ -88,6 +107,9 @@ export const userService = {
       throw new ApiError(409, "A user with this email already exists");
     }
 
+    const role = input.role ?? "operator";
+    await this.ensureRoleExists(role);
+
     const password = await bcrypt.hash(input.password, 12);
 
     const user = await prisma.user.create({
@@ -95,7 +117,8 @@ export const userService = {
         email: input.email,
         password,
         name: input.name,
-        role: input.role ?? "operator",
+        role,
+        mustChangePassword: input.mustChangePassword ?? false,
       },
       select: safeSelect,
     });
@@ -137,28 +160,33 @@ export const userService = {
 
     if (user.role === "super_admin") {
       const superAdmins = await prisma.user.count({
-        where: { role: "super_admin" },
+        where: { role: "super_admin", deletedAt: null },
       });
       if (superAdmins <= 1) {
         throw new ApiError(400, "Cannot delete the last Super Admin account");
       }
     }
 
-    await prisma.user.delete({ where: { id } });
-    logger.info("User deleted", { userId: id, email: user.email });
+    await prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date(), status: "disabled" },
+    });
+    logger.info("User soft-deleted", { userId: id, email: user.email });
     return { success: true, id };
   },
 
-  async assignRole(id: string, role: RoleValue, actorId?: string) {
+  async assignRole(id: string, role: string, actorId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot change your own role");
     }
+
+    await this.ensureRoleExists(role);
 
     const user = await this.findById(id);
 
     if (user.role === "super_admin" && role !== "super_admin") {
       const superAdmins = await prisma.user.count({
-        where: { role: "super_admin" },
+        where: { role: "super_admin", deletedAt: null },
       });
       if (superAdmins <= 1) {
         throw new ApiError(
@@ -184,7 +212,7 @@ export const userService = {
 
     if (user.role === "super_admin" && status === "disabled") {
       const superAdmins = await prisma.user.count({
-        where: { role: "super_admin" },
+        where: { role: "super_admin", deletedAt: null },
       });
       if (superAdmins <= 1) {
         throw new ApiError(400, "Cannot disable the last Super Admin account");
@@ -198,30 +226,79 @@ export const userService = {
     });
   },
 
+  async lock(id: string, actorId?: string) {
+    if (id === actorId) {
+      throw new ApiError(400, "You cannot lock your own account");
+    }
+
+    const user = await this.findById(id);
+
+    if (user.isLocked) {
+      throw new ApiError(400, "This account is already locked");
+    }
+
+    return prisma.user.update({
+      where: { id },
+      data: {
+        isLocked: true,
+        lockedAt: new Date(),
+        failedLoginAttempts: 0,
+      },
+      select: safeSelect,
+    });
+  },
+
+  async unlock(id: string, actorId?: string) {
+    if (id === actorId) {
+      throw new ApiError(400, "You cannot unlock your own account");
+    }
+
+    const user = await this.findById(id);
+
+    if (!user.isLocked) {
+      throw new ApiError(400, "This account is not locked");
+    }
+
+    return prisma.user.update({
+      where: { id },
+      data: {
+        isLocked: false,
+        lockedAt: null,
+        failedLoginAttempts: 0,
+      },
+      select: safeSelect,
+    });
+  },
+
   async resetPassword(id: string, input: ResetPasswordInput) {
     await this.findById(id);
     const hashedPassword = await bcrypt.hash(input.password, 12);
     await prisma.user.update({
       where: { id },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: input.mustChangePassword ?? false,
+      },
     });
     logger.info("Password reset", { userId: id });
     return { success: true };
   },
 
   async stats() {
-    const [total, active, disabled, online] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { status: "active" } }),
-      prisma.user.count({ where: { status: "disabled" } }),
+    const [total, active, disabled, online, locked] = await Promise.all([
+      prisma.user.count({ where: { deletedAt: null } }),
+      prisma.user.count({ where: { status: "active", deletedAt: null } }),
+      prisma.user.count({ where: { status: "disabled", deletedAt: null } }),
       prisma.user.count({
         where: {
           status: "active",
+          deletedAt: null,
           lastLogin: { gte: new Date(Date.now() - ONLINE_WINDOW_MS) },
         },
       }),
+      prisma.user.count({ where: { isLocked: true, deletedAt: null } }),
     ]);
 
-    return { total, active, disabled, online };
+    return { total, active, disabled, online, locked };
   },
 };
