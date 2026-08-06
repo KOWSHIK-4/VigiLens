@@ -33,10 +33,10 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 20 permissions across 8 categories and 4 roles: `super_admin`
-(full access), `admin` (manage users, cameras and models), `operator`
-(monitor cameras, detections and alerts) and `viewer` (read-only). Accounts
-with status `disabled` cannot log in (401). Seed accounts (password
+seeded with 22 permissions across 8 categories and 4 roles: `super_admin`
+(full access), `admin` (manage users, cameras, models and settings),
+`operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
+Accounts with status `disabled` cannot log in (401). Seed accounts (password
 `admin123`): `super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
 `viewer@vigilens.io`, `disabled@vigilens.io`.
 
@@ -145,6 +145,76 @@ PATCH /models/:id/threshold body:
   "confidenceThreshold": 62
 }
 ```
+
+## System Settings
+
+Application configuration is grouped into 8 categories: `general`, `security`,
+`ai_detection`, `notifications`, `cameras`, `storage`, `email`, `backup`.
+Every setting ships with a default that is seeded on first startup, is
+validated against its type/range/options, and is cached in memory. Every
+change is written to the audit log (`settings_changed`) and is restricted to
+administrators (`settings.read` / `settings.manage`).
+
+```bash
+GET    /settings                          # all settings across every category
+GET    /settings/:category                # settings for one category
+PATCH  /settings/:category                # update one or more settings
+POST   /settings/:category/reset          # restore the category to defaults
+```
+
+A setting row looks like:
+
+```json
+{
+  "key": "global_confidence_threshold",
+  "category": "ai_detection",
+  "label": "Global confidence threshold",
+  "description": "Detections below this confidence are ignored across all detectors.",
+  "type": "number",
+  "value": 50,
+  "min": 0,
+  "max": 100,
+  "step": 1,
+  "unit": "%",
+  "updatedAt": "2026-08-06T12:00:00.000Z",
+  "updatedBy": "62f7375d-7cd3-4b63-930d-2b7e3fc9843d"
+}
+```
+
+`type` is one of `boolean`, `number`, `string`, `select`, `color`. `select`
+settings include an `options` array, number settings include `min`/`max`/`step`
+/`unit` where applicable, and `color` settings accept `#rrggbb` values.
+
+PATCH /settings/:category body (each key must exist in that category):
+
+```json
+{
+  "session_timeout_minutes": 45,
+  "max_login_attempts": 7
+}
+```
+
+Notable settings:
+
+- **AI Detection**: `global_confidence_threshold` (0–100), `default_detector`,
+  `preferred_processor` (`auto`|`gpu`|`cpu`), `detection_fps` (1–60),
+  `image_retention_days`, `video_retention_days`, `snapshot_quality` (10–100),
+  `auto_cleanup_enabled`.
+- **Security**: `session_timeout_minutes`, `password_min_length`,
+  `password_require_complexity`, `max_login_attempts`, `lockout_duration_minutes`,
+  `rate_limit_window_ms`, `rate_limit_max_requests`, `jwt_expiration_hours`,
+  `jwt_require_https`.
+- **Notifications**: `email_alerts_enabled`, `critical_alert_enabled`,
+  `warning_alert_enabled`, `daily_summary_enabled`, `weekly_report_enabled`,
+  `digest_time`.
+- **Cameras**: `default_capture_fps`, `max_connected_cameras`,
+  `camera_reconnect_timeout_seconds`, `thumbnail_refresh_seconds`.
+- **Storage**: `storage_base_path`, `max_storage_gb`, `low_storage_threshold_gb`,
+  `cleanup_interval_days`.
+- **Email**: `smtp_host`, `smtp_port`, `smtp_secure`, `smtp_username`,
+  `smtp_from_email`, `notifications_email`.
+- **Backup**: `auto_backup_enabled`, `backup_interval_days`, `backup_time`,
+  `backup_retention_count`.
 
 ## AI Detector Marketplace
 
