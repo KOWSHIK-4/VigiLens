@@ -1,7 +1,7 @@
 import type { Response, NextFunction } from "express";
 import { authService } from "@/services/auth.service";
 import { success, error } from "@/utils/apiResponse";
-import type { AuthRequest } from "@/types";
+import type { AuthRequest, ChangePasswordInput } from "@/types";
 import { logger } from "@/config/logger";
 import { logAudit } from "@/utils/auditLog";
 
@@ -75,6 +75,12 @@ export const authController = {
       ) {
         return error(res, err.message, 401);
       }
+      if (
+        err instanceof Error &&
+        err.message === "Account locked. Contact your administrator"
+      ) {
+        return error(res, err.message, 403);
+      }
       next(err);
     }
   },
@@ -84,6 +90,42 @@ export const authController = {
       const user = await authService.me(req.userId!);
       success(res, user);
     } catch (err) {
+      next(err);
+    }
+  },
+
+  async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.changePassword(
+        req.userId!,
+        req.body as ChangePasswordInput,
+      );
+      const info = getClientInfo(req);
+      const user = await authService.me(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: user?.name || "",
+        email: user?.email || "",
+        action: "password_changed",
+        module: "auth",
+        description: `Password changed for ${user?.email || req.userId}`,
+        ...info,
+      });
+      logger.info(`Password changed: ${user?.email || req.userId}`);
+      success(res, result);
+    } catch (err) {
+      const info = getClientInfo(req);
+      if (err instanceof Error && err.message === "Current password is incorrect") {
+        await logAudit({
+          userId: req.userId,
+          action: "password_changed",
+          module: "auth",
+          description: "Password change rejected: incorrect current password",
+          ...info,
+          status: "failed",
+        });
+        return error(res, err.message, 400);
+      }
       next(err);
     }
   },

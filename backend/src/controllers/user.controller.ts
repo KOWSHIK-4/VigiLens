@@ -129,7 +129,7 @@ export const userController = {
       const targetUser = await userService.findById(req.params.id as string).catch(() => null);
       const user = await userService.assignRole(
         req.params.id as string,
-        req.body.role as "super_admin" | "admin" | "operator" | "viewer",
+        req.body.role as string,
         req.userId,
       );
       const info = getClientInfo(req);
@@ -175,6 +175,50 @@ export const userController = {
     }
   },
 
+  async lock(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const targetUser = await userService.findById(req.params.id as string).catch(() => null);
+      const user = await userService.lock(req.params.id as string, req.userId);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "user_locked",
+        module: "users",
+        description: `User locked: ${targetUser?.email || req.params.id}`,
+        ...info,
+        metadata: { targetUserId: user.id, email: targetUser?.email },
+      });
+      success(res, user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async unlock(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const targetUser = await userService.findById(req.params.id as string).catch(() => null);
+      const user = await userService.unlock(req.params.id as string, req.userId);
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "user_unlocked",
+        module: "users",
+        description: `User unlocked: ${targetUser?.email || req.params.id}`,
+        ...info,
+        metadata: { targetUserId: user.id, email: targetUser?.email },
+      });
+      success(res, user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async resetPassword(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const result = await userService.resetPassword(
@@ -184,6 +228,7 @@ export const userController = {
       const info = getClientInfo(req);
       const targetUser = await userService.findById(req.params.id as string).catch(() => null);
       const actor = await userService.findById(req.userId!).catch(() => null);
+      const body = req.body as ResetPasswordInput;
       await logAudit({
         userId: req.userId,
         username: actor?.name || "",
@@ -192,7 +237,11 @@ export const userController = {
         module: "users",
         description: `Password reset for ${targetUser?.email || req.params.id}`,
         ...info,
-        metadata: { targetUserId: req.params.id, email: targetUser?.email },
+        metadata: {
+          targetUserId: req.params.id,
+          email: targetUser?.email,
+          mustChangePassword: body.mustChangePassword ?? false,
+        },
       });
       success(res, result);
     } catch (err) {
