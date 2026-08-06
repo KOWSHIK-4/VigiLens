@@ -11,6 +11,12 @@ interface JwtPayload {
   role: string;
 }
 
+const ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED = new Set([
+  "/change-password",
+  "/me",
+  "/logout",
+]);
+
 export async function authenticate(
   req: AuthRequest,
   res: Response,
@@ -28,9 +34,15 @@ export async function authenticate(
     req.userId = decoded.userId;
     req.userRole = decoded.role;
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, status: true, role: true },
+    const user = await prisma.user.findFirst({
+      where: { id: decoded.userId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        role: true,
+        isLocked: true,
+        mustChangePassword: true,
+      },
     });
 
     if (!user) {
@@ -38,6 +50,19 @@ export async function authenticate(
     }
     if (user.status === "disabled") {
       return apiError(res, "Account disabled. Contact your administrator", 403);
+    }
+    if (user.isLocked) {
+      return apiError(res, "Account locked. Contact your administrator", 403);
+    }
+    if (
+      user.mustChangePassword &&
+      !ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED.has(req.path)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Password change required",
+        code: "PASSWORD_CHANGE_REQUIRED",
+      });
     }
 
     req.userRole = user.role;
