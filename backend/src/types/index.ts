@@ -289,3 +289,31 @@ export const auditLogQuerySchema = z.object({
 });
 
 export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
+
+export const settingsCategorySchema = z.enum([
+  "general",
+  "security",
+  "ai_detection",
+  "notifications",
+  "cameras",
+  "storage",
+  "email",
+  "backup",
+]);
+
+export const settingsCategoryParamSchema = z.object({
+  category: settingsCategorySchema,
+});
+
+export const updateSettingsSchema = z
+  .record(
+    z.string().min(1, "Setting key cannot be empty").max(100),
+    z.union([z.string().max(500), z.number(), z.boolean()]),
+  )
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one setting must be provided",
+  });
+
+export type SettingsCategory = z.infer<typeof settingsCategorySchema>;
+export type SettingsCategoryParam = z.infer<typeof settingsCategoryParamSchema>;
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
