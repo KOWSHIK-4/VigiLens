@@ -10,6 +10,7 @@ import {
   BarChart3,
   MonitorPlay,
   ScrollText,
+  Settings,
   Shield,
   Users,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const navItems = [
 const adminNavItems = [
   { path: "/users", label: "Users", icon: Users },
   { path: "/roles", label: "Roles", icon: Shield },
+  { path: "/settings", label: "Settings", icon: Settings },
   { path: "/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 

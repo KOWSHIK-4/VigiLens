@@ -18,6 +18,7 @@ const DetectorsPage = lazy(() => import("@/pages/DetectorsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -145,6 +146,14 @@ export default function App() {
               element={
                 <Suspense fallback={<PageFallback />}>
                   <AuditLogsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <SettingsPage />
                 </Suspense>
               }
             />

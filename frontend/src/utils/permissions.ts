@@ -35,6 +35,8 @@ const ROLE_ABILITIES: Record<UserRole, string[]> = {
     "alerts.read",
     "audit.read",
     "audit.export",
+    "settings.read",
+    "settings.manage",
   ],
   operator: ["cameras.read", "cameras.control", "detections.read", "alerts.read", "alerts.manage"],
   viewer: ["cameras.read", "detections.read", "models.read", "analytics.read", "reports.read", "alerts.read"],
