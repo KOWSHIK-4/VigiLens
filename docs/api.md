@@ -28,39 +28,69 @@ POST /auth/login
 }
 ```
 
+Login returns `{ token, user }`. After 5 consecutive failed attempts the
+account is locked (`isLocked: true`, `lockedAt` set); locked accounts get `403`
+on login until an admin unlocks them via `POST /users/:id/unlock`.
+
+Additional auth endpoints (all require the Bearer token unless noted):
+
+```bash
+POST /auth/logout            # blacklists the token, writes user_logout audit
+GET  /auth/me                # current user profile + effective permissions
+POST /auth/change-password   # { "currentPassword", "newPassword" }
+```
+
+- `POST /auth/change-password` requires a valid current password. It clears
+  `mustChangePassword`, `isLocked` and the failed-login counter.
+- When a user's `mustChangePassword` flag is set (e.g. after an admin password
+  reset), every authenticated request except `/auth/change-password`,
+  `/auth/me` and `/auth/logout` is rejected with `403`
+  `{ "code": "PASSWORD_CHANGE_REQUIRED" }`.
+
 All subsequent requests require the `Authorization: Bearer <token>` header.
 
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 22 permissions across 8 categories and 4 roles: `super_admin`
+seeded with 31 permissions across 10 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
-Accounts with status `disabled` cannot log in (401). Seed accounts (password
-`admin123`): `super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
+Custom roles can be created and assigned. Accounts with status `disabled`
+cannot log in. Seed accounts (password `password123`):
+`super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
 `viewer@vigilens.io`, `disabled@vigilens.io`.
 
 ```bash
 GET    /users?page=1&limit=10&search=jane&role=admin&status=active&sortBy=name&sortOrder=asc
-GET    /users/stats                          # total, active, disabled, online
+GET    /users/stats                          # total, active, disabled, online, locked
 GET    /users/:id
 POST   /users                                # create a user (email must be unique)
-PATCH  /users/:id                            # update name / avatar
+PATCH  /users/:id                            # update name / avatar / role
 PATCH  /users/:id/role                       # { "role": "operator" }
-PATCH  /users/:id/status                     # { "status": "disabled" }
-PATCH  /users/:id/password                   # { "password": "newpass123" } (requires users.reset_password)
-DELETE /users/:id                            # self-delete and last super-admin are blocked
+PATCH  /users/:id/status                     # { "status": "disabled" | "active" }
+POST   /users/:id/lock                       # lock account (blocks login)
+POST   /users/:id/unlock                     # clear lock and failed attempts
+POST   /users/:id/reset-password             # { "password": "newpass123", "mustChangePassword": true }
+DELETE /users/:id                            # soft delete (deletedAt set, login blocked)
 ```
 
 Role management:
 
 ```bash
 GET    /roles                                # roles with permissions and user counts
+GET    /roles/permissions                    # all permission definitions
+POST   /roles                                # { "name": "security_manager", "description": "..." }
+PATCH  /roles/:name                          # { "description": "..." }
 PATCH  /roles/:name/permissions              # { "permissionKeys": ["cameras.read", "..."] }
+DELETE /roles/:name                          # delete a custom role
 ```
 
-- Disabled accounts are rejected with 403 on every authenticated request.
-- Editing `super_admin` permissions is always blocked (400).
+- Disabled, soft-deleted and locked accounts are rejected with 403 on every
+  authenticated request.
+- Editing or deleting `super_admin` is always blocked (400). System roles
+  (`admin`, `operator`, `viewer`) cannot be deleted.
+- Deleting a role is rejected with 400 while active users reference it; any
+  soft-deleted users still assigned are moved to `viewer` first.
 - Permission changes take effect immediately (per-role cache is invalidated).
 
 ## Reports

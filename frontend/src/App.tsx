@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthProvider from "@/components/AuthProvider";
 import LoginPage from "@/pages/LoginPage";
+import ChangePasswordPage from "@/pages/ChangePasswordPage";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CamerasPage = lazy(() => import("@/pages/CamerasPage"));
@@ -44,6 +45,16 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <AuthProvider>
+                  <ChangePasswordPage />
+                </AuthProvider>
+              </ProtectedRoute>
+            }
+          />
           <Route
             element={
               <ProtectedRoute>
