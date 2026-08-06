@@ -9,6 +9,7 @@ import { logger } from "@/config/logger";
 import { errorHandler } from "@/middleware/errorHandler";
 import routes from "@/routes";
 import { modelService } from "@/services/model.service";
+import { settingsService } from "@/services/settings.service";
 
 const app = express();
 
@@ -47,6 +48,12 @@ async function start() {
       await modelService.syncRegisteredDetectors();
     } catch (error) {
       logger.error("Failed to sync AI model registry", { error });
+    }
+
+    try {
+      await settingsService.ensureDefaults();
+    } catch (error) {
+      logger.error("Failed to seed default system settings", { error });
     }
 
     app.listen(config.port, () => {

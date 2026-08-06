@@ -10,6 +10,7 @@ import detectorRoutes from "./detector.routes";
 import userRoutes from "./user.routes";
 import roleRoutes from "./role.routes";
 import auditLogRoutes from "./auditLog.routes";
+import settingsRoutes from "./settings.routes";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use("/detectors", detectorRoutes);
 router.use("/users", userRoutes);
 router.use("/roles", roleRoutes);
 router.use("/audit-logs", auditLogRoutes);
+router.use("/settings", settingsRoutes);
 
 export default router;
