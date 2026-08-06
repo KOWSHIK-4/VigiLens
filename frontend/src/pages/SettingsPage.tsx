@@ -342,6 +342,14 @@ export default function SettingsPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
+  useEffect(() => {
+    const baseTitle = "Settings | VigiLens";
+    document.title = dirty ? `\u25CF ${dirtyCount} unsaved \u2013 ${baseTitle}` : baseTitle;
+    return () => {
+      document.title = baseTitle;
+    };
+  }, [dirty, dirtyCount]);
+
   function setValue(key: string, value: SettingsValue) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
@@ -396,6 +404,18 @@ export default function SettingsPage() {
       });
     },
   });
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!dirty || saveMutation.isPending) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        saveMutation.mutate();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [dirty, saveMutation]);
 
   const resetMutation = useMutation({
     mutationFn: (category: SettingsCategory) => settingsService.reset(category),
