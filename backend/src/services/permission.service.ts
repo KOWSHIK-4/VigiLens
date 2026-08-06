@@ -1,6 +1,5 @@
 import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
-import type { RoleValue } from "@prisma/client";
 
 const CACHE_TTL_MS = 30_000;
 
@@ -14,7 +13,7 @@ const permissionCache = new Map<string, CachedPermissions>();
 export const ALL_PERMISSION_KEYS_CATEGORY = "general";
 
 export const permissionService = {
-  async getPermissionsForRole(role: RoleValue): Promise<Set<string>> {
+  async getPermissionsForRole(role: string): Promise<Set<string>> {
     const cached = permissionCache.get(role);
     if (cached && cached.expiresAt > Date.now()) {
       return new Set(cached.keys);
@@ -39,7 +38,7 @@ export const permissionService = {
     });
   },
 
-  invalidate(role?: RoleValue) {
+  invalidate(role?: string) {
     if (role) {
       permissionCache.delete(role);
       logger.debug("Permission cache invalidated", { role });
