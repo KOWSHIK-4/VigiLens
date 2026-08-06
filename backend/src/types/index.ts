@@ -209,14 +209,23 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateCameraInput = z.infer<typeof createCameraSchema>;
 export type UpdateCameraInput = z.infer<typeof updateCameraSchema>;
 
-export const userRoleSchema = z.enum(["super_admin", "admin", "operator", "viewer"]);
+export const roleNameValueSchema = z
+  .string()
+  .min(1, "Role name is required")
+  .max(50, "Role name must be at most 50 characters")
+  .regex(
+    /^[a-z][a-z0-9_]*$/,
+    "Role name must be lowercase letters, numbers or underscores",
+  );
+export const userRoleSchema = roleNameValueSchema;
 export const userStatusSchema = z.enum(["active", "disabled"]);
 
 export const createUserSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
-  role: userRoleSchema.default("operator"),
+  role: roleNameValueSchema.default("operator"),
+  mustChangePassword: z.boolean().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -226,7 +235,7 @@ export const updateUserSchema = z.object({
 });
 
 export const assignRoleSchema = z.object({
-  role: userRoleSchema,
+  role: roleNameValueSchema,
 });
 
 export const userStatusUpdateSchema = z.object({
@@ -237,7 +246,7 @@ export const userQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().optional(),
-  role: userRoleSchema.optional(),
+  role: roleNameValueSchema.optional(),
   status: userStatusSchema.optional(),
   sortBy: z
     .enum(["name", "email", "role", "status", "lastLogin", "createdAt"])
@@ -251,22 +260,48 @@ export const userIdSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
+  mustChangePassword: z.boolean().optional(),
 });
 
 export const roleNameSchema = z.object({
-  name: userRoleSchema,
+  name: roleNameValueSchema,
+});
+
+export const createRoleSchema = z.object({
+  name: roleNameValueSchema,
+  description: z.string().max(300).default(""),
+  permissionKeys: z
+    .array(z.string().min(1, "Permission key cannot be empty"))
+    .max(100)
+    .default([]),
+});
+
+export const updateRoleSchema = z.object({
+  description: z.string().max(300).optional(),
+  permissionKeys: z
+    .array(z.string().min(1, "Permission key cannot be empty"))
+    .max(100)
+    .optional(),
 });
 
 export const updateRolePermissionsSchema = z.object({
   permissionKeys: z.array(z.string().min(1, "Permission key cannot be empty")).max(100),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters").max(100),
+});
+
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
 export type UserQueryInput = z.infer<typeof userQuerySchema>;
+export type CreateRoleInput = z.infer<typeof createRoleSchema>;
+export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 export type UpdateRolePermissionsInput = z.infer<typeof updateRolePermissionsSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const auditLogQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -274,9 +309,11 @@ export const auditLogQuerySchema = z.object({
   search: z.string().optional(),
   userId: z.string().uuid().optional(),
   action: z.enum([
-    "user_login", "user_logout", "password_reset", "user_created",
-    "user_updated", "user_deleted", "role_changed", "camera_added",
-    "camera_updated", "camera_deleted", "camera_started", "camera_stopped",
+    "user_login", "user_logout", "password_reset", "password_changed",
+    "user_created", "user_updated", "user_deleted", "user_locked",
+    "user_unlocked", "role_changed", "role_created", "role_updated",
+    "role_deleted", "camera_added", "camera_updated", "camera_deleted",
+    "camera_started", "camera_stopped",
     "ai_model_enabled", "ai_model_disabled", "ai_model_updated",
     "detection_created", "alert_created", "report_generated", "settings_changed",
   ]).optional(),

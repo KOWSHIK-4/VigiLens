@@ -61,8 +61,27 @@ router.patch(
   validate(userStatusUpdateSchema),
   userController.setStatus,
 );
+router.post(
+  "/:id/lock",
+  requirePermission("users.lock"),
+  validate(userIdSchema, "params"),
+  userController.lock,
+);
+router.post(
+  "/:id/unlock",
+  requirePermission("users.unlock"),
+  validate(userIdSchema, "params"),
+  userController.unlock,
+);
 router.patch(
   "/:id/password",
+  requirePermission("users.reset_password"),
+  validate(userIdSchema, "params"),
+  validate(resetPasswordSchema),
+  userController.resetPassword,
+);
+router.post(
+  "/:id/reset-password",
   requirePermission("users.reset_password"),
   validate(userIdSchema, "params"),
   validate(resetPasswordSchema),
