@@ -485,3 +485,50 @@ export const AUDIT_ACTIONS: AuditLogAction[] = [
   "report_generated",
   "settings_changed",
 ];
+
+export type SettingsCategory =
+  | "general"
+  | "security"
+  | "ai_detection"
+  | "notifications"
+  | "cameras"
+  | "storage"
+  | "email"
+  | "backup";
+
+export type SettingType = "boolean" | "number" | "string" | "select" | "color";
+
+export interface SettingOption {
+  value: string;
+  label: string;
+}
+
+export interface SystemSetting {
+  key: string;
+  category: SettingsCategory;
+  label: string;
+  description: string;
+  type: SettingType;
+  value: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  options?: SettingOption[];
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+export type SettingsValue = string | number | boolean;
+export type SettingsUpdateInput = Record<string, SettingsValue>;
+
+export const SETTINGS_CATEGORIES: SettingsCategory[] = [
+  "general",
+  "security",
+  "ai_detection",
+  "notifications",
+  "cameras",
+  "storage",
+  "email",
+  "backup",
+];
