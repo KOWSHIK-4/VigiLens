@@ -7,41 +7,38 @@ import {
   ChevronLeft,
   ChevronRight,
   KeyRound,
+  Lock,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
+  Unlock,
   UserRoundX,
   Users,
 } from "lucide-react";
 import { userService } from "@/services/users";
+import { roleService } from "@/services/roles";
 import UserAvatar from "@/components/UserAvatar";
 import RoleBadge from "@/components/RoleBadge";
-import UserStatusBadge from "@/components/UserStatusBadge";
+import UserStatusBadge, { LockedBadge } from "@/components/UserStatusBadge";
 import UserStatsCards, { UserStatsSkeleton } from "@/components/UserStats";
 import {
   AddUserDialog,
   AssignRoleDialog,
   DeleteUserDialog,
   EditUserDialog,
+  LockUserDialog,
   ResetPasswordDialog,
   ToggleStatusDialog,
+  UnlockUserDialog,
 } from "@/components/UserDialogs";
-import { can } from "@/utils/permissions";
+import { hasPermission, roleLabel } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
-import type { User, UserRole, UserStatus } from "@/types";
+import type { User, UserStatus } from "@/types";
 
 const PAGE_SIZE = 10;
-
-const roleFilters: Array<{ value: "" | UserRole; label: string }> = [
-  { value: "", label: "All Roles" },
-  { value: "super_admin", label: "Super Admin" },
-  { value: "admin", label: "Admin" },
-  { value: "operator", label: "Operator" },
-  { value: "viewer", label: "Viewer" },
-];
 
 const statusFilters: Array<{ value: "" | UserStatus; label: string }> = [
   { value: "", label: "All Status" },
@@ -91,7 +88,7 @@ function TableSkeleton() {
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"" | UserRole>("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | UserStatus>("");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -102,11 +99,23 @@ export default function UsersPage() {
   const [assigning, setAssigning] = useState<User | null>(null);
   const [toggling, setToggling] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
+  const [locking, setLocking] = useState<User | null>(null);
+  const [unlocking, setUnlocking] = useState<User | null>(null);
 
-  const canManage = can(currentUser?.role, "users.write");
-  const canAssignRole = can(currentUser?.role, "users.assign_role");
-  const canToggleStatus = can(currentUser?.role, "users.toggle_status");
-  const canResetPassword = can(currentUser?.role, "users.reset_password");
+  const canCreate = hasPermission(currentUser, "users.create");
+  const canManage = hasPermission(currentUser, "users.update");
+  const canAssignRole = hasPermission(currentUser, "users.assign_role");
+  const canToggleStatus = hasPermission(currentUser, "users.toggle_status");
+  const canResetPassword = hasPermission(currentUser, "users.reset_password");
+  const canLock = hasPermission(currentUser, "users.lock");
+  const canUnlock = hasPermission(currentUser, "users.unlock");
+  const canDelete = hasPermission(currentUser, "users.delete");
+
+  const { data: roleOptions } = useQuery({
+    queryKey: ["roles"],
+    queryFn: () => roleService.getAll(),
+    staleTime: 60000,
+  });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["users", { search, roleFilter, statusFilter, sortBy, sortOrder, page }],
@@ -131,6 +140,11 @@ export default function UsersPage() {
   const users = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, data?.totalPages ?? 1);
+
+  const roleFilters = [
+    { value: "", label: "All Roles" },
+    ...(roleOptions ?? []).map((r) => ({ value: r.name, label: roleLabel(r.name) })),
+  ];
 
   const handleSort = (key: string) => {
     if (sortBy === key) {
@@ -160,7 +174,7 @@ export default function UsersPage() {
             Manage accounts, roles and access across your organisation
           </p>
         </div>
-        {canManage && (
+        {canCreate && (
           <button
             className="btn-primary inline-flex items-center gap-2"
             onClick={() => setAddOpen(true)}
@@ -305,7 +319,10 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <RoleBadge role={user.role} />
+                      <div className="flex items-center gap-2">
+                        <RoleBadge role={user.role} />
+                        {user.isLocked && <LockedBadge />}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <UserStatusBadge status={user.status} />
@@ -352,6 +369,27 @@ export default function UsersPage() {
                             <UserRoundX className="w-4 h-4" />
                           </button>
                         )}
+                        {user.isLocked
+                          ? canUnlock && user.id !== currentUser?.id && (
+                              <button
+                                onClick={() => setUnlocking(user)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                aria-label={`Unlock ${user.name}`}
+                                title="Unlock Account"
+                              >
+                                <Unlock className="w-4 h-4" />
+                              </button>
+                            )
+                          : canLock && user.id !== currentUser?.id && (
+                              <button
+                                onClick={() => setLocking(user)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                aria-label={`Lock ${user.name}`}
+                                title="Lock Account"
+                              >
+                                <Lock className="w-4 h-4" />
+                              </button>
+                            )}
                         {canManage && (
                           <button
                             onClick={() => setEditing(user)}
@@ -362,7 +400,7 @@ export default function UsersPage() {
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
-                        {canManage && user.id !== currentUser?.id && (
+                        {canDelete && user.id !== currentUser?.id && (
                           <button
                             onClick={() => setDeleting(user)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -466,6 +504,16 @@ export default function UsersPage() {
         open={Boolean(resetting)}
         user={resetting as User}
         onClose={() => setResetting(null)}
+      />
+      <LockUserDialog
+        open={Boolean(locking)}
+        user={locking as User}
+        onClose={() => setLocking(null)}
+      />
+      <UnlockUserDialog
+        open={Boolean(unlocking)}
+        user={unlocking as User}
+        onClose={() => setUnlocking(null)}
       />
     </div>
   );

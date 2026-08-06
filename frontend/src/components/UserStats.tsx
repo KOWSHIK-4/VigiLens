@@ -1,4 +1,4 @@
-import { Users, UserCheck, UserMinus, Wifi } from "lucide-react";
+import { Users, UserCheck, UserMinus, Wifi, Lock } from "lucide-react";
 import type { UserStats } from "@/types";
 
 function StatCard({
@@ -29,7 +29,7 @@ function StatCard({
 
 export default function UserStatsCards({ stats }: { stats: UserStats }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <StatCard
         label="Total Users"
         value={stats.total}
@@ -53,6 +53,12 @@ export default function UserStatsCards({ stats }: { stats: UserStats }) {
         value={stats.disabled}
         icon={<UserMinus className="w-5 h-5 text-gray-500" />}
         iconClass="bg-gray-100"
+      />
+      <StatCard
+        label="Locked Users"
+        value={stats.locked}
+        icon={<Lock className="w-5 h-5 text-red-600" />}
+        iconClass="bg-red-50"
       />
     </div>
   );

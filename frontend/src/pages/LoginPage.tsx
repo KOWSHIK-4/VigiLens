@@ -18,12 +18,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (isRegister) {
-        await authService.register(name, email, password);
-      } else {
-        await authService.login(email, password);
-      }
-      navigate("/");
+      const res = isRegister
+        ? await authService.register(name, email, password)
+        : await authService.login(email, password);
+      navigate(res.user.mustChangePassword ? "/change-password" : "/");
     } catch (err) {
       const message = axios.isAxiosError(err)
         ? (err.response?.data as { error?: string } | undefined)?.error

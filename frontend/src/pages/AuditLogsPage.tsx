@@ -21,7 +21,7 @@ import AuditLogDetailsDrawer from "@/components/AuditLogDetailsDrawer";
 import { AUDIT_ACTIONS } from "@/types";
 import type { AuditLog, AuditLogAction, AuditLogStatus } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
-import { can } from "@/utils/permissions";
+import { hasPermission } from "@/utils/permissions";
 
 const PAGE_SIZE = 15;
 
@@ -98,8 +98,8 @@ export default function AuditLogsPage() {
   const [selected, setSelected] = useState<AuditLog | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const canRead = can(user?.role, "audit.read");
-  const canExport = can(user?.role, "audit.export");
+  const canRead = hasPermission(user, "audit.read");
+  const canExport = hasPermission(user, "audit.export");
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: [

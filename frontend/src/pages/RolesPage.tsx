@@ -1,27 +1,39 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, Pencil, Shield, X } from "lucide-react";
-import { roleService } from "@/services/roles";
+import {
+  AlertTriangle,
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  Shield,
+  Trash2,
+  X,
+} from "lucide-react";
+import { roleService, fetchAllPermissions } from "@/services/roles";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
 import RoleBadge from "@/components/RoleBadge";
-import { can } from "@/utils/permissions";
+import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
-import type { Permission, Role, UserRole } from "@/types";
+import type { Permission, Role } from "@/types";
 
-const ROLE_ICON_TINTS: Record<UserRole, string> = {
+const ROLE_ICON_TINTS: Record<string, string> = {
   super_admin: "bg-purple-50",
   admin: "bg-blue-50",
   operator: "bg-emerald-50",
   viewer: "bg-gray-100",
 };
 
-const ROLE_ICON_COLORS: Record<UserRole, string> = {
+const ROLE_ICON_COLORS: Record<string, string> = {
   super_admin: "text-purple-600",
   admin: "text-blue-600",
   operator: "text-emerald-600",
   viewer: "text-gray-500",
 };
+
+const FALLBACK_TINT = "bg-indigo-50";
+const FALLBACK_COLOR = "text-indigo-600";
 
 const CATEGORY_LABELS: Record<string, string> = {
   users: "Users",
@@ -62,14 +74,7 @@ function RolePermissionDialog({ open, onClose, role }: RolePermissionDialogProps
   const { data: allPermissions } = useQuery({
     queryKey: ["roles", "permissions"],
     enabled: open && role.name !== "super_admin",
-    queryFn: () =>
-      roleService.getAll().then((roles) => {
-        const seen = new Map<string, Permission>();
-        roles.forEach((r) => {
-          r.permissions.forEach((p) => seen.set(p.key, p));
-        });
-        return Array.from(seen.values());
-      }),
+    queryFn: fetchAllPermissions,
   });
 
   useEffect(() => {
@@ -220,13 +225,201 @@ function RolePermissionDialog({ open, onClose, role }: RolePermissionDialogProps
   );
 }
 
+interface CreateRoleDialogProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+function CreateRoleDialog({ open, onClose }: CreateRoleDialogProps) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setError("");
+    }
+  }, [open]);
+
+  const mutation = useMutation({
+    mutationFn: () => roleService.create({ name, description }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      showToast({
+        severity: "info",
+        title: "Role created",
+        message: `Role ${created.name} created. Edit it to assign permissions.`,
+      });
+      onClose();
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err));
+    },
+  });
+
+  if (!open) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!/^[a-z][a-z0-9_]*$/.test(name.trim())) {
+      setError("Role name must be lowercase letters, numbers or underscores");
+      return;
+    }
+    mutation.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center flex-shrink-0">
+              <Plus className="w-5 h-5 text-brand-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Create Role</h3>
+              <p className="text-sm text-gray-500">Add a custom access role</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                placeholder="e.g. security_manager"
+                autoFocus
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Lowercase letters, numbers and underscores
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="input"
+                rows={3}
+                placeholder="What is this role for?"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+              <button
+                type="submit"
+                disabled={mutation.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Create Role
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface DeleteRoleDialogProps {
+  open: boolean;
+  onClose: () => void;
+  role: Role;
+}
+
+function DeleteRoleDialog({ open, onClose, role }: DeleteRoleDialogProps) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () => roleService.remove(role.name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      showToast({
+        severity: "info",
+        title: "Role deleted",
+        message: `Role ${role.name} has been deleted`,
+      });
+      onClose();
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err));
+    },
+  });
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
+        <div className="p-6">
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Role</h3>
+              <div className="mt-2">
+                <RoleBadge role={role.name} />
+              </div>
+              <p className="text-sm text-gray-500 mt-3">
+                This will permanently remove the role. Any soft-deleted users still
+                assigned to it will be moved to the default Viewer role.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={onClose} className="btn-secondary">Cancel</button>
+            <button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete Role
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface RoleCardProps {
   role: Role;
   canManage: boolean;
   onEdit: (role: Role) => void;
+  onDelete: (role: Role) => void;
 }
 
-function RoleCard({ role, canManage, onEdit }: RoleCardProps) {
+function RoleCard({ role, canManage, onEdit, onDelete }: RoleCardProps) {
   const groups = permissionGroups(role.permissions);
   const protectedRole = role.name === "super_admin";
 
@@ -235,9 +428,15 @@ function RoleCard({ role, canManage, onEdit }: RoleCardProps) {
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div
-            className={`w-11 h-11 rounded-xl ${ROLE_ICON_TINTS[role.name]} flex items-center justify-center flex-shrink-0`}
+            className={`w-11 h-11 rounded-xl ${
+              ROLE_ICON_TINTS[role.name] ?? FALLBACK_TINT
+            } flex items-center justify-center flex-shrink-0`}
           >
-            <Shield className={`w-5 h-5 ${ROLE_ICON_COLORS[role.name]}`} />
+            <Shield
+              className={`w-5 h-5 ${
+                ROLE_ICON_COLORS[role.name] ?? FALLBACK_COLOR
+              }`}
+            />
           </div>
           <div className="min-w-0">
             <RoleBadge role={role.name} />
@@ -253,15 +452,35 @@ function RoleCard({ role, canManage, onEdit }: RoleCardProps) {
           </div>
         </div>
         {canManage && !protectedRole ? (
-          <button
-            onClick={() => onEdit(role)}
-            className="p-2 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors flex-shrink-0"
-            aria-label={`Edit ${role.name} permissions`}
-            title="Edit Permissions"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => onEdit(role)}
+              className="p-2 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              aria-label={`Edit ${role.name} permissions`}
+              title="Edit Permissions"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+            {!role.isSystem && (
+              <button
+                onClick={() => onDelete(role)}
+                className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                aria-label={`Delete ${role.name} role`}
+                title="Delete Role"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         ) : protectedRole ? (
+          <span
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 flex-shrink-0"
+            title="System-managed role"
+          >
+            <Lock className="w-3 h-3" />
+            System
+          </span>
+        ) : role.isSystem ? (
           <span
             className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 flex-shrink-0"
             title="System-managed role"
@@ -326,7 +545,9 @@ function RolesSkeleton() {
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
   const [editing, setEditing] = useState<Role | null>(null);
-  const canManageRoles = can(currentUser?.role, "roles.manage");
+  const [deleting, setDeleting] = useState<Role | null>(null);
+  const [creating, setCreating] = useState(false);
+  const canManageRoles = hasPermission(currentUser, "roles.manage");
 
   const { data: roles, isLoading, isError } = useQuery({
     queryKey: ["roles"],
@@ -347,11 +568,22 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Role Management</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Roles bundle permissions that control access to VigiLens resources
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Role Management</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Roles bundle permissions that control access to VigiLens resources
+          </p>
+        </div>
+        {canManageRoles && (
+          <button
+            className="btn-primary inline-flex items-center gap-2"
+            onClick={() => setCreating(true)}
+          >
+            <Plus className="w-4 h-4" />
+            Create Role
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -364,6 +596,7 @@ export default function RolesPage() {
               role={role}
               canManage={canManageRoles && role.name !== "super_admin"}
               onEdit={setEditing}
+              onDelete={setDeleting}
             />
           ))}
         </div>
@@ -373,6 +606,12 @@ export default function RolesPage() {
         open={Boolean(editing)}
         role={editing as Role}
         onClose={() => setEditing(null)}
+      />
+      <CreateRoleDialog open={creating} onClose={() => setCreating(false)} />
+      <DeleteRoleDialog
+        open={Boolean(deleting)}
+        role={deleting as Role}
+        onClose={() => setDeleting(null)}
       />
     </div>
   );

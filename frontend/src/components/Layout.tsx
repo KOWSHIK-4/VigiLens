@@ -19,25 +19,25 @@ import { alertService } from "@/services/alerts";
 import ToastItem from "./Toast";
 import { showToast, useToast } from "@/utils/toast";
 import { useEffect, useRef } from "react";
-import { can } from "@/utils/permissions";
+import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import type { Alert } from "@/types";
 
 const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/live-camera", label: "Live Camera", icon: MonitorPlay },
-  { path: "/cameras", label: "Cameras", icon: Camera },
-  { path: "/detections", label: "Detections", icon: ScanEye },
-  { path: "/analytics", label: "Analytics", icon: BarChart3 },
-  { path: "/reports", label: "Reports", icon: FileText },
-  { path: "/detectors", label: "Detectors", icon: Brain },
+  { path: "/", label: "Dashboard", icon: LayoutDashboard, permission: null },
+  { path: "/live-camera", label: "Live Camera", icon: MonitorPlay, permission: "cameras.control" },
+  { path: "/cameras", label: "Cameras", icon: Camera, permission: "cameras.read" },
+  { path: "/detections", label: "Detections", icon: ScanEye, permission: "detections.read" },
+  { path: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics.read" },
+  { path: "/reports", label: "Reports", icon: FileText, permission: "reports.read" },
+  { path: "/detectors", label: "Detectors", icon: Brain, permission: "models.read" },
 ];
 
 const adminNavItems = [
-  { path: "/users", label: "Users", icon: Users },
-  { path: "/roles", label: "Roles", icon: Shield },
-  { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/audit-logs", label: "Audit Logs", icon: ScrollText },
+  { path: "/users", label: "Users", icon: Users, permission: "users.read" },
+  { path: "/roles", label: "Roles", icon: Shield, permission: "roles.read" },
+  { path: "/settings", label: "Settings", icon: Settings, permission: "settings.read" },
+  { path: "/audit-logs", label: "Audit Logs", icon: ScrollText, permission: "audit.read" },
 ];
 
 export default function Layout() {
@@ -45,18 +45,28 @@ export default function Layout() {
   const { toasts, dismiss } = useToast();
   const { user } = useAuth();
   const prevAlertIds = useRef<Set<string>>(new Set());
-  const showAdminNav = can(user?.role, "users.read");
+
+  const visibleNav = navItems.filter(
+    (item) => !item.permission || hasPermission(user, item.permission),
+  );
+  const visibleAdminNav = adminNavItems.filter((item) =>
+    hasPermission(user, item.permission),
+  );
+
+  const canSeeAlerts = hasPermission(user, "alerts.read");
 
   const { data: unreadData } = useQuery({
     queryKey: ["alerts", "unread-count"],
     queryFn: () => alertService.getUnreadCount(),
     refetchInterval: 5000,
+    enabled: canSeeAlerts,
   });
 
   const { data: latestAlerts } = useQuery({
     queryKey: ["alerts", "latest"],
     queryFn: () => alertService.getAll({ page: 1, limit: 5, isRead: "false" }),
     refetchInterval: 5000,
+    enabled: canSeeAlerts,
   });
 
   useEffect(() => {
@@ -85,7 +95,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
             return (
@@ -103,12 +113,12 @@ export default function Layout() {
               </Link>
             );
           })}
-          {showAdminNav && (
+          {visibleAdminNav.length > 0 && (
             <>
               <div className="pt-3 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Administration
               </div>
-              {adminNavItems.map((item) => {
+              {visibleAdminNav.map((item) => {
                 const Icon = item.icon;
                 const active = location.pathname === item.path;
                 return (
@@ -128,24 +138,26 @@ export default function Layout() {
               })}
             </>
           )}
-          <Link
-            to="/alerts"
-            className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              location.pathname === "/alerts"
-                ? "bg-brand-600 text-white"
-                : "text-gray-300 hover:bg-gray-800 hover:text-white"
-            }`}
-          >
-            <span className="flex items-center gap-3">
-              <Bell className="w-4 h-4" />
-              Alerts
-            </span>
-            {unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                {unreadCount > 99 ? "99+" : unreadCount}
+          {hasPermission(user, "alerts.read") && (
+            <Link
+              to="/alerts"
+              className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                location.pathname === "/alerts"
+                  ? "bg-brand-600 text-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <Bell className="w-4 h-4" />
+                Alerts
               </span>
-            )}
-          </Link>
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-700">
