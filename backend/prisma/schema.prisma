@@ -7,6 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SystemSettingCategory {
+  general
+  security
+  ai_detection
+  notifications
+  cameras
+  storage
+  email
+  backup
+}
+
 enum RoleValue {
   super_admin
   admin
@@ -292,6 +303,22 @@ model DetectorCamera {
   @@unique([aiModelId, cameraId])
   @@index([cameraId])
   @@map("detector_cameras")
+}
+
+model SystemSetting {
+  id          String                 @id @default(uuid())
+  category    SystemSettingCategory
+  key         String
+  label       String
+  description String                 @default("")
+  value       Json
+  updatedBy   String?                @map("updated_by")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@unique([category, key])
+  @@index([category])
+  @@map("system_settings")
 }
 
 model AuditLog {
