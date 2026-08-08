@@ -562,3 +562,61 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   "email",
   "backup",
 ];
+
+export type ServiceStatus = "healthy" | "degraded" | "offline" | "not_configured";
+export type OverallStatus = "healthy" | "degraded" | "unhealthy";
+
+export interface ServiceHealth {
+  name: string;
+  label: string;
+  status: ServiceStatus;
+  responseTimeMs: number;
+  lastChecked: string;
+  version?: string;
+  detail?: string;
+}
+
+export interface SystemMonitoring {
+  status: OverallStatus;
+  timestamp: string;
+  version: string;
+  uptime: {
+    process: number;
+    system: number;
+  };
+  services: ServiceHealth[];
+  resources: {
+    cpu: { usagePercent: number; cores: number };
+    memory: { totalBytes: number; usedBytes: number; usagePercent: number };
+    disk: {
+      totalBytes: number;
+      freeBytes: number;
+      usagePercent: number;
+      mount: string;
+    };
+  };
+}
+
+export interface SystemMetrics {
+  version: string;
+  windowSeconds: number;
+  slowRequestThresholdMs: number;
+  collectedAt: string;
+  requests: {
+    total: number;
+    errorCount: number;
+    errorRate: number;
+    averageResponseTimeMs: number;
+    p95ResponseTimeMs: number;
+    maxResponseTimeMs: number;
+    slowRequestCount: number;
+  };
+  detections: {
+    total: number;
+    averageProcessingTimeMs: number;
+  };
+  uptime: {
+    processSeconds: number;
+    sinceStartedSeconds: number;
+  };
+}

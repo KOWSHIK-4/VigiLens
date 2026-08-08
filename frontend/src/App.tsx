@@ -20,6 +20,7 @@ const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const SystemMonitoringPage = lazy(() => import("@/pages/SystemMonitoringPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -165,6 +166,14 @@ export default function App() {
               element={
                 <Suspense fallback={<PageFallback />}>
                   <SettingsPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="system-monitoring"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <SystemMonitoringPage />
                 </Suspense>
               }
             />

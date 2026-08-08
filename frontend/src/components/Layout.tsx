@@ -13,6 +13,7 @@ import {
   Settings,
   Shield,
   Users,
+  Activity,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { alertService } from "@/services/alerts";
@@ -38,6 +39,12 @@ const adminNavItems = [
   { path: "/roles", label: "Roles", icon: Shield, permission: "roles.read" },
   { path: "/settings", label: "Settings", icon: Settings, permission: "settings.read" },
   { path: "/audit-logs", label: "Audit Logs", icon: ScrollText, permission: "audit.read" },
+  {
+    path: "/system-monitoring",
+    label: "System Health",
+    icon: Activity,
+    permission: "monitoring.read",
+  },
 ];
 
 export default function Layout() {
