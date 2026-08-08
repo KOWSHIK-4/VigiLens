@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.services.detector import detector_service
+from app.services.tracker import IouTracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/detect", tags=["detection"])
@@ -25,13 +26,22 @@ _webcam_stats: dict = {}
 _stats_lock = threading.Lock()
 
 
-def _update_stats(fps: float, persons: int, confidence: float, total_persons: int) -> None:
+def _update_stats(
+    fps: float,
+    persons: int,
+    confidence: float,
+    total_persons: int,
+    image_width: int = 0,
+    image_height: int = 0,
+) -> None:
     with _stats_lock:
         _webcam_stats.update(
             fps=round(fps, 1),
             persons=persons,
             confidence=round(confidence, 4),
             total_persons=total_persons,
+            image_width=image_width,
+            image_height=image_height,
         )
 
 
@@ -99,14 +109,19 @@ async def detect_image(
         annotated = detector_obj.draw(image, detections)
         cv2.imwrite(out_path, annotated)
 
+        h, w = image.shape[:2]
         return {
             "success": True,
             "detections": dets_json,
             "count": len(detections),
             "output_path": out_path,
+            "image_width": int(w),
+            "image_height": int(h),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Image detection failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -144,6 +159,12 @@ async def detect_video(
             os.remove(tmp_path)
 
 
+@router.get("/detectors")
+async def list_detectors():
+    """Catalog of registered inference models in this service."""
+    return {"success": True, "detectors": detector_service.list(), "count": len(detector_service.list())}
+
+
 @router.get("/webcam/stats")
 async def webcam_stats():
     return _webcam_stats
@@ -156,27 +177,29 @@ async def detect_webcam(
 ):
     def save_detection(
         cam_id: str,
-        label: str,
-        confidence: float,
-        count: int,
+        detections: list,
         image_path: str,
     ) -> None:
         try:
             with httpx.Client(timeout=3.0) as client:
-                client.post(
-                    f"{settings.backend_url}/api/detections/internal",
-                    json={
-                        "camera_id": cam_id,
-                        "label": label,
-                        "confidence": confidence,
-                        "image_url": image_path,
-                        "metadata": {
-                            "detector_type": label,
-                            "count": count,
-                            "source": "webcam",
+                for det in detections:
+                    client.post(
+                        f"{settings.backend_url}/api/detections/internal",
+                        json={
+                            "camera_id": cam_id,
+                            "label": det["class_name"],
+                            "confidence": det["confidence"],
+                            "image_url": image_path,
+                            "detector_key": "person",
+                            "class_name": det["class_name"],
+                            "track_id": det.get("track_id"),
+                            "bounding_box": det["bbox"],
+                            "metadata": {
+                                "detector_type": "person_detector",
+                                "source": "webcam",
+                            },
                         },
-                    },
-                )
+                    )
         except Exception:
             logger.debug("Failed to save detection to backend", exc_info=True)
 
@@ -189,6 +212,7 @@ async def detect_webcam(
             return
 
         person_detector = detector_service.get("person_detector")
+        tracker = IouTracker()
         fps_counter = _FPSCounter()
         frame_no = 0
         total_persons = 0
@@ -203,17 +227,33 @@ async def detect_webcam(
 
                 frame_no += 1
                 detections = person_detector.detect(frame)
+                tracked = tracker.update(
+                    [
+                        {
+                            "class_name": d.class_name,
+                            "confidence": d.confidence,
+                            "bbox": {
+                                "x1": int(d.bbox[0]),
+                                "y1": int(d.bbox[1]),
+                                "x2": int(d.bbox[2]),
+                                "y2": int(d.bbox[3]),
+                            },
+                        }
+                        for d in detections
+                    ]
+                )
                 annotated = person_detector.draw(frame, detections)
 
                 fps = fps_counter.update()
-                person_count = len(detections)
+                person_count = len(tracked)
                 total_persons += person_count
-                max_conf = max((d.confidence for d in detections), default=0.0)
+                max_conf = max((d["confidence"] for d in tracked), default=0.0)
+                image_height, image_width = frame.shape[:2]
 
-                _update_stats(fps, person_count, max_conf, total_persons)
+                _update_stats(fps, person_count, max_conf, total_persons, image_width, image_height)
                 _draw_overlay(annotated, fps, person_count, max_conf)
 
-                if detections and frame_no % snapshot_interval == 0:
+                if tracked and frame_no % snapshot_interval == 0:
                     image_path = ""
                     if snapshot_enabled:
                         snapshot_name = f"webcam_{int(time.time())}_{frame_no}.jpg"
@@ -222,7 +262,7 @@ async def detect_webcam(
 
                     threading.Thread(
                         target=save_detection,
-                        args=(camera_id, "person", max_conf, person_count, image_path),
+                        args=(camera_id, tracked, image_path),
                         daemon=True,
                     ).start()
 

@@ -25,6 +25,17 @@ class DetectorService:
             raise KeyError(f"Detector '{name}' not registered. Available: {list(self._detectors.keys())}")
         return self._detectors[name]
 
+    def list(self) -> list[dict]:
+        return [
+            {
+                "key": name,
+                "name": detector.__class__.__name__,
+                "type": "object_detection",
+                "availability": "available",
+            }
+            for name, detector in self._detectors.items()
+        ]
+
     def detect_image(self, image_data: bytes, detector_name: str | None = None) -> tuple[List[Detection], np.ndarray]:
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -69,4 +80,14 @@ class DetectorService:
 detector_service = DetectorService()
 
 from app.detectors import PersonDetector
+from app.detectors.yolo import YoloDetector
+
 detector_service.register(PersonDetector())
+# Vehicle detection uses the same YOLO COCO model, filtered to
+# motorized road vehicles (car=2, motorcycle=3, bus=5, truck=7).
+detector_service.register(
+    YoloDetector(
+        detector_name="vehicle_detector",
+        class_filter=[2, 3, 5, 7],
+    )
+)
