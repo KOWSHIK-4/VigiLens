@@ -146,50 +146,6 @@ function formatBytes(bytes: number): string {
   return `${gb >= 100 ? Math.round(gb) : gb.toFixed(1)} GB`;
 }
 
-async function getStorageBasePath(): Promise<string> {
-  try {
-    const value = await settingsService.getValue("storage", "storage_base_path");
-    if (typeof value === "string" && value.trim()) return value.trim();
-  } catch {
-    // settings unavailable; fall back to the configured default
-  }
-  return "/data/vigilens";
-}
-
-async function checkStorage(): Promise<ServiceHealth> {
-  const name = "storage";
-  const label = "Storage";
-  const start = Date.now();
-  const basePath = await getStorageBasePath();
-  try {
-    await fs.mkdir(basePath, { recursive: true });
-    const probe = path.join(basePath, `.vigilens-health-${process.pid}-${Date.now()}.tmp`);
-    await fs.writeFile(probe, "ok");
-    await fs.unlink(probe);
-
-    const stats = await fs.statfs(basePath);
-    const availableBytes = Number(stats.bavail) * Number(stats.bsize);
-    const totalBytes = Number(stats.blocks) * Number(stats.bsize);
-
-    return {
-      name,
-      label,
-      status: "healthy",
-      responseTimeMs: Date.now() - start,
-      lastChecked: nowIso(),
-      detail: `${basePath} (${formatBytes(availableBytes)} free of ${formatBytes(totalBytes)})`,
-    };
-  } catch (error) {
-    logger.warn("Storage health check failed", { error, basePath });
-    return degradedService(
-      name,
-      label,
-      Date.now() - start,
-      `${basePath}: ${error instanceof Error ? error.message : "Storage unavailable"}`,
-    );
-  }
-}
-
 const AI_HEALTH_TIMEOUT_MS = 3000;
 
 async function checkAI(): Promise<ServiceHealth> {
@@ -248,6 +204,50 @@ function checkRedis(): ServiceHealth {
   };
 }
 
+async function getStorageBasePath(): Promise<string> {
+  try {
+    const value = await settingsService.getValue("storage", "storage_base_path");
+    if (typeof value === "string" && value.trim()) return value.trim();
+  } catch {
+    // settings unavailable; fall back to the configured default
+  }
+  return "/data/vigilens";
+}
+
+async function checkStorage(): Promise<ServiceHealth> {
+  const name = "storage";
+  const label = "Storage";
+  const start = Date.now();
+  const basePath = await getStorageBasePath();
+  try {
+    await fs.mkdir(basePath, { recursive: true });
+    const probe = path.join(basePath, `.vigilens-health-${process.pid}-${Date.now()}.tmp`);
+    await fs.writeFile(probe, "ok");
+    await fs.unlink(probe);
+
+    const stats = await fs.statfs(basePath);
+    const availableBytes = Number(stats.bavail) * Number(stats.bsize);
+    const totalBytes = Number(stats.blocks) * Number(stats.bsize);
+
+    return {
+      name,
+      label,
+      status: "healthy",
+      responseTimeMs: Date.now() - start,
+      lastChecked: nowIso(),
+      detail: `${basePath} (${formatBytes(availableBytes)} free of ${formatBytes(totalBytes)})`,
+    };
+  } catch (error) {
+    logger.warn("Storage health check failed", { error, basePath });
+    return degradedService(
+      name,
+      label,
+      Date.now() - start,
+      `${basePath}: ${error instanceof Error ? error.message : "Storage unavailable"}`,
+    );
+  }
+}
+
 function overallStatus(services: ServiceHealth[]): OverallStatus {
   if (services.some((service) => service.status === "offline")) {
     return "unhealthy";
@@ -274,6 +274,10 @@ export const healthService = {
     };
   },
 
+  async getStorageBasePath(): Promise<string> {
+    return getStorageBasePath();
+  },
+
   async getReadiness(): Promise<HealthReport> {
     const startedAt = Date.now();
     const services = await Promise.all([
@@ -291,5 +295,9 @@ export const healthService = {
       version: appVersion,
       uptime: Math.round(process.uptime()),
     };
+  },
+
+  get aiServiceUrl(): string {
+    return config.ai.serviceUrl;
   },
 };

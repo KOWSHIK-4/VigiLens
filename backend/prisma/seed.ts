@@ -47,6 +47,8 @@ export const permissionDefinitions = [
   // Settings
   { key: "settings.read", name: "View Settings", description: "View system settings and configuration", category: "settings" },
   { key: "settings.manage", name: "Manage Settings", description: "Change system settings and configuration", category: "settings" },
+  // Monitoring
+  { key: "monitoring.read", name: "View System Monitoring", description: "View system health, status and performance metrics", category: "monitoring" },
 ] as const;
 
 export type PermissionDefinitionKey = (typeof permissionDefinitions)[number]["key"];
@@ -83,6 +85,7 @@ export const rolePermissionMap: Record<string, string[]> = {
     "audit.view",
     "settings.read",
     "settings.manage",
+    "monitoring.read",
   ],
   operator: [
     "dashboard.view",
