@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { systemService } from "@/services/system";
 import StatusBadge from "@/components/StatusBadge";
+import ServiceStatusTable from "@/components/ServiceStatusTable";
 import type { OverallStatus, ServiceHealth } from "@/types";
 
 function formatMs(ms: number): string {
@@ -131,10 +132,12 @@ function ServiceCardsSkeleton() {
 
 export default function SystemMonitoringPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const monitoringQuery = useQuery({
     queryKey: ["system", "monitoring"],
     queryFn: () => systemService.getMonitoring(),
+    refetchInterval: autoRefresh ? 15000 : false,
   });
 
   useEffect(() => {
@@ -156,7 +159,27 @@ export default function SystemMonitoringPage() {
             Real-time status of every VigiLens service and dependency
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoRefresh}
+            onClick={() => setAutoRefresh((value) => !value)}
+            className="flex items-center gap-2 text-sm text-gray-600"
+          >
+            <span
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                autoRefresh ? "bg-brand-600" : "bg-gray-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  autoRefresh ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </span>
+            Auto-refresh (15s)
+          </button>
           {lastRefreshed && (
             <p className="text-xs text-gray-500">
               Last refreshed: {lastRefreshed.toLocaleTimeString()}
@@ -242,6 +265,7 @@ export default function SystemMonitoringPage() {
                 <ServiceCard key={service.name} service={service} />
               ))}
             </div>
+            <ServiceStatusTable services={monitoring.services} />
           </>
         )
       )}
