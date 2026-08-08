@@ -11,12 +11,13 @@ import {
   Cpu,
 } from "lucide-react";
 import { detectorService } from "@/services/detectors";
+import { engineService } from "@/services/engine";
 import { showToast } from "@/utils/toast";
 import DetectorCard from "@/components/DetectorCard";
 import DetectorConfigDialog from "@/components/DetectorConfigDialog";
 import DetectorCameraModal from "@/components/DetectorCameraModal";
 import DetectorDetailsDrawer from "@/components/DetectorDetailsDrawer";
-import type { MarketplaceDetector } from "@/types";
+import type { EngineDetector, MarketplaceDetector } from "@/types";
 
 type Tab = "installed" | "available";
 
@@ -71,6 +72,18 @@ export default function DetectorsPage() {
     queryKey: ["detectors", "categories"],
     queryFn: () => detectorService.getCategories(),
   });
+
+  const { data: engineDescriptors } = useQuery({
+    queryKey: ["detectors", "engine"],
+    queryFn: () => engineService.getAll(),
+    refetchInterval: 5000,
+  });
+
+  const descriptorByKey = useMemo(() => {
+    const map = new Map<string, EngineDetector>();
+    for (const d of engineDescriptors ?? []) map.set(d.key, d);
+    return map;
+  }, [engineDescriptors]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["detectors"] });
 
@@ -309,6 +322,8 @@ export default function DetectorsPage() {
               key={detector.key}
               detector={detector}
               busy={isBusy(detector)}
+              availability={descriptorByKey.get(detector.key)?.availability}
+              engineType={descriptorByKey.get(detector.key)?.type}
               onToggle={(d) =>
                 toggleMutation.mutate({ detector: d, enabled: !d.enabled })
               }

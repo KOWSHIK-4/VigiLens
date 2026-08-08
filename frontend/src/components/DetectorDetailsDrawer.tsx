@@ -17,9 +17,11 @@ import {
   Download,
 } from "lucide-react";
 import { detectorService } from "@/services/detectors";
+import { engineService } from "@/services/engine";
 import type { MarketplaceDetector } from "@/types";
 import DetectorIcon from "./DetectorIcon";
 import DetectorStatusBadge from "./DetectorStatusBadge";
+import DetectorAvailabilityBadge from "./DetectorAvailabilityBadge";
 
 interface DetectorDetailsDrawerProps {
   detector: MarketplaceDetector | null;
@@ -65,6 +67,23 @@ export default function DetectorDetailsDrawer({
     enabled: isInstalled,
   });
 
+  const { data: engineDescriptor } = useQuery({
+    queryKey: ["detectors", "engine", detector?.key],
+    queryFn: () => engineService.getByKey(detector!.key),
+    enabled: Boolean(detector?.key),
+    refetchInterval: 5000,
+  });
+
+  const { data: engineMetrics } = useQuery({
+    queryKey: ["detectors", "engine", detector?.key, "metrics"],
+    queryFn: () => engineService.getMetrics(detector!.key),
+    enabled: Boolean(detector?.key),
+    refetchInterval: 5000,
+  });
+
+  const hasRealMetrics =
+    engineMetrics && "recorded" in engineMetrics ? false : Boolean(engineMetrics?.framesProcessed);
+
   if (!detector) return null;
 
   const installed = detector.installed && detector.id;
@@ -101,14 +120,19 @@ export default function DetectorDetailsDrawer({
 
         <div className="p-6 space-y-6">
           <div className="flex items-center justify-between">
-            {installed && detector.status ? (
-              <DetectorStatusBadge status={detector.status} />
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                <Download className="w-3.5 h-3.5" />
-                Not installed
-              </span>
-            )}
+            <div className="flex flex-col items-start gap-1.5">
+              {installed && detector.status ? (
+                <DetectorStatusBadge status={detector.status} />
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  <Download className="w-3.5 h-3.5" />
+                  Not installed
+                </span>
+              )}
+              {engineDescriptor && (
+                <DetectorAvailabilityBadge availability={engineDescriptor.availability} />
+              )}
+            </div>
             {installed && (
               <span
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -232,6 +256,60 @@ export default function DetectorDetailsDrawer({
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-3">{health.message}</p>
+            </div>
+          )}
+
+          {installed && (
+            <div className="card bg-gray-50 border border-gray-100">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 mb-3">
+                <Activity className="w-4 h-4 text-brand-600" />
+                Engine Performance
+              </h3>
+              {hasRealMetrics ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Total Processing</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.totalProcessingTimeMs ?? 0}ms
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Inference</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.inferenceTimeMs ?? 0}ms
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Tracking</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.trackingTimeMs ?? 0}ms
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Frames Processed</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.framesProcessed ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Detections / Frame</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.detectionsPerFrame ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Errors</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {engineMetrics?.errorCount ?? 0}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  No engine runs recorded yet. Run a detection to measure real inference
+                  performance.
+                </p>
+              )}
             </div>
           )}
 

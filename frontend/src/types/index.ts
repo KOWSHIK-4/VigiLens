@@ -416,6 +416,99 @@ export interface DetectorSettingsInput {
   preferredProcessor?: ProcessorPreference;
 }
 
+// --- Detector Engine v2 (frontend view of the engine API) ---
+
+export type DetectorEngineType = "object_detection" | "classification" | "segmentation";
+export type DetectorAvailability = "available" | "unconfigured";
+export type DetectorRuntimeStatus =
+  | "registered"
+  | "initializing"
+  | "ready"
+  | "error"
+  | "disabled"
+  | "unconfigured";
+
+export interface DetectorConfiguration {
+  confidenceThreshold: number;
+  detectionIntervalMs: number;
+  maxDetectionsPerFrame: number;
+  alertSeverity: "info" | "warning" | "critical";
+  alertCooldownMs: number;
+  cameraIds: string[];
+  inputResolution: string;
+  processingMode: ProcessorPreference;
+}
+
+export interface EngineDetector {
+  id: string;
+  key: string;
+  name: string;
+  type: DetectorEngineType;
+  version: string;
+  status: DetectorRuntimeStatus;
+  availability: DetectorAvailability;
+  confidenceThreshold: number;
+  supportedInput: string[];
+  configuration: DetectorConfiguration;
+  modelVersion: string | null;
+}
+
+export interface EngineDetection {
+  id?: string;
+  className: string;
+  confidence: number;
+  bbox: { x1: number; y1: number; x2: number; y2: number };
+  normalized?: { x: number; y: number; width: number; height: number };
+  trackId: string | null;
+  detectorKey: string;
+  processingTimeMs: number;
+  timestamp: string;
+}
+
+export interface EngineStoredDetection {
+  id: string;
+  className: string | null;
+  label: string;
+  confidence: number;
+  boundingBox: { x1: number; y1: number; x2: number; y2: number } | null;
+  trackId: string | null;
+  detectorKey: string | null;
+  modelVersion: string | null;
+  processingTimeMs: number | null;
+  snapshotUrl: string | null;
+  cameraId: string;
+  timestamp: string;
+}
+
+export interface EngineDetectionsResponse {
+  key: string;
+  count: number;
+  detections: EngineStoredDetection[];
+}
+
+export interface EngineMetrics {
+  framesProcessed: number;
+  framesSkipped: number;
+  inferenceTimeMs: number;
+  preprocessingTimeMs: number;
+  postprocessingTimeMs: number;
+  trackingTimeMs: number;
+  totalProcessingTimeMs: number;
+  detectionsPerFrame: number;
+  lastDetectionAt: string | null;
+  lastFrameAt: string | null;
+  errorCount: number;
+}
+
+export interface EngineProcessResponse {
+  key: string;
+  cameraId: string;
+  detections: EngineDetection[];
+  count: number;
+  metrics: EngineMetrics;
+  processedAt: string;
+}
+
 export type AuditLogAction =
   | "user_login"
   | "user_logout"

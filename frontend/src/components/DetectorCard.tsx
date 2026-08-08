@@ -10,13 +10,16 @@ import {
   AlertTriangle,
   Tag,
 } from "lucide-react";
-import type { MarketplaceDetector } from "@/types";
+import type { DetectorAvailability, DetectorEngineType, MarketplaceDetector } from "@/types";
 import DetectorIcon from "./DetectorIcon";
 import DetectorStatusBadge from "./DetectorStatusBadge";
+import DetectorAvailabilityBadge from "./DetectorAvailabilityBadge";
 
 interface DetectorCardProps {
   detector: MarketplaceDetector;
   busy?: boolean;
+  availability?: DetectorAvailability;
+  engineType?: DetectorEngineType;
   onToggle: (detector: MarketplaceDetector) => void;
   onInstall: (detector: MarketplaceDetector) => void;
   onConfigure: (detector: MarketplaceDetector) => void;
@@ -45,6 +48,8 @@ function severityBadge(severity: MarketplaceDetector["alertSeverity"] | null) {
 export default function DetectorCard({
   detector,
   busy,
+  availability,
+  engineType,
   onToggle,
   onInstall,
   onConfigure,
@@ -86,7 +91,10 @@ export default function DetectorCard({
           </div>
         </div>
         {isInstalled && detector.status ? (
-          <DetectorStatusBadge status={detector.status} />
+          <div className="flex flex-col items-end gap-1.5">
+            <DetectorStatusBadge status={detector.status} />
+            {availability && <DetectorAvailabilityBadge availability={availability} />}
+          </div>
         ) : (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
             <Download className="w-3.5 h-3.5" />
@@ -122,6 +130,12 @@ export default function DetectorCard({
             <Camera className="w-3 h-3" />
             {detector.cameraCount} cam
           </span>
+          {engineType && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 capitalize">
+              <Cpu className="w-3 h-3" />
+              {engineType.replace("_", " ")}
+            </span>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap gap-2 mt-3">
