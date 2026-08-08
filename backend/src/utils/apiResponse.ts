@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { toApiErrorBody } from "./errors";
 
 export function success(res: Response, data: unknown, statusCode = 200) {
   return res.status(statusCode).json({ success: true, data });
@@ -21,6 +22,21 @@ export function paginated(
   });
 }
 
-export function error(res: Response, message: string, statusCode = 500) {
-  return res.status(statusCode).json({ success: false, error: message });
+export function error(
+  res: Response,
+  message: string,
+  statusCode = 500,
+  options: { code?: string; details?: unknown } = {},
+) {
+  const req = res.req;
+  const body = toApiErrorBody({
+    statusCode,
+    message,
+    code: options.code,
+    details: options.details,
+    requestId: res.locals.requestId,
+    endpoint: req?.originalUrl || req?.url,
+    method: req?.method,
+  });
+  return res.status(statusCode).json(body);
 }

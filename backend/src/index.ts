@@ -6,7 +6,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "@/config";
 import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
-import { errorHandler } from "@/middleware/errorHandler";
+import { errorHandler, notFoundHandler } from "@/middleware/errorHandler";
 import routes from "@/routes";
 import healthRoutes from "@/routes/health.routes";
 import { modelService } from "@/services/model.service";
@@ -35,6 +35,8 @@ app.use(
 app.use("/health", healthRoutes);
 
 app.use("/api", routes);
+
+app.use(notFoundHandler);
 
 app.use(errorHandler);
 

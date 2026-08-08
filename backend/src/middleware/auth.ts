@@ -58,9 +58,7 @@ export async function authenticate(
       user.mustChangePassword &&
       !ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED.has(req.path)
     ) {
-      return res.status(403).json({
-        success: false,
-        error: "Password change required",
+      return apiError(res, "Password change required", 403, {
         code: "PASSWORD_CHANGE_REQUIRED",
       });
     }
