@@ -190,6 +190,64 @@ async function checkStorage(): Promise<ServiceHealth> {
   }
 }
 
+const AI_HEALTH_TIMEOUT_MS = 3000;
+
+async function checkAI(): Promise<ServiceHealth> {
+  const name = "ai";
+  const label = "AI Service";
+  const start = Date.now();
+  const url = `${config.ai.serviceUrl}/health`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_HEALTH_TIMEOUT_MS);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return degradedService(
+        name,
+        label,
+        Date.now() - start,
+        `AI service returned HTTP ${response.status}`,
+      );
+    }
+
+    const body = (await response.json()) as {
+      status?: string;
+      service?: string;
+      version?: string;
+    };
+    return {
+      name,
+      label,
+      status: body.status === "ok" ? "healthy" : "degraded",
+      responseTimeMs: Date.now() - start,
+      lastChecked: nowIso(),
+      version: typeof body.version === "string" ? body.version : undefined,
+      detail: typeof body.service === "string" ? body.service : undefined,
+    };
+  } catch (error) {
+    logger.warn("AI service health check failed", { error, url });
+    return offlineService(
+      name,
+      label,
+      Date.now() - start,
+      error instanceof Error ? error.message : "AI service unreachable",
+    );
+  }
+}
+
+function checkRedis(): ServiceHealth {
+  return {
+    name: "redis",
+    label: "Redis / Cache",
+    status: "not_configured",
+    responseTimeMs: 0,
+    lastChecked: nowIso(),
+    detail: "Redis cache is not configured",
+  };
+}
+
 function overallStatus(services: ServiceHealth[]): OverallStatus {
   if (services.some((service) => service.status === "offline")) {
     return "unhealthy";
@@ -221,7 +279,9 @@ export const healthService = {
     const services = await Promise.all([
       checkDatabase(),
       checkPrisma(),
+      checkAI(),
       checkStorage(),
+      checkRedis(),
     ]);
     return {
       status: overallStatus(services),
