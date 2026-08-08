@@ -304,3 +304,86 @@ POST /detect/image   # multipart/form-data with image file
 POST /detect/video   # multipart/form-data with video file
 GET  /health
 ```
+
+## Health Checks
+
+Health endpoints are public (no authentication) and designed for load
+balancers, orchestrators, and uptime monitors.
+
+| Endpoint        | Auth | Description                                                        |
+|-----------------|------|--------------------------------------------------------------------|
+| `GET /health/live`    | No  | Liveness probe — returns `200 { status: "ok" }` once the process is up. |
+| `GET /health/ready`   | No  | Readiness probe — aggregates all dependency checks (database, storage, AI, cache, Redis). |
+| `GET /health/ai`      | No  | AI service health, version, uptime, and detection latency. |
+| `GET /health/cache`   | No  | Cache health (Redis). |
+| `GET /health/storage` | No  | Storage path, writability probe, free/total space, and usage percentage. |
+| `GET /health/redis`   | No  | Redis health detail (`not_configured` when no Redis URL is set). |
+
+Readiness response example:
+
+```json
+{
+  "status": "degraded",
+  "checks": {
+    "database": { "status": "up", "version": "PostgreSQL 16.4" },
+    "storage": {
+      "status": "up",
+      "path": "/data/vigilens",
+      "freeBytes": 482344960000,
+      "totalBytes": 1024 }
+  },
+  "timestamp": "2026-08-08T10:00:00.000Z"
+}
+```
+
+Each service reports `status` of `up` / `down` / `not_configured`; the overall
+status is `ok` only when every configured service is `up`.
+
+## System Monitoring
+
+These endpoints require a JWT and the `monitoring.read` permission (granted to
+`admin` and `super_admin` roles by default).
+
+```bash
+GET /api/system/health     # overall + per-service status, hostname, uptime, timestamp
+GET /api/system/resources  # cpu (percent), memory (used/total), disk (used/total/free)
+GET /api/system/metrics    # in-memory request and detection counters
+```
+
+`GET /api/system/metrics` returns a live snapshot of the current process:
+
+```json
+{
+  "requests": {
+    "total": 1240,
+    "perMinute": 58,
+    "byRoute": { "GET /api/system/health": 3 }
+  },
+  "detections": {
+    "total": 8712,
+    "perMinute": 133,
+    "bySeverity": { "info": 6100, "warning": 2104, "critical": 508 }
+  },
+  "uptimeSeconds": 86400,
+  "timestamp": "2026-08-08T10:00:00.000Z"
+}
+```
+
+## Request Context & Errors
+
+Every request is assigned a `X-Request-Id` header (echoed in responses) that is
+also returned as `requestId` in error bodies for correlation with logs.
+
+All errors share a uniform shape:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Route not found",
+  "requestId": "7f9c...",
+  "timestamp": "2026-08-08T10:00:00.000Z"
+}
+```
+
+Unknown routes return `404 Route not found`; validation errors return `400`
+with the failing fields.

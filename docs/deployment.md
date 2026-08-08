@@ -7,6 +7,25 @@ cp .env.example .env
 docker compose up -d
 ```
 
+The compose stack hardens production behavior:
+
+- **Resource limits** — each service pins CPU/memory via `cpus`/`mem_limit`.
+- **Health checks** — backend uses `/health/live`, AI service uses `/health`.
+- **Storage** — the backend data volume is mounted at `/data/vigilens` and
+  created with the correct ownership (`mkdir -p /data/vigilens` in the image)
+  so the service runs as a non-root user.
+- **nginx** — the frontend ships a production `nginx.conf` (gzip, caching,
+  SPA fallback) instead of relying on the dev server.
+
+## Graceful Shutdown
+
+The backend handles `SIGTERM`/`SIGINT`: it stops accepting new connections,
+closes keep-alive connections, awaits in-flight requests, then closes Prisma
+and exits. If shutdown exceeds 10 seconds it forces an exit. Keep-alive
+timeouts are tuned (65s) to drain long-lived connections behind proxies. Use
+the `/health/ready` endpoint as the readiness gate so orchestrators only route
+traffic once dependencies (database, storage, AI, cache) are healthy.
+
 ## Manual Deployment
 
 ### Backend

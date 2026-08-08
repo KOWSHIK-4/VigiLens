@@ -86,6 +86,11 @@ uvicorn app.main:app --reload
 - **Real-time Detection** — Process live camera streams with low latency
 - **Multi-model Support** — Pluggable architecture for custom detection models
 - **Dashboard & Analytics** — Recharts-powered visualizations and trends
+- **System Health Monitoring** — Live `/health` probes (database, storage, AI,
+  cache) plus an admin dashboard with service status cards, a resource
+  (CPU/memory/disk) and request/detection metrics view, and auto-refresh
+- **Production-Ready Ops** — Graceful shutdown on SIGTERM/SIGINT, request IDs
+  for log correlation, centralized error handling, and hardened Docker images
 - **User & Role Management** — 4 built-in roles with 19 granular permissions, a
   full users page (search, filters, sorting, pagination, status toggles,
   role assignment) and a role page with a permission editor; disabled accounts
