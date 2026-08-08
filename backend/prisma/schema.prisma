@@ -148,15 +148,25 @@ model CameraHealthLog {
 }
 
 model Detection {
-  id         String           @id @default(uuid())
-  cameraId   String           @map("camera_id")
-  label      String
-  confidence Float
-  status     DetectionStatus  @default(info)
-  imageUrl   String           @map("image_url")
-  metadata   Json?
-  timestamp  DateTime         @default(now())
-  createdAt  DateTime         @default(now()) @map("created_at")
+  id               String           @id @default(uuid())
+  cameraId         String           @map("camera_id")
+  label            String
+  confidence       Float
+  status           DetectionStatus  @default(info)
+  imageUrl         String           @map("image_url")
+  metadata         Json?
+  timestamp        DateTime         @default(now())
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  // Detector Engine v2 fields (all optional for backward compatibility).
+  detectorId       String?          @map("detector_id")
+  detectorKey      String?          @map("detector_key")
+  modelVersion     String?          @map("model_version")
+  trackId          String?          @map("track_id")
+  className        String?          @map("class_name")
+  boundingBox      Json?            @map("bounding_box")
+  snapshotUrl      String?          @map("snapshot_url")
+  processingTimeMs Int?             @map("processing_time_ms")
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   alert  Alert?
@@ -164,6 +174,8 @@ model Detection {
   @@index([cameraId])
   @@index([status])
   @@index([timestamp])
+  @@index([detectorKey])
+  @@index([trackId])
   @@map("detections")
 }
 

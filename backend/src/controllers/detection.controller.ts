@@ -9,13 +9,31 @@ export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
     const startedAt = process.hrtime.bigint();
     try {
-      const { camera_id, label, confidence, image_url, metadata } = req.body;
+      const {
+        camera_id,
+        label,
+        confidence,
+        image_url,
+        metadata,
+        bounding_box,
+        detector_key,
+        track_id,
+        class_name,
+        model_version,
+        processing_time_ms,
+      } = req.body;
       const detection = await detectionService.create({
         cameraId: camera_id,
         label,
         confidence,
         imageUrl: image_url,
         metadata,
+        boundingBox: bounding_box,
+        detectorKey: detector_key,
+        trackId: track_id,
+        className: class_name,
+        modelVersion: model_version,
+        processingTimeMs: processing_time_ms,
       });
       const info = {
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",

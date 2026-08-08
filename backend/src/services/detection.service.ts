@@ -12,6 +12,17 @@ interface CreateDetectionInput {
   confidence: number;
   imageUrl?: string;
   metadata?: Record<string, unknown>;
+  /** Detector Engine v2 fields (all optional, backward compatible). */
+  detectorId?: string;
+  detectorKey?: string;
+  modelVersion?: string;
+  trackId?: string;
+  className?: string;
+  boundingBox?: Record<string, number>;
+  snapshotUrl?: string;
+  processingTimeMs?: number;
+  /** When true, no alert is created — the engine's alert stage handles it. */
+  skipAlert?: boolean;
 }
 
 function getAlertSeverity(status: string): AlertSeverity {
@@ -109,9 +120,21 @@ export const detectionService = {
         confidence: input.confidence,
         imageUrl: input.imageUrl || "",
         metadata: (input.metadata || {}) as Prisma.InputJsonValue,
+        detectorId: input.detectorId,
+        detectorKey: input.detectorKey,
+        modelVersion: input.modelVersion,
+        trackId: input.trackId,
+        className: input.className,
+        boundingBox: (input.boundingBox || undefined) as Prisma.InputJsonValue | undefined,
+        snapshotUrl: input.snapshotUrl,
+        processingTimeMs: input.processingTimeMs,
       },
       include: { camera: true },
     });
+
+    if (input.skipAlert) {
+      return detection;
+    }
 
     const severity = getAlertSeverity(detection.status);
     const title = getAlertTitle(detection.label, detection.status);
@@ -159,6 +182,15 @@ export const detectionService = {
     ]);
 
     return { data, total };
+  },
+
+  async findRecentByDetectorKey(detectorKey: string, limit = 25) {
+    return prisma.detection.findMany({
+      where: { detectorKey },
+      include: { camera: true },
+      orderBy: { timestamp: "desc" },
+      take: limit,
+    });
   },
 
   async findById(id: string) {
