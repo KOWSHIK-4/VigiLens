@@ -8,6 +8,7 @@ import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
 import { errorHandler } from "@/middleware/errorHandler";
 import routes from "@/routes";
+import healthRoutes from "@/routes/health.routes";
 import { modelService } from "@/services/model.service";
 import { settingsService } from "@/services/settings.service";
 
@@ -31,9 +32,7 @@ app.use(
   }),
 );
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+app.use("/health", healthRoutes);
 
 app.use("/api", routes);
 
