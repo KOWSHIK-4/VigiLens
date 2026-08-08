@@ -85,6 +85,10 @@ uvicorn app.main:app --reload
 
 - **Real-time Detection** — Process live camera streams with low latency
 - **Multi-model Support** — Pluggable architecture for custom detection models
+- **Multi-Detector Inference Engine** — A staged pipeline (preprocess → inference →
+  NMS → tracking → persistence → alerts) with measured, never-fabricated metrics,
+  per-detector configuration, IoU object tracking, and alert cooldowns; only
+  detectors with a real model (`person`, `vehicle`) accept inference requests
 - **Dashboard & Analytics** — Recharts-powered visualizations and trends
 - **System Health Monitoring** — Live `/health` probes (database, storage, AI,
   cache) plus an admin dashboard with service status cards, a resource

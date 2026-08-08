@@ -297,6 +297,98 @@ PUT /detectors/:id/cameras body:
 
 POST /detectors/:id/restart marks the detector as `loading`, then flips it to `loaded` (and `running` when enabled) after the engine warm-up delay. Restarting a disabled detector is rejected with 400.
 
+## Inference Engine (v2)
+
+The inference engine is a multi-stage pipeline: frame capture → preprocessing →
+detector selection → inference (AI service) → post-processing (confidence filter +
+per-class NMS) → object tracking (IoU) → normalization → persistence → alert
+evaluation (with per-detector/camera/class cooldown). Every stage runs against
+real data; metrics are measured with `process.hrtime`, never fabricated.
+
+Engine endpoints require `models.read` (reads) and `models.manage` (process):
+
+```bash
+GET    /engines                         # runtime descriptors for all detectors
+GET    /engines/:key                    # descriptor for one detector
+GET    /engines/:key/metrics            # measured pipeline metrics (real runs only)
+GET    /engines/:key/detections?limit=25 # recent persisted detections for a detector
+POST   /engines/:key/process            # run inference on an uploaded image
+```
+
+A descriptor looks like:
+
+```json
+{
+  "id": "clx...",
+  "key": "person",
+  "name": "Person Detection",
+  "type": "object_detection",
+  "version": "1.0.0",
+  "status": "ready",
+  "availability": "available",
+  "confidenceThreshold": 50,
+  "supportedInput": ["image"],
+  "modelVersion": "1.0.0",
+  "configuration": {
+    "confidenceThreshold": 50,
+    "detectionIntervalMs": 1000,
+    "maxDetectionsPerFrame": 20,
+    "alertSeverity": "warning",
+    "alertCooldownMs": 5000,
+    "cameraIds": ["demo-camera-1"],
+    "inputResolution": "640x640",
+    "processingMode": "auto"
+  }
+}
+```
+
+`availability` is `available` only when the detector has a real model wired to the
+AI service (`person` and `vehicle` today). All other detectors are `unconfigured`
+and refuse inference — the engine never fabricates detections.
+
+`POST /engines/:key/process` accepts `multipart/form-data` with an `image` file
+(and an optional `camera_id`; when omitted the first camera is used so persisted
+detections satisfy the foreign key). Response:
+
+```json
+{
+  "key": "person",
+  "cameraId": "demo-camera-1",
+  "detections": [
+    {
+      "id": "clx...",
+      "className": "person",
+      "confidence": 0.88,
+      "bbox": { "x1": 214, "y1": 96, "x2": 328, "y2": 398 },
+      "normalized": { "x": 0.33, "y": 0.15, "width": 0.18, "height": 0.47 },
+      "trackId": "0",
+      "detectorKey": "person",
+      "processingTimeMs": 84.2,
+      "timestamp": "2026-08-08T10:00:00.000Z"
+    }
+  ],
+  "count": 1,
+  "metrics": {
+    "framesProcessed": 1,
+    "framesSkipped": 0,
+    "inferenceTimeMs": 82.1,
+    "totalProcessingTimeMs": 88.4,
+    "detectionsPerFrame": 1,
+    "lastDetectionAt": "2026-08-08T10:00:00.000Z",
+    "lastFrameAt": "2026-08-08T10:00:00.000Z",
+    "errorCount": 0
+  },
+  "processedAt": "2026-08-08T10:00:00.000Z"
+}
+```
+
+Engine errors are explicit and never faked:
+
+- `404` unknown detector key
+- `501` `{ "code": "DETECTOR_UNCONFIGURED" }` — detector has no trained model
+- `409` `{ "code": "DETECTOR_DISABLED" }` — detector is disabled
+- `502` `{ "code": "DETECTOR_INFERENCE_FAILED" }` — AI service error/unreachable
+
 ## AI Service
 
 ```bash

@@ -20,3 +20,4 @@ venv/
 prisma/*.db
 prisma/migrations/
 docker/**/.env
+ai/app/output/
