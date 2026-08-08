@@ -14,9 +14,12 @@ import {
 import { systemService } from "@/services/system";
 import StatusBadge from "@/components/StatusBadge";
 import ServiceStatusTable from "@/components/ServiceStatusTable";
+import SystemResources from "@/components/SystemResources";
+import PerformanceMetrics from "@/components/PerformanceMetrics";
 import type { OverallStatus, ServiceHealth } from "@/types";
 
 function formatMs(ms: number): string {
+  if (ms < 1) return `${Math.round(ms * 100) / 100} ms`;
   return `${Math.round(ms * 100) / 100} ms`;
 }
 
@@ -137,6 +140,12 @@ export default function SystemMonitoringPage() {
   const monitoringQuery = useQuery({
     queryKey: ["system", "monitoring"],
     queryFn: () => systemService.getMonitoring(),
+    refetchInterval: autoRefresh ? 15000 : false,
+  });
+
+  const metricsQuery = useQuery({
+    queryKey: ["system", "metrics"],
+    queryFn: () => systemService.getMetrics(),
     refetchInterval: autoRefresh ? 15000 : false,
   });
 
@@ -266,6 +275,14 @@ export default function SystemMonitoringPage() {
               ))}
             </div>
             <ServiceStatusTable services={monitoring.services} />
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <SystemResources
+                resources={monitoring.resources}
+                uptime={monitoring.uptime}
+              />
+              {metricsQuery.data && <PerformanceMetrics metrics={metricsQuery.data} />}
+            </div>
           </>
         )
       )}
