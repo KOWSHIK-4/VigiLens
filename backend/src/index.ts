@@ -15,6 +15,10 @@ import { settingsService } from "@/services/settings.service";
 
 const app = express();
 
+if (config.nodeEnv === "production") {
+  app.set("trust proxy", 1);
+}
+
 app.use(helmet());
 app.use(
   cors({
@@ -60,13 +64,52 @@ async function start() {
       logger.error("Failed to seed default system settings", { error });
     }
 
-    app.listen(config.port, () => {
+    const server = app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port}`);
     });
+
+    server.keepAliveTimeout = 65 * 1000;
+    server.headersTimeout = 66 * 1000;
+
+    let shuttingDown = false;
+    const shutdown = (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info(`${signal} received, shutting down gracefully`);
+
+      const forceExit = setTimeout(() => {
+        logger.error("Forced shutdown after timeout");
+        process.exit(1);
+      }, 10_000);
+      forceExit.unref();
+
+      server.close(async () => {
+        try {
+          await prisma.$disconnect();
+          logger.info("HTTP server and database connections closed");
+          process.exit(0);
+        } catch (error) {
+          logger.error("Error during shutdown", { error });
+          process.exit(1);
+        }
+      });
+    };
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
     logger.error("Failed to start server", { error });
     process.exit(1);
   }
 }
+
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception", { error });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection", { reason });
+});
 
 start();
