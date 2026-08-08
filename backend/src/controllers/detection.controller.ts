@@ -1,11 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
 import { detectionService } from "@/services/detection.service";
+import { metricsService } from "@/services/metrics.service";
 import { success, paginated } from "@/utils/apiResponse";
 import { logAudit } from "@/utils/auditLog";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
+    const startedAt = process.hrtime.bigint();
     try {
       const { camera_id, label, confidence, image_url, metadata } = req.body;
       const detection = await detectionService.create({
@@ -26,6 +28,9 @@ export const detectionController = {
         ...info,
         metadata: { detectionId: detection.id, label: detection.label, cameraId: camera_id },
       });
+      metricsService.recordDetection(
+        Number(process.hrtime.bigint() - startedAt) / 1e6,
+      );
       success(res, detection, 201);
     } catch (err) {
       next(err);

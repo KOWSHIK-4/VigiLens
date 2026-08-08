@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "@/config/logger";
+import { metricsService } from "@/services/metrics.service";
 
 export function requestContext(req: Request, res: Response, next: NextFunction) {
   const requestId = randomUUID();
@@ -24,6 +25,11 @@ export function requestContext(req: Request, res: Response, next: NextFunction) 
       durationMs: Math.round(durationMs * 100) / 100,
       userAgent: req.headers["user-agent"],
     });
+
+    const endpoint = req.originalUrl || req.url || "";
+    if (endpoint.startsWith("/api") && !endpoint.startsWith("/api/system/metrics")) {
+      metricsService.recordRequest(durationMs, statusCode);
+    }
   });
 
   next();
