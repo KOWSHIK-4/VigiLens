@@ -1,3 +1,5 @@
+import type { DetectorType, DetectorAvailability, ProcessingMode } from "@/engine/types";
+
 export interface DetectorDefinition {
   key: string;
   name: string;
@@ -5,10 +7,28 @@ export interface DetectorDefinition {
   description: string;
   category: string;
   icon: string;
+  /** Model task type, e.g. object_detection. */
+  type: DetectorType;
+  /** Whether a real trained model is available for this detector. */
+  availability: DetectorAvailability;
+  /** Inputs the detector can consume. */
+  supportedInput: string[];
   defaultConfidenceThreshold: number;
   gpuSupported: boolean;
   modelPath: string;
+  /** Estimated latency used only when no real metrics exist yet. */
   inferenceTimeMs: number;
+  /** COCO class names this detector filters when backed by YOLO. */
+  classFilter?: string[];
+  /** Default operational configuration. */
+  defaultConfiguration?: {
+    detectionIntervalMs: number;
+    maxDetectionsPerFrame: number;
+    alertSeverity: "info" | "warning" | "critical";
+    alertCooldownMs: number;
+    inputResolution: string;
+    processingMode: ProcessingMode;
+  };
   autoInstall?: boolean;
 }
 
@@ -36,4 +56,10 @@ export function getDetectorCategories(): string[] {
     if (def.category) categories.add(def.category);
   }
   return Array.from(categories).sort();
+}
+
+export function getAvailableDetectorKeys(): string[] {
+  return Array.from(detectors.values())
+    .filter((def) => def.availability === "available")
+    .map((def) => def.key);
 }
