@@ -7,6 +7,7 @@ import { config } from "@/config";
 import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
 import { errorHandler, notFoundHandler } from "@/middleware/errorHandler";
+import { requestContext } from "@/middleware/requestContext";
 import routes from "@/routes";
 import healthRoutes from "@/routes/health.routes";
 import { modelService } from "@/services/model.service";
@@ -31,6 +32,8 @@ app.use(
     message: { success: false, error: "Too many requests, please try again later" },
   }),
 );
+
+app.use(requestContext);
 
 app.use("/health", healthRoutes);
 
