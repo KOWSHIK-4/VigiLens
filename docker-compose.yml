@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 512m
+    cpus: 1.0
 
   ai-service:
     build:
@@ -33,13 +33,15 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - ai_models:/app/models
-      - ./ai:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    mem_limit: 2g
+    cpus: 2.0
 
   backend:
     build:
@@ -64,23 +66,33 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       - LOG_LEVEL=info
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - storage_data:/data/vigilens
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health/live >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 1.0
 
   frontend:
     build:
       context: ./frontend
       dockerfile: ../docker/frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: vigilens-frontend
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      - backend
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:4000/api}
-      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:4000}
+      backend:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
 
 volumes:
   postgres_data:
   ai_models:
+  storage_data:
