@@ -8,6 +8,7 @@ import type {
 } from "@/types";
 import { detectorService } from "@/services/detector.service";
 import { userService } from "@/services/user.service";
+import { getMergedDetectorHealth } from "@/engine/health";
 import { success, paginated } from "@/utils/apiResponse";
 import { logAudit } from "@/utils/auditLog";
 
@@ -183,7 +184,7 @@ export const detectorController = {
 
   async health(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const health = await detectorService.health(req.params.id as string);
+      const health = await getMergedDetectorHealth(req.params.id as string);
       success(res, health);
     } catch (err) {
       next(err);

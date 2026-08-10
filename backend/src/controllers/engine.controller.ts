@@ -42,6 +42,19 @@ export const engineController = {
     }
   },
 
+  async getHealth(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const descriptor = await runtimeRegistry.describeByKey(req.params.key as string);
+      if (!descriptor) {
+        throw new ApiError(404, `Unknown detector key "${req.params.key}"`);
+      }
+      const health = await engineService.getHealth(req.params.key as string);
+      success(res, health);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getDetections(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const key = req.params.key as string;

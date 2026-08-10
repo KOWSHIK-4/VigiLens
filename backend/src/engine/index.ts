@@ -13,4 +13,6 @@ export * from "./tracking";
 export * from "./normalize";
 export * from "./alerts";
 export * from "./pipelineImpl";
+export * from "./lifecycle";
+export * from "./health";
 export { engineService } from "./engineService";

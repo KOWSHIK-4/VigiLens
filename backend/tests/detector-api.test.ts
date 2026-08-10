@@ -342,14 +342,19 @@ async function run() {
   }
 
   const healthRunning = await request(`/detectors/${detectorId}/health`, {}, token);
-  const healthRunningBody = healthRunning.body as { data: { status: string; healthy: boolean; latencyMs: number } };
+  const healthRunningBody = healthRunning.body as {
+    data: { status: string; healthy: boolean; latencyMs: number; engine: { status: string; healthy: boolean } };
+  };
+  // The DB layer reports the detector as running; the engine health layer is
+  // honest about the missing trained model (weapon has no AI backend yet).
   if (
     healthRunning.status === 200 &&
     healthRunningBody.data.status === "running" &&
-    healthRunningBody.data.healthy === true &&
-    healthRunningBody.data.latencyMs >= 1
+    healthRunningBody.data.latencyMs >= 1 &&
+    healthRunningBody.data.engine?.status === "unconfigured" &&
+    healthRunningBody.data.engine?.healthy === false
   ) {
-    ok("GET /detectors/:id/health reports healthy running state");
+    ok("GET /detectors/:id/health reports running state with honest engine status");
   } else {
     fail("GET /detectors/:id/health (running)", healthRunningBody);
   }

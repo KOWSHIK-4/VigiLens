@@ -20,6 +20,7 @@ router.use(authenticate);
 router.get("/", requirePermission("models.read"), engineController.listAll);
 router.get("/:key", requirePermission("models.read"), engineController.getByKey);
 router.get("/:key/metrics", requirePermission("models.read"), engineController.getMetrics);
+router.get("/:key/health", requirePermission("models.read"), engineController.getHealth);
 router.get("/:key/detections", requirePermission("models.read"), engineController.getDetections);
 router.post(
   "/:key/process",

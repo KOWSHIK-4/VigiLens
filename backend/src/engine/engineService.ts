@@ -8,10 +8,12 @@
  */
 
 import { ApiError } from "@/utils/errors";
+import { logger } from "@/config/logger";
 import { detectionService } from "@/services/detection.service";
 import { metricsService } from "@/services/metrics.service";
 import { aiServiceClient, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
+import { lifecycleManager } from "./lifecycle";
 import { ConcretePipelineBuilder } from "./pipelineImpl";
 import { PostprocessStageImpl } from "./postprocess";
 import { IouTracker, type ObjectTracker } from "./tracking";
@@ -188,13 +190,24 @@ class EngineServiceImpl {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
       metricsService.recordDetection(durationMs);
       this.recordMetrics(key, result.metrics);
+      lifecycleManager.markInferenceSucceeded(key);
+      logger.info("Engine frame processed", {
+        key,
+        cameraId,
+        detections: result.detections.length,
+        durationMs: Math.round(durationMs),
+      });
       return result;
     } catch (err) {
-      this.recordError(key);
+      const message = err instanceof Error ? err.message : "unknown engine error";
+      const unreachable = message.toLowerCase().includes("unreachable");
+      this.recordError(key, message);
+      lifecycleManager.markInferenceFailed(key, message, unreachable);
+      logger.error("Engine frame processing failed", { key, cameraId, message });
       if (err instanceof ApiError) throw err;
       throw new ApiError(
         502,
-        `Inference failed for detector "${key}": ${err instanceof Error ? err.message : "unknown error"}`,
+        `Inference failed for detector "${key}": ${message}`,
         { code: "DETECTOR_INFERENCE_FAILED" },
       );
     }
@@ -206,7 +219,7 @@ class EngineServiceImpl {
       this.metricsByKey.set(key, { ...incoming });
       return;
     }
-    prev.framesProcessed = incoming.framesProcessed;
+    prev.framesProcessed = prev.framesProcessed + incoming.framesProcessed;
     prev.framesSkipped = prev.framesSkipped + incoming.framesSkipped;
     prev.inferenceTimeMs = incoming.inferenceTimeMs;
     prev.preprocessingTimeMs = incoming.preprocessingTimeMs;
@@ -216,15 +229,37 @@ class EngineServiceImpl {
     prev.detectionsPerFrame = incoming.detectionsPerFrame;
     prev.lastDetectionAt = incoming.lastDetectionAt;
     prev.lastFrameAt = incoming.lastFrameAt;
+    prev.lastSuccessfulInferenceAt = incoming.lastSuccessfulInferenceAt;
+    prev.lastError = incoming.lastError;
+    prev.lastErrorAt = incoming.lastErrorAt;
     prev.errorCount = prev.errorCount + incoming.errorCount;
     this.metricsByKey.set(key, prev);
   }
 
-  private recordError(key: string): void {
+  private recordError(key: string, message: string): void {
     const prev = this.metricsByKey.get(key);
     if (prev) {
       prev.errorCount += 1;
       prev.framesSkipped += 1;
+      prev.lastError = message;
+      prev.lastErrorAt = new Date();
+    } else {
+      this.metricsByKey.set(key, {
+        framesProcessed: 0,
+        framesSkipped: 1,
+        inferenceTimeMs: 0,
+        preprocessingTimeMs: 0,
+        postprocessingTimeMs: 0,
+        trackingTimeMs: 0,
+        totalProcessingTimeMs: 0,
+        detectionsPerFrame: 0,
+        lastDetectionAt: null,
+        lastFrameAt: new Date(),
+        lastSuccessfulInferenceAt: null,
+        lastError: message,
+        lastErrorAt: new Date(),
+        errorCount: 1,
+      });
     }
   }
 
@@ -233,6 +268,62 @@ class EngineServiceImpl {
     const descriptor = await runtimeRegistry.describeByKey(key);
     if (!descriptor) return null;
     return this.metricsByKey.get(key) ?? null;
+  }
+
+  /**
+   * Structured health view merging accumulated engine metrics with the
+   * lifecycle state (reachability, last error, failure streak). Consumers
+   * must never see fabricated latency/throughput values.
+   */
+  async getHealth(key: string) {
+    const descriptor = await runtimeRegistry.describeByKey(key);
+    if (!descriptor) return null;
+    const metrics = this.metricsByKey.get(key);
+    const lifecycle = lifecycleManager.get(key);
+
+    const latencyMs = metrics && metrics.framesProcessed > 0 ? metrics.inferenceTimeMs : null;
+    const elapsedSinceLastFrame =
+      metrics?.lastFrameAt != null ? Date.now() - metrics.lastFrameAt.getTime() : null;
+    const throughputFps =
+      metrics && metrics.framesProcessed > 0 && elapsedSinceLastFrame !== null && elapsedSinceLastFrame > 0
+        ? Math.round((metrics.framesProcessed / elapsedSinceLastFrame) * 1000 * 10) / 10
+        : null;
+
+    return {
+      key: descriptor.key,
+      status: descriptor.status,
+      enabled: descriptor.enabled,
+      healthy: descriptor.status === "ready" || descriptor.status === "configured",
+      message:
+        descriptor.status === "ready"
+          ? "Detector is ready and running live inference"
+          : descriptor.status === "configured"
+            ? "Detector is configured but has not run yet"
+            : descriptor.status === "disabled"
+              ? "Detector is disabled"
+              : descriptor.status === "unavailable"
+                ? "AI inference backend is unreachable"
+                : descriptor.status === "error"
+                  ? "Detector is in an error state"
+                  : descriptor.status === "loading"
+                    ? "Detector model is loading"
+                    : descriptor.status === "unconfigured"
+                      ? "No trained model installed"
+                      : `Detector lifecycle: ${descriptor.status}`,
+      latencyMs,
+      throughputFps,
+      framesProcessed: metrics?.framesProcessed ?? 0,
+      framesSkipped: metrics?.framesSkipped ?? 0,
+      errorCount: metrics?.errorCount ?? 0,
+      lastInferenceAt: lifecycle.lastInferenceAt,
+      lastSuccessfulInferenceAt: lifecycle.lastSuccessfulInferenceAt,
+      lastError: lifecycle.lastError,
+      lastErrorAt: lifecycle.lastErrorAt,
+      consecutiveFailures: lifecycle.consecutiveFailures,
+      aiReachable: lifecycle.aiReachable,
+      lastDetectionAt: metrics?.lastDetectionAt?.toISOString() ?? null,
+      lastFrameAt: metrics?.lastFrameAt?.toISOString() ?? null,
+    };
   }
 }
 
