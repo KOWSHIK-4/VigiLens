@@ -16,12 +16,28 @@ export type DetectorType =
 
 export type DetectorAvailability = "available" | "unconfigured";
 
+/**
+ * Detector engine lifecycle status.
+ *
+ *   registered  – installed model row exists, load has not started
+ *   configured  – model loaded and enabled, live inference not yet verified
+ *   enabled     – installed, turned on, model not loaded yet
+ *   disabled    – turned off (explicitly disabled by a user)
+ *   loading     – model weights are being loaded
+ *   ready       – model loaded and a live inference run has succeeded
+ *   error       – model load failed or consecutive engine runs failed
+ *   unavailable – AI inference backend unreachable
+ *   unconfigured– no installed model (no trained model, nothing to run)
+ */
 export type DetectorRuntimeStatus =
   | "registered"
-  | "initializing"
+  | "configured"
+  | "enabled"
+  | "disabled"
+  | "loading"
   | "ready"
   | "error"
-  | "disabled"
+  | "unavailable"
   | "unconfigured";
 
 export type ProcessingMode = "auto" | "gpu" | "cpu";
@@ -62,6 +78,8 @@ export interface DetectorDescriptor {
   type: DetectorType;
   version: string;
   status: DetectorRuntimeStatus;
+  /** Whether the detector is switched on (user preference from the DB). */
+  enabled: boolean;
   availability: DetectorAvailability;
   confidenceThreshold: number;
   supportedInput: string[];
@@ -118,6 +136,9 @@ export interface PipelineMetrics {
   detectionsPerFrame: number;
   lastDetectionAt: Date | null;
   lastFrameAt: Date | null;
+  lastSuccessfulInferenceAt: Date | null;
+  lastError: string | null;
+  lastErrorAt: Date | null;
   errorCount: number;
 }
 

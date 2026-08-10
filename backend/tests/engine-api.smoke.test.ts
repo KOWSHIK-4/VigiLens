@@ -117,6 +117,15 @@ async function run() {
     if (procRes.ok && procBody.data) {
       ok("POST /engines/person/process runs real inference", `count=${procBody.data.count}`);
       ok("process returns metrics", JSON.stringify(procBody.data.metrics).slice(0, 90));
+
+      // A successful engine run transitions the lifecycle to ready.
+      const afterRes = await fetch(`${BASE_URL}/engines/person`, { headers });
+      const afterBody = (await afterRes.json()) as { data?: { status: string; enabled: boolean } };
+      if (afterRes.ok && afterBody.data?.status === "ready" && afterBody.data.enabled === true) {
+        ok("person lifecycle becomes ready after successful run", `status=${afterBody.data.status}`);
+      } else {
+        fail("person lifecycle becomes ready after successful run", JSON.stringify(afterBody.data));
+      }
     } else {
       fail("POST /engines/person/process", JSON.stringify(procBody).slice(0, 200));
     }

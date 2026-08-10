@@ -9,6 +9,8 @@
 import { getDetectorDefinition, getDetectorDefinitions } from "@/detectors/registry";
 import { detectorService } from "@/services/detector.service";
 import { logger } from "@/config/logger";
+import { aiServiceClient } from "./aiClient";
+import { deriveLifecycleStatus, lifecycleManager } from "./lifecycle";
 import type {
   DetectorAvailability,
   DetectorConfiguration,
@@ -29,10 +31,32 @@ const DEFAULT_CONFIG: Omit<DetectorConfiguration, "confidenceThreshold"> = {
   processingMode: "auto",
 };
 
-function runtimeStatusFor(enabled: boolean, installed: boolean): DetectorRuntimeStatus {
-  if (!installed) return "unconfigured";
-  return enabled ? "ready" : "disabled";
+function runtimeStatusFor(
+  enabled: boolean,
+  installed: boolean,
+  availability: DetectorAvailability,
+  modelStatus: string | null,
+  key: string,
+): DetectorRuntimeStatus {
+  const state = lifecycleManager.get(key);
+  lifecycleManager.setEnabled(key, enabled);
+  return deriveLifecycleStatus({
+    installed,
+    enabled,
+    availability,
+    modelStatus,
+    aiReachable: state.aiReachable,
+    consecutiveFailures: state.consecutiveFailures,
+    lastSuccessfulInferenceAt: state.lastSuccessfulInferenceAt,
+  });
 }
+
+/**
+ * Probes AI backend reachability for detectors that are loaded, enabled and
+ * available. Results are cached per key for a short TTL, so listing engines
+ * never hammers the AI service. When the AI service is down the descriptor
+ * transitions to `unavailable` instead of silently reporting ready.
+ */
 
 function availabilityFor(installed: boolean, definitionAvailable: DetectorAvailability): DetectorAvailability {
   // A definition is only really available when a model is present; an
@@ -83,10 +107,38 @@ class RuntimeDetectorRegistry {
     });
     const descriptors: DetectorDescriptor[] = [];
 
+    // Probe AI reachability in parallel so a slow/unreachable backend does
+    // not serialise the registry listing.
+    const probes: Promise<void>[] = [];
     for (const def of getDetectorDefinitions()) {
       const model = models.find((m) => m.detectorKey === def.key);
       const installed = Boolean(model);
       const enabled = installed && Boolean(model?.enabled);
+      const rawStatus = installed ? (model as { modelStatus?: string | null }).modelStatus ?? null : null;
+      if (
+        installed &&
+        enabled &&
+        def.availability === "available" &&
+        rawStatus === "loaded" &&
+        lifecycleManager.isProbeDue(def.key)
+      ) {
+        probes.push(
+          aiServiceClient.isReachable().then((reachable) => {
+            lifecycleManager.recordReachabilityProbe(def.key, reachable);
+            if (!reachable) {
+              logger.warn("AI inference service unreachable for detector", { key: def.key });
+            }
+          }),
+        );
+      }
+    }
+    await Promise.all(probes);
+
+    for (const def of getDetectorDefinitions()) {
+      const model = models.find((m) => m.detectorKey === def.key);
+      const installed = Boolean(model);
+      const enabled = installed && Boolean(model?.enabled);
+      const rawStatus = installed ? (model as { modelStatus?: string | null }).modelStatus ?? null : null;
 
       const configuration = toConfiguration(
         def.availability,
@@ -115,7 +167,8 @@ class RuntimeDetectorRegistry {
         name: def.name,
         type: def.type,
         version: def.version,
-        status: runtimeStatusFor(enabled, installed),
+        status: runtimeStatusFor(enabled, installed, def.availability, rawStatus, def.key),
+        enabled,
         availability: availabilityFor(installed, def.availability),
         confidenceThreshold: model?.confidenceThreshold ?? def.defaultConfidenceThreshold,
         supportedInput: def.supportedInput,

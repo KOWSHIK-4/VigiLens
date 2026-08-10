@@ -74,6 +74,9 @@ function serialize(model: ModelWithRelations) {
       name: a.camera.name,
     })),
     cameraCount: model.cameraAssignments.length,
+    // Raw model load status ("loaded" | "loading" | "disabled" | "error") —
+    // distinct from the serialized `status` which collapses to running/stopped.
+    modelStatus: model.status,
   };
 }
 

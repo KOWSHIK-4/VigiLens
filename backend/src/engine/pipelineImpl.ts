@@ -51,6 +51,9 @@ function zeroMetrics(): PipelineMetrics {
     detectionsPerFrame: 0,
     lastDetectionAt: null,
     lastFrameAt: null,
+    lastSuccessfulInferenceAt: null,
+    lastError: null,
+    lastErrorAt: null,
     errorCount: 0,
   };
 }
@@ -217,6 +220,9 @@ class ConcretePipeline implements InferencePipeline {
       // Update rolling metrics with real measured values.
       this.state.framesProcessed += 1;
       this.state.lastFrameAt = new Date();
+      this.state.lastSuccessfulInferenceAt = new Date();
+      this.state.lastError = null;
+      this.state.lastErrorAt = null;
       this.state.inferenceTimeMs = ctx.stageTimes.inference ?? this.state.inferenceTimeMs;
       this.state.preprocessingTimeMs = ctx.stageTimes.preprocess ?? this.state.preprocessingTimeMs;
       this.state.postprocessingTimeMs = ctx.stageTimes.postprocess ?? this.state.postprocessingTimeMs;
@@ -231,6 +237,8 @@ class ConcretePipeline implements InferencePipeline {
     } catch (err) {
       this.state.errorCount += 1;
       this.state.framesSkipped += 1;
+      this.state.lastError = err instanceof Error ? err.message : "unknown pipeline error";
+      this.state.lastErrorAt = new Date();
       throw err;
     }
   }
