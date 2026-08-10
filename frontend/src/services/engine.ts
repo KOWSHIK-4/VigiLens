@@ -2,6 +2,7 @@ import api from "./api";
 import type {
   EngineDetectionsResponse,
   EngineDetector,
+  EngineHealth,
   EngineMetrics,
   EngineProcessResponse,
 } from "@/types";
@@ -24,6 +25,13 @@ export const engineService = {
   async getMetrics(key: string) {
     const { data } = await api.get<{ success: boolean; data: EngineMetrics }>(
       `/engines/${key}/metrics`,
+    );
+    return data.data;
+  },
+
+  async getHealth(key: string) {
+    const { data } = await api.get<{ success: boolean; data: EngineHealth }>(
+      `/engines/${key}/health`,
     );
     return data.data;
   },

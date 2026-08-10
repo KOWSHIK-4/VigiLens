@@ -10,6 +10,21 @@
 import { config } from "@/config";
 import type { BoundingBox } from "./types";
 
+export type AiErrorReason = "unreachable" | "timeout" | "http" | "invalid_payload" | "invalid_frame";
+
+/** Typed error for AI service failures so callers can classify/recover. */
+export class AiServiceError extends Error {
+  readonly reason: AiErrorReason;
+  readonly status: number | null;
+
+  constructor(reason: AiErrorReason, message: string, status: number | null = null) {
+    super(message);
+    this.name = "AiServiceError";
+    this.reason = reason;
+    this.status = status;
+  }
+}
+
 export interface AiImageDetectionResponse {
   success: boolean;
   detections: Array<{
@@ -37,6 +52,16 @@ function toBoundingBox(bbox: { x1: number; y1: number; x2: number; y2: number })
   };
 }
 
+function isDetectionPayload(value: unknown): value is AiImageDetectionResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.success === "boolean" &&
+    Array.isArray(record.detections) &&
+    typeof record.count === "number"
+  );
+}
+
 export class HttpAiServiceClient implements AiServiceClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -47,6 +72,10 @@ export class HttpAiServiceClient implements AiServiceClient {
   }
 
   async detectImage(frame: Buffer, detectorKey?: string): Promise<AiImageDetectionResponse> {
+    if (!frame || frame.length === 0) {
+      throw new AiServiceError("invalid_frame", "Empty frame buffer cannot be inferred");
+    }
+
     const form = new FormData();
     form.append(
       "file",
@@ -60,15 +89,43 @@ export class HttpAiServiceClient implements AiServiceClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        body: form,
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`AI service returned ${response.status}`);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          body: form,
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new AiServiceError("timeout", `AI service timed out after ${this.timeoutMs}ms`);
+        }
+        throw new AiServiceError("unreachable", "AI service is unreachable", null);
       }
-      const payload = (await response.json()) as AiImageDetectionResponse;
+
+      if (!response.ok) {
+        throw new AiServiceError(
+          "http",
+          response.status === 404
+            ? `AI service has no model "${detectorKey ?? "default"}" registered`
+            : `AI service returned ${response.status}`,
+          response.status,
+        );
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new AiServiceError("invalid_payload", "AI service returned malformed JSON");
+      }
+      if (!isDetectionPayload(payload)) {
+        throw new AiServiceError("invalid_payload", "AI service returned an unexpected response shape");
+      }
+      if (payload.success === false) {
+        throw new AiServiceError("http", "AI service reported inference failure", response.status);
+      }
+
       return {
         ...payload,
         detections: payload.detections.map((d) => ({

@@ -11,7 +11,7 @@ import { ApiError } from "@/utils/errors";
 import { logger } from "@/config/logger";
 import { detectionService } from "@/services/detection.service";
 import { metricsService } from "@/services/metrics.service";
-import { aiServiceClient, type AiServiceClient } from "./aiClient";
+import { aiServiceClient, AiServiceError, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
 import { lifecycleManager } from "./lifecycle";
 import { ConcretePipelineBuilder } from "./pipelineImpl";
@@ -69,9 +69,6 @@ class AiInferenceStage implements InferenceStage {
       throw new Error(
         `No AI model configured for detector "${ctx.detector.key}" — the engine does not fabricate detections.`,
       );
-    }
-    if (!(await this.client.isReachable())) {
-      throw new Error("AI service is unreachable");
     }
 
     const result = await this.client.detectImage(frame.image, model);
@@ -154,7 +151,11 @@ class EngineServiceImpl {
   }
 
   /** Run a single frame through the engine for a detector key. */
-  async processFrame(key: string, cameraId: string, image: Buffer): Promise<PipelineResult> {
+  async processFrame(key: string, cameraId: string, image: Buffer, options: { force?: boolean } = {}): Promise<PipelineResult> {
+    if (!image || image.length === 0) {
+      throw new ApiError(400, "Empty frame buffer cannot be processed", { code: "INVALID_FRAME" });
+    }
+
     const descriptor = await runtimeRegistry.describeByKey(key);
     if (!descriptor) {
       throw new ApiError(404, `Unknown detector key "${key}"`);
@@ -172,6 +173,13 @@ class EngineServiceImpl {
         409,
         `Detector "${key}" is disabled. Enable it before running inference.`,
         { code: "DETECTOR_DISABLED" },
+      );
+    }
+    if (descriptor.status === "unavailable") {
+      throw new ApiError(
+        503,
+        `Detector "${key}" is unavailable: the AI inference backend is unreachable.`,
+        { code: "DETECTOR_UNAVAILABLE" },
       );
     }
 
@@ -200,7 +208,10 @@ class EngineServiceImpl {
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown engine error";
-      const unreachable = message.toLowerCase().includes("unreachable");
+      const unreachable =
+        err instanceof AiServiceError && err.reason === "unreachable"
+          ? true
+          : message.toLowerCase().includes("unreachable");
       this.recordError(key, message);
       lifecycleManager.markInferenceFailed(key, message, unreachable);
       logger.error("Engine frame processing failed", { key, cameraId, message });

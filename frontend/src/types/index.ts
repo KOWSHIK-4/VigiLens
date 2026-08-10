@@ -422,10 +422,13 @@ export type DetectorEngineType = "object_detection" | "classification" | "segmen
 export type DetectorAvailability = "available" | "unconfigured";
 export type DetectorRuntimeStatus =
   | "registered"
-  | "initializing"
+  | "configured"
+  | "enabled"
+  | "disabled"
+  | "loading"
   | "ready"
   | "error"
-  | "disabled"
+  | "unavailable"
   | "unconfigured";
 
 export interface DetectorConfiguration {
@@ -446,6 +449,7 @@ export interface EngineDetector {
   type: DetectorEngineType;
   version: string;
   status: DetectorRuntimeStatus;
+  enabled: boolean;
   availability: DetectorAvailability;
   confidenceThreshold: number;
   supportedInput: string[];
@@ -497,7 +501,31 @@ export interface EngineMetrics {
   detectionsPerFrame: number;
   lastDetectionAt: string | null;
   lastFrameAt: string | null;
+  lastSuccessfulInferenceAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
   errorCount: number;
+}
+
+export interface EngineHealth {
+  key: string;
+  status: DetectorRuntimeStatus;
+  enabled: boolean;
+  healthy: boolean;
+  message: string;
+  latencyMs: number | null;
+  throughputFps: number | null;
+  framesProcessed: number;
+  framesSkipped: number;
+  errorCount: number;
+  lastInferenceAt: string | null;
+  lastSuccessfulInferenceAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  consecutiveFailures: number;
+  aiReachable: boolean | null;
+  lastDetectionAt: string | null;
+  lastFrameAt: string | null;
 }
 
 export interface EngineProcessResponse {

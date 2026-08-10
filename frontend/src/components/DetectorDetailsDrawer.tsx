@@ -22,6 +22,7 @@ import type { MarketplaceDetector } from "@/types";
 import DetectorIcon from "./DetectorIcon";
 import DetectorStatusBadge from "./DetectorStatusBadge";
 import DetectorAvailabilityBadge from "./DetectorAvailabilityBadge";
+import EngineStatusBadge from "./EngineStatusBadge";
 
 interface DetectorDetailsDrawerProps {
   detector: MarketplaceDetector | null;
@@ -131,6 +132,9 @@ export default function DetectorDetailsDrawer({
               )}
               {engineDescriptor && (
                 <DetectorAvailabilityBadge availability={engineDescriptor.availability} />
+              )}
+              {installed && engineDescriptor && (
+                <EngineStatusBadge status={engineDescriptor.status} />
               )}
             </div>
             {installed && (
