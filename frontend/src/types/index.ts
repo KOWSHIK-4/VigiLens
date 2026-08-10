@@ -391,12 +391,12 @@ export interface DetectorHealth {
   status: DetectorStatus;
   healthy: boolean;
   message: string;
-  latencyMs: number;
+  latencyMs: number | null;
   uptimeSeconds: number;
   lastHealthCheck: string;
   assignedCameras: number;
-  framesProcessed: number;
-  throughputFps: number;
+  framesProcessed: number | null;
+  throughputFps: number | null;
 }
 
 export interface DetectorFilters {

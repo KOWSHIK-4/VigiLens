@@ -228,7 +228,9 @@ export default function DetectorDetailsDrawer({
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Latency</p>
-                  <p className="text-sm font-semibold text-gray-900">{health.latencyMs}ms</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {health.latencyMs != null ? `${health.latencyMs}ms` : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Uptime</p>
@@ -239,13 +241,13 @@ export default function DetectorDetailsDrawer({
                 <div>
                   <p className="text-xs text-gray-500">Throughput</p>
                   <p className="text-sm font-semibold text-gray-900">
-                    {health.throughputFps} fps
+                    {health.throughputFps != null ? `${health.throughputFps} fps` : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Frames Processed</p>
                   <p className="text-sm font-semibold text-gray-900">
-                    {health.framesProcessed.toLocaleString()}
+                    {health.framesProcessed != null ? health.framesProcessed.toLocaleString() : "—"}
                   </p>
                 </div>
                 <div>

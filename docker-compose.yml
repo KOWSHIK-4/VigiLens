@@ -31,6 +31,7 @@ services:
       - PYTHONUNBUFFERED=1
       - MODEL_PATH=/app/models
       - LOG_LEVEL=INFO
+      - BACKEND_URL=http://backend:4000
     volumes:
       - ai_models:/app/models
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000

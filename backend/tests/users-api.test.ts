@@ -392,14 +392,15 @@ async function run() {
   }
 
   const roles = await request("/roles", {}, superToken);
+  const roleData = (roles.body as { data: Array<{ name: string; permissions: unknown[] }> }).data ?? [];
+  const seededRoles = ["super_admin", "admin", "operator", "viewer"];
   if (
     roles.status === 200 &&
-    (roles.body as { data: Array<{ name: string; permissions: unknown[] }> }).data.length === 4 &&
-    (roles.body as { data: Array<{ permissions: unknown[] }> }).data.every(
-      (r) => Array.isArray(r.permissions) && r.permissions.length > 0,
-    )
+    roleData.length >= seededRoles.length &&
+    seededRoles.every((name) => roleData.some((r) => r.name === name)) &&
+    roleData.every((r) => Array.isArray(r.permissions) && r.permissions.length > 0)
   ) {
-    ok("GET /roles returns 4 seeded roles with permissions");
+    ok("GET /roles returns all seeded roles with permissions");
   } else {
     fail("GET /roles", roles);
   }

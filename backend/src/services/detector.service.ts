@@ -346,7 +346,9 @@ export const detectorService = {
     const model = await findModelOrThrow(id);
     const def = getDetectorDefinition(model.detectorKey);
     const status = detectorStatusOf(model);
-    const latencyMs = (def?.inferenceTimeMs ?? 30) + Math.floor(Math.random() * 12);
+    // `inferenceTimeMs` is the definition's documented estimate, only used
+    // until real engine metrics are measured (see GET /engines/:key/metrics).
+    const latencyMs = def?.inferenceTimeMs ?? null;
     const base = model.lastRestartAt ?? model.createdAt;
     const uptime =
       status === "running"
@@ -369,8 +371,11 @@ export const detectorService = {
       uptimeSeconds: uptime,
       lastHealthCheck: new Date().toISOString(),
       assignedCameras: model.cameraAssignments.length,
-      framesProcessed: status === "running" ? uptime * 8 : 0,
-      throughputFps: status === "running" ? 8 : 0,
+      // No engine run has been measured for this detector yet, so report
+      // nothing rather than fabricated values. Real per-detector metrics are
+      // exposed through GET /engines/:key/metrics.
+      framesProcessed: null,
+      throughputFps: null,
     };
   },
 

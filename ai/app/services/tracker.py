@@ -38,13 +38,22 @@ class IouTracker:
         self._next_id = 0
 
     def update(self, detections: List[dict]) -> List[dict]:
-        """Detections: list of dicts with class_name, confidence, bbox."""
+        """Detections: list of dicts with class_name, confidence, bbox.
+
+        bbox is a 4-tuple (x1, y1, x2, y2) or a dict with x1/y1/x2/y2 keys.
+        """
         result: List[dict] = []
         matched: set[int] = set()
 
         for det in detections:
             cls = det["class_name"]
-            bbox = tuple(int(v) for v in det["bbox"])
+            raw_bbox = det["bbox"]
+            if isinstance(raw_bbox, dict):
+                bbox = tuple(
+                    int(raw_bbox[k]) for k in ("x1", "y1", "x2", "y2")
+                )
+            else:
+                bbox = tuple(int(v) for v in raw_bbox)
             best_id: Optional[int] = None
             best_iou = self._match_iou
             for track_id, track in self._tracks.items():
@@ -59,6 +68,7 @@ class IouTracker:
                 track_id = self._next_id
                 self._next_id += 1
                 self._tracks[track_id] = Track(id=track_id, bbox=bbox, cls=cls)
+                matched.add(track_id)
             else:
                 track_id = best_id
                 matched.add(track_id)
