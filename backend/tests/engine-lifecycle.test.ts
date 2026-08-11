@@ -1,158 +1,167 @@
-/**
- * Detector Engine v2 — Lifecycle unit tests.
- *
- * These tests exercise the pure lifecycle state machine (deriveLifecycleStatus)
- * and the in-memory LifecycleManager. They deliberately avoid touching the
- * database or the AI service.
- */
-
-import { deriveLifecycleStatus, LifecycleManager } from "../src/engine/lifecycle";
+import {
+  LifecycleManager,
+  deriveLifecycleStatus,
+  MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR,
+  REACHABILITY_PROBE_TTL_MS,
+  type LifecycleDerivationInput,
+} from "../src/engine/lifecycle";
 
 let passed = 0;
 let failed = 0;
 
+function ok(name: string, details?: string) {
+  passed += 1;
+  console.log(`  PASS  ${name}${details ? ` — ${details}` : ""}`);
+}
+
+function fail(name: string, details?: string) {
+  failed += 1;
+  console.log(`  FAIL  ${name}${details ? ` — ${details}` : ""}`);
+}
+
 function expectEqual(actual: unknown, expected: unknown, name: string) {
   if (actual === expected) {
-    passed += 1;
-    console.log(`  PASS  ${name}`);
+    ok(name, `${String(expected)}`);
   } else {
-    failed += 1;
-    console.error(`  FAIL  ${name} — expected "${expected}", got "${actual}"`);
+    fail(name, `expected ${String(expected)}, got ${String(actual)}`);
   }
 }
 
-function expectTrue(actual: boolean, name: string) {
-  if (actual) {
-    passed += 1;
-    console.log(`  PASS  ${name}`);
-  } else {
-    failed += 1;
-    console.error(`  FAIL  ${name}`);
-  }
-}
-
-function base() {
+function loadedInput(overrides: Partial<LifecycleDerivationInput> = {}): LifecycleDerivationInput {
   return {
     installed: true,
     enabled: true,
-    availability: "available" as const,
+    availability: "available",
     modelStatus: "loaded",
     aiReachable: true,
     consecutiveFailures: 0,
-    lastSuccessfulInferenceAt: "2026-08-10T00:00:00.000Z",
+    lastSuccessfulInferenceAt: "2026-08-09T12:00:00.000Z",
+    ...overrides,
   };
 }
 
-function run() {
-  console.log("Detector lifecycle status derivation:");
+// --- deriveLifecycleStatus ---
 
-  // unconfigured
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), installed: false }),
-    "unconfigured",
-    "not installed -> unconfigured",
-  );
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), availability: "unconfigured" }),
-    "unconfigured",
-    "definition without a model -> unconfigured",
-  );
+expectEqual(deriveLifecycleStatus({ ...loadedInput(), installed: false }), "unconfigured", "not installed → unconfigured");
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), availability: "unconfigured" }),
+  "unconfigured",
+  "unconfigured availability → unconfigured",
+);
+expectEqual(deriveLifecycleStatus({ ...loadedInput(), enabled: false }), "disabled", "disabled → disabled");
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), modelStatus: "disabled" }),
+  "enabled",
+  "loaded+enabled but model disabled → enabled",
+);
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), modelStatus: "loading" }),
+  "loading",
+  "model loading → loading",
+);
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), modelStatus: "error" }),
+  "error",
+  "model error → error",
+);
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), modelStatus: "pending" }),
+  "registered",
+  "unknown model status → registered",
+);
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), aiReachable: false }),
+  "unavailable",
+  "AI backend unreachable → unavailable",
+);
+expectEqual(
+  deriveLifecycleStatus({
+    ...loadedInput(),
+    consecutiveFailures: MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR,
+    lastSuccessfulInferenceAt: null,
+  }),
+  "error",
+  "3+ failures without a success → error",
+);
+expectEqual(
+  deriveLifecycleStatus({ ...loadedInput(), lastSuccessfulInferenceAt: null, consecutiveFailures: 1 }),
+  "configured",
+  "loaded but never ran → configured",
+);
+expectEqual(
+  deriveLifecycleStatus(loadedInput()),
+  "ready",
+  "loaded with a successful run → ready",
+);
 
-  // disabled / enabled
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), enabled: false }),
-    "disabled",
-    "explicitly disabled -> disabled",
-  );
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), modelStatus: "disabled" }),
-    "enabled",
-    "installed, enabled, model not loaded -> enabled",
-  );
+// --- LifecycleManager ---
 
-  // loading / error / registered
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), modelStatus: "loading" }),
-    "loading",
-    "model loading -> loading",
-  );
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), modelStatus: "error" }),
-    "error",
-    "model load failed -> error",
-  );
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), modelStatus: null }),
-    "registered",
-    "installed with no load state -> registered",
-  );
+const manager = new LifecycleManager();
+const key = "person";
 
-  // unavailable
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), aiReachable: false }),
-    "unavailable",
-    "AI backend unreachable -> unavailable",
-  );
+const fresh = manager.get("vehicle");
+expectEqual(fresh.enabled, true, "fresh state is enabled");
+expectEqual(fresh.lastInferenceAt, null, "fresh state has no last inference");
+expectEqual(fresh.aiReachable, null, "fresh state has unknown reachability");
+expectEqual(fresh.consecutiveFailures, 0, "fresh state has zero failures");
 
-  // configured vs ready
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), lastSuccessfulInferenceAt: null }),
-    "configured",
-    "loaded + enabled + never run -> configured",
-  );
-  expectEqual(
-    deriveLifecycleStatus(base()),
-    "ready",
-    "loaded + enabled + successful run -> ready",
-  );
+expectEqual(manager.isProbeDue(key), true, "probe is due before any probe");
 
-  // failure streak escalation
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), lastSuccessfulInferenceAt: null, consecutiveFailures: 3 }),
-    "error",
-    "3 consecutive failures without success -> error",
-  );
-  expectEqual(
-    deriveLifecycleStatus({ ...base(), consecutiveFailures: 3 }),
-    "ready",
-    "3 failures but a past success still reports ready",
-  );
+manager.markInferenceSucceeded(key);
+let state = manager.get(key);
+expectEqual(state.consecutiveFailures, 0, "success resets failure streak");
+expectEqual(state.lastError, null, "success clears last error");
+expectEqual(state.aiReachable, true, "success marks AI reachable");
+expectEqual(state.lastSuccessfulInferenceAt != null, true, "success records last successful inference");
+expectEqual(manager.isInErrorState(key), false, "not in error state after success");
 
-  console.log("LifecycleManager state tracking:");
+manager.markInferenceFailed(key, "boom");
+state = manager.get(key);
+expectEqual(state.consecutiveFailures, 1, "failure increments streak");
+expectEqual(state.lastError, "boom", "failure records error message");
+expectEqual(state.lastErrorAt != null, true, "failure records error time");
 
-  const manager = new LifecycleManager();
-  expectEqual(manager.consecutiveFailures("person"), 0, "fresh key has zero failures");
+manager.recordReachabilityProbe(key, false);
+state = manager.get(key);
+expectEqual(state.aiReachable, false, "probe records unreachable");
+expectEqual(state.lastProbeAt != null, true, "probe records probe time");
+expectEqual(manager.isProbeDue(key), false, "probe not due after fresh probe");
 
-  manager.markInferenceFailed("person", "AI service unreachable", true);
-  manager.markInferenceFailed("person", "AI service unreachable", true);
-  expectEqual(manager.consecutiveFailures("person"), 2, "failures accumulate");
-  expectTrue(manager.get("person").aiReachable === false, "unreachable flag recorded");
-  expectTrue(manager.isInErrorState("person") === false, "not in error state at 2 failures");
-  expectTrue(
-    manager.get("person").lastError?.includes("unreachable") ?? false,
-    "last error message recorded",
-  );
+state.lastProbeAt = Date.now() - REACHABILITY_PROBE_TTL_MS - 1;
+expectEqual(manager.isProbeDue(key), true, "probe due after TTL expires");
 
-  manager.markInferenceFailed("person", "timeout");
-  expectTrue(manager.isInErrorState("person"), "in error state at 3 failures");
+manager.markInferenceFailed(key, "again");
+manager.markInferenceFailed(key, "thrice");
+state = manager.get(key);
+expectEqual(state.consecutiveFailures, MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR, "streak accumulates");
+expectEqual(manager.isInErrorState(key), true, "in error state after 3 consecutive failures");
 
-  manager.markInferenceSucceeded("person");
-  expectEqual(manager.consecutiveFailures("person"), 0, "success resets failures");
-  expectTrue(manager.get("person").lastError === null, "success clears last error");
-  expectTrue(manager.get("person").aiReachable === true, "success marks AI reachable");
-  expectTrue(
-    manager.get("person").lastSuccessfulInferenceAt !== null,
-    "success records lastSuccessfulInferenceAt",
-  );
+manager.markInferenceFailed(key, "fourth", true);
+state = manager.get(key);
+expectEqual(state.consecutiveFailures, MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR + 1, "streak keeps counting");
+expectEqual(state.aiReachable, false, "aiUnreachable failure marks AI unreachable");
 
-  manager.setEnabled("person", false);
-  expectEqual(manager.get("person").enabled, false, "setEnabled(false) persisted");
+manager.setEnabled(key, false);
+state = manager.get(key);
+expectEqual(state.enabled, false, "setEnabled false persists");
 
-  const snapshots = manager.snapshot();
-  expectTrue(snapshots.length === 1, "snapshot contains tracked keys");
+manager.markInferenceSucceeded(key);
+state = manager.get(key);
+expectEqual(state.enabled, false, "success does not re-enable a disabled detector");
 
-  console.log(`\nLifecycle tests: ${passed} passed, ${failed} failed`);
-  process.exit(failed === 0 ? 0 : 1);
-}
+manager.setEnabled(key, true);
+state = manager.get(key);
+expectEqual(state.enabled, true, "setEnabled true persists");
+expectEqual(state.consecutiveFailures, 0, "re-enabling clears the failure streak");
 
-run();
+const snapshot = manager.snapshot();
+expectEqual(snapshot.length >= 1, true, "snapshot includes tracked detectors");
+expectEqual(snapshot.some((s) => s.key === key), true, "snapshot includes the person key");
+expectEqual(snapshot[0] !== manager.get(key), true, "snapshot returns copies");
+
+manager.reset(key);
+expectEqual(manager.get(key).consecutiveFailures, 0, "reset restores fresh state");
+expectEqual(manager.isProbeDue(key), true, "reset makes probe due again");
+
+console.log(`\nEngine lifecycle tests: ${passed} passed, ${failed} failed`);
+process.exit(failed === 0 ? 0 : 1);
