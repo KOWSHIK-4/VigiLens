@@ -24,6 +24,10 @@ export const detectionService = {
     return data;
   },
 
+  async remove(id: string): Promise<void> {
+    await api.delete(`/detections/${id}`);
+  },
+
   async exportCSV(filters?: DetectionFilters): Promise<Blob> {
     const { data } = await api.get("/detections/export/csv", {
       params: filters,

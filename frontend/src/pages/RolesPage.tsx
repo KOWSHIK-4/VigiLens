@@ -36,6 +36,7 @@ const FALLBACK_TINT = "bg-indigo-50";
 const FALLBACK_COLOR = "text-indigo-600";
 
 const CATEGORY_LABELS: Record<string, string> = {
+  dashboard: "Dashboard",
   users: "Users",
   roles: "Roles",
   cameras: "Cameras",
@@ -44,6 +45,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   analytics: "Analytics",
   reports: "Reports",
   alerts: "Alerts",
+  audit: "Audit Logs",
+  settings: "Settings",
+  monitoring: "System Monitoring",
   general: "General",
 };
 

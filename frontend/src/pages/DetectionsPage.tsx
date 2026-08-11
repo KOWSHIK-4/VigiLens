@@ -4,6 +4,9 @@ import { detectionService } from "@/services/detections";
 import { cameraService } from "@/services/cameras";
 import DetectionImagePreview from "@/components/DetectionImagePreview";
 import DetectionDetailsDrawer from "@/components/DetectionDetailsDrawer";
+import { DeleteDetectionDialog } from "@/components/DeleteDetectionDialog";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 import type { Detection, DetectionFilters } from "@/types";
 import {
   Search,
@@ -16,6 +19,7 @@ import {
   ChevronRight,
   Eye,
   Maximize2,
+  Trash2,
 } from "lucide-react";
 
 const statusColors = {
@@ -32,8 +36,12 @@ export default function DetectionsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Detection | null>(null);
   const [sortBy, setSortBy] = useState<string>("timestamp");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "detections.manage");
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -402,6 +410,15 @@ export default function DetectionsPage() {
                             >
                               <Download className="w-4 h-4 text-gray-500" />
                             </button>
+                            {canManage && (
+                              <button
+                                onClick={() => setDeleteTarget(detection)}
+                                className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete detection"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -482,6 +499,12 @@ export default function DetectionsPage() {
           setSelectedDetection(null);
           setPreviewImage(src);
         }}
+      />
+
+      <DeleteDetectionDialog
+        open={!!deleteTarget}
+        detection={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );

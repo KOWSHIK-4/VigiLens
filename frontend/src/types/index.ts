@@ -560,6 +560,7 @@ export type AuditLogAction =
   | "ai_model_disabled"
   | "ai_model_updated"
   | "detection_created"
+  | "detection_deleted"
   | "alert_created"
   | "report_generated"
   | "settings_changed";
@@ -632,6 +633,7 @@ export const AUDIT_ACTIONS: AuditLogAction[] = [
   "ai_model_disabled",
   "ai_model_updated",
   "detection_created",
+  "detection_deleted",
   "alert_created",
   "report_generated",
   "settings_changed",
