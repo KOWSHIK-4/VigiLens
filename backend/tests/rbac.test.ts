@@ -569,6 +569,63 @@ async function run() {
     fail("viewer reset guard", viewerReset);
   }
 
+  // ---- Detection deletion (detections.manage) ----
+  const ingest = await request("/detections/internal", {
+    method: "POST",
+    body: JSON.stringify({
+      camera_id: "demo-camera-1",
+      label: "person",
+      confidence: 0.8,
+      image_url: "/tmp/rbac_test.jpg",
+      detector_key: "person",
+      class_name: "person",
+      track_id: "rbac-1",
+      bounding_box: { x1: 1, y1: 2, x2: 3, y2: 4 },
+      metadata: { source: "rbac-test" },
+    }),
+  });
+  const detectionId = (ingest.body as { data?: { id?: string } })?.data?.id;
+  if (ingest.status !== 201 || !detectionId) {
+    fail("POST /detections/internal seeds a detection for delete tests", ingest);
+  } else {
+    ok("POST /detections/internal seeds a detection for delete tests");
+
+    const viewerDelete = await request(`/detections/${detectionId}`, { method: "DELETE" }, viewerToken);
+    if (viewerDelete.status === 403) {
+      ok("viewer cannot delete detections (403)");
+    } else {
+      fail("viewer cannot delete detections", viewerDelete);
+    }
+
+    const operatorDelete = await request(`/detections/${detectionId}`, { method: "DELETE" }, operatorToken);
+    if (operatorDelete.status === 403) {
+      ok("operator cannot delete detections (403)");
+    } else {
+      fail("operator cannot delete detections", operatorDelete);
+    }
+
+    const adminDelete = await request(`/detections/${detectionId}`, { method: "DELETE" }, adminToken);
+    if (adminDelete.status === 200) {
+      ok("admin can delete detections (detections.manage)");
+    } else {
+      fail("admin can delete detections", adminDelete);
+    }
+
+    const secondDelete = await request(`/detections/${detectionId}`, { method: "DELETE" }, adminToken);
+    if (secondDelete.status === 404) {
+      ok("deleting an already-deleted detection returns 404");
+    } else {
+      fail("deleting an already-deleted detection", secondDelete);
+    }
+  }
+
+  const unauthDelete = await request(`/detections/${detectionId ?? "missing"}`, { method: "DELETE" });
+  if (unauthDelete.status === 401) {
+    ok("unauthenticated delete detection is rejected (401)");
+  } else {
+    fail("unauthenticated delete detection", unauthDelete);
+  }
+
   // ---- Soft delete + role cleanup ----
   const removed = await request(`/users/${userId}`, { method: "DELETE" }, superToken);
   if (removed.status === 200) {
