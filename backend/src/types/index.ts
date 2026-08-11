@@ -315,7 +315,7 @@ export const auditLogQuerySchema = z.object({
     "role_deleted", "camera_added", "camera_updated", "camera_deleted",
     "camera_started", "camera_stopped",
     "ai_model_enabled", "ai_model_disabled", "ai_model_updated",
-    "detection_created", "alert_created", "report_generated", "settings_changed",
+    "detection_created", "detection_deleted", "alert_created", "report_generated", "settings_changed",
   ]).optional(),
   module: z.string().optional(),
   status: z.enum(["success", "failed"]).optional(),

@@ -13,5 +13,6 @@ router.get("/export/csv", requirePermission("detections.read"), detectionControl
 router.get("/stats", requirePermission("detections.read"), detectionController.getStats);
 router.get("/", requirePermission("detections.read"), detectionController.getAll);
 router.get("/:id", requirePermission("detections.read"), detectionController.getById);
+router.delete("/:id", requirePermission("detections.manage"), detectionController.remove);
 
 export default router;

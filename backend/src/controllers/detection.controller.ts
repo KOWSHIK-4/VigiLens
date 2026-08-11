@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { AuthRequest } from "@/types";
+import { prisma } from "@/config/prisma";
 import { detectionService } from "@/services/detection.service";
 import { metricsService } from "@/services/metrics.service";
 import { success, paginated } from "@/utils/apiResponse";
@@ -130,6 +131,41 @@ export const detectionController = {
     try {
       const stats = await detectionService.getStats();
       success(res, stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const detection = await detectionService.findById(id);
+      const result = await detectionService.remove(id);
+      const actor = req.userId
+        ? await prisma.user.findFirst({
+            where: { id: req.userId },
+            select: { name: true, email: true },
+          })
+        : null;
+      const info = {
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+      };
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "detection_deleted",
+        module: "detections",
+        description: `Detection deleted: ${detection.label}`,
+        ...info,
+        metadata: {
+          detectionId: id,
+          label: detection.label,
+          cameraId: detection.cameraId,
+        },
+      });
+      success(res, result);
     } catch (err) {
       next(err);
     }

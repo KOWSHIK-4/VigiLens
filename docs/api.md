@@ -109,7 +109,10 @@ DELETE /reports/:id          # requires reports.manage
 GET /detections?page=1&limit=20&status=critical
 GET /detections/stats
 GET /detections/:id
+DELETE /detections/:id              # requires detections.manage (also removes the linked alert)
 ```
+
+Detections are read-only for `viewer`/`operator` (require `detections.read`). Deleting a detection additionally requires `detections.manage` (granted to `admin` and `super_admin`) and records a `detection_deleted` audit action. Deleting an unknown id returns `404`.
 
 ## Cameras
 

@@ -28,6 +28,7 @@ export const permissionDefinitions = [
   // Detections
   { key: "detections.read", name: "View Detections", description: "View detection events", category: "detections" },
   { key: "detections.view", name: "Access Detections", description: "Access the detections feed", category: "detections" },
+  { key: "detections.manage", name: "Manage Detections", description: "Delete and clean up detection events", category: "detections" },
   // AI Models
   { key: "models.read", name: "View AI Models", description: "View AI model catalog", category: "models" },
   { key: "models.manage", name: "Manage AI Models", description: "Create, edit, load and test AI models", category: "models" },
@@ -73,6 +74,7 @@ export const rolePermissionMap: Record<string, string[]> = {
     "cameras.control",
     "detections.read",
     "detections.view",
+    "detections.manage",
     "models.read",
     "models.manage",
     "analytics.read",

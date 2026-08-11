@@ -1,4 +1,5 @@
 import { prisma } from "@/config/prisma";
+import { ApiError } from "@/utils/errors";
 import type {
   AlertSeverity,
   DetectionStatus,
@@ -200,10 +201,20 @@ export const detectionService = {
     });
 
     if (!detection) {
-      throw new Error("Detection not found");
+      throw new ApiError(404, "Detection not found");
     }
 
     return detection;
+  },
+
+  async remove(id: string) {
+    const detection = await prisma.detection.findUnique({ where: { id } });
+    if (!detection) {
+      throw new ApiError(404, "Detection not found");
+    }
+    await prisma.alert.deleteMany({ where: { detectionId: id } });
+    await prisma.detection.delete({ where: { id } });
+    return { success: true, id };
   },
 
   async exportCSV(params: Partial<FindAllParams>) {
