@@ -150,8 +150,16 @@ class EngineServiceImpl {
     return pipeline;
   }
 
-  /** Run a single frame through the engine for a detector key. */
+  /**
+   * Run a single frame through the engine for a detector key.
+   *
+   * `options.force` bypasses the soft guards (disabled and AI-backend
+   * unavailable) for manual troubleshooting runs. It never bypasses the
+   * hard `unconfigured` guard: a detector with no trained model cannot
+   * run inference — the engine does not fabricate detections.
+   */
   async processFrame(key: string, cameraId: string, image: Buffer, options: { force?: boolean } = {}): Promise<PipelineResult> {
+    const { force = false } = options;
     if (!image || image.length === 0) {
       throw new ApiError(400, "Empty frame buffer cannot be processed", { code: "INVALID_FRAME" });
     }
@@ -168,14 +176,14 @@ class EngineServiceImpl {
         { code: "DETECTOR_UNCONFIGURED" },
       );
     }
-    if (descriptor.status === "disabled") {
+    if (descriptor.status === "disabled" && !force) {
       throw new ApiError(
         409,
         `Detector "${key}" is disabled. Enable it before running inference.`,
         { code: "DETECTOR_DISABLED" },
       );
     }
-    if (descriptor.status === "unavailable") {
+    if (descriptor.status === "unavailable" && !force) {
       throw new ApiError(
         503,
         `Detector "${key}" is unavailable: the AI inference backend is unreachable.`,
