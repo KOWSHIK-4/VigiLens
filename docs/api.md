@@ -251,24 +251,32 @@ Notable settings:
 
 ## AI Detector Marketplace
 
-Install, configure, and monitor detection detectors. Detector statuses: `running`, `stopped`, `error`. A detector is `running` when it is loaded and enabled; `error` when the engine is in an error state; `stopped` otherwise. After a restart the detector transitions through `loading` until it reports healthy.
+Install, configure, and monitor detection detectors. Every detector exposes two status surfaces:
+
+- `status` — legacy 3-state (`running` | `stopped` | `error`), kept for backwards compatibility.
+- `runtimeStatus` — honest 9-state lifecycle derived from durable and measured engine facts: `registered`, `configured`, `enabled`, `disabled`, `loading`, `ready`, `error`, `unavailable`, `unconfigured`. A detector is only ever `ready` after a real live inference has succeeded; it is `unconfigured` when no trained model is wired to the AI service, and `unavailable` when the AI backend is unreachable.
 
 The marketplace ships 14 detector definitions across 6 categories. 8 are auto-installed on seed: Person Detection, Fire Detection, Smoking Detection, Helmet Detection, Face Mask Detection, Vehicle Detection, Intrusion Detection, and Drowsiness Detection. The remaining 6 (Weapon Detection, Abandoned Object Detection, PPE Detection, Crowd Detection, Violence Detection, License Plate Detection) are available for manual install.
+
+Detector rows also carry `type` (`object_detection` | `classification` | `segmentation`) and `supportedInput` (`image` | `video` | `webcam`), which drive the camera assignment validation described below.
 
 ```bash
 GET    /detectors/marketplace          # all definitions + installed flag
 GET    /detectors/categories           # available category chips
-GET    /detectors?page=1&limit=20&search=fire&status=running&category=safety&sortBy=name&sortOrder=asc
+GET    /detectors?page=1&limit=20&search=fire&status=ready&type=object_detection&enabled=true&category=safety&sortBy=name&sortOrder=asc
 GET    /detectors/:id
 GET    /detectors/:id/health           # engine health + settings + cameras
 POST   /detectors                      # install a detector from the marketplace
+PATCH  /detectors/:id                  # update name / description / version / enabled
 PATCH  /detectors/:id/enable           # enable a detector
 PATCH  /detectors/:id/disable          # disable a detector
-PATCH  /detectors/:id/settings         # update alert severity / interval / processor
-PUT    /detectors/:id/cameras          # assign monitored cameras
+PATCH  /detectors/:id/settings         # update severity / interval / cooldown / threshold / processor
+PUT    /detectors/:id/cameras          # assign monitored cameras (with per-camera enable)
 POST   /detectors/:id/restart          # restart the detector engine
 DELETE /detectors/:id                  # uninstall the detector
 ```
+
+`GET /detectors` accepts `status` in either vocabulary (legacy `running`/`stopped`/`error` or any `runtimeStatus` value), plus `type`, `enabled` (`true`/`false`), `search`, `category`, `sortBy` (including `version`) and `sortOrder`.
 
 POST /detectors body:
 
@@ -278,19 +286,41 @@ POST /detectors body:
 }
 ```
 
+PATCH /detectors/:id body (at least one field required):
+
+```json
+{
+  "name": "Fire Detection PRO",
+  "version": "2.4.0",
+  "description": "Updated description",
+  "enabled": true
+}
+```
+
 PATCH /detectors/:id/settings body (all fields optional):
 
 ```json
 {
+  "confidenceThreshold": 65,
   "alertSeverity": "critical",
   "detectionIntervalMs": 5000,
+  "alertCooldownMs": 30000,
   "preferredProcessor": "gpu"
 }
 ```
 
-`alertSeverity`: `info` | `warning` | `critical`. `preferredProcessor`: `gpu` | `cpu` | `auto`. `detectionIntervalMs` must be between 1000 and 60000.
+`alertSeverity`: `info` | `warning` | `critical`. `preferredProcessor`: `gpu` | `cpu` | `auto`. `detectionIntervalMs` must be between 100 and 3600000 (default 5000). `alertCooldownMs` is the minimum time between alerts for the same detector (0 disables the cooldown; default 30000).
 
-PUT /detectors/:id/cameras body:
+PUT /detectors/:id/cameras accepts either a plain list of camera ids, or per-camera assignments with an enable flag (assign a feed but pause detection on it without removing it):
+
+```json
+{
+  "assignments": [
+    { "cameraId": "demo-camera-1", "enabled": true },
+    { "cameraId": "demo-camera-2", "enabled": false }
+  ]
+}
+```
 
 ```json
 {
@@ -298,7 +328,11 @@ PUT /detectors/:id/cameras body:
 }
 ```
 
+Camera ids must be unique, existing cameras, and each camera's feed type must be compatible with the detector's `supportedInput` (webcam feeds map to `webcam`, RTSP/IP/video-file feeds map to `video`). Incompatible assignments are rejected with 400.
+
 POST /detectors/:id/restart marks the detector as `loading`, then flips it to `loaded` (and `running` when enabled) after the engine warm-up delay. Restarting a disabled detector is rejected with 400.
+
+All detector management actions (`detector_created`, `detector_updated`, `detector_deleted`, `detector_enabled`, `detector_disabled`, `detector_config_updated`, `detector_cameras_updated`) are recorded in the audit log.
 
 ## Inference Engine (v2)
 
