@@ -151,6 +151,18 @@ export type CreateModelInput = z.infer<typeof createModelSchema>;
 export type ModelQueryInput = z.infer<typeof modelQuerySchema>;
 
 export const detectorStatusSchema = z.enum(["running", "stopped", "error"]);
+export const detectorRuntimeStatusSchema = z.enum([
+  "registered",
+  "configured",
+  "enabled",
+  "disabled",
+  "loading",
+  "ready",
+  "error",
+  "unavailable",
+  "unconfigured",
+]);
+export const detectorTypeSchema = z.enum(["object_detection", "classification", "segmentation"]);
 export const alertSeveritySchema = z.enum(["info", "warning", "critical"]);
 export const processorPreferenceSchema = z.enum(["gpu", "cpu", "auto"]);
 
@@ -158,19 +170,35 @@ export const detectorQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().optional(),
-  status: detectorStatusSchema.optional(),
+  status: z.union([detectorStatusSchema, detectorRuntimeStatusSchema]).optional(),
+  type: detectorTypeSchema.optional(),
+  enabled: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
   category: z.string().optional(),
   installed: z
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
-  sortBy: z.enum(["name", "status", "confidenceThreshold", "enabled", "createdAt"]).optional(),
+  sortBy: z.enum(["name", "status", "confidenceThreshold", "enabled", "createdAt", "version"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 export const installDetectorSchema = z.object({
   detectorKey: z.string().min(1, "Detector key is required").max(100),
 });
+
+export const updateDetectorSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100).optional(),
+    description: z.string().max(500).optional(),
+    version: z.string().min(1, "Version is required").max(50).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
 
 export const detectorIdSchema = z.object({
   id: z.string().uuid("Invalid detector id"),
@@ -189,18 +217,43 @@ export const detectorSettingsSchema = z.object({
     .min(100, "Detection interval must be at least 100ms")
     .max(3_600_000, "Detection interval must be at most 1 hour")
     .optional(),
+  alertCooldownMs: z
+    .number()
+    .int("Alert cooldown must be an integer")
+    .min(0, "Alert cooldown must be at least 0ms")
+    .max(3_600_000, "Alert cooldown must be at most 1 hour")
+    .optional(),
   preferredProcessor: processorPreferenceSchema.optional(),
 });
 
-export const detectorCamerasSchema = z.object({
-  cameraIds: z
-    .array(z.string().min(1, "Camera id cannot be empty").max(100))
-    .min(0)
-    .max(100, "Cannot assign more than 100 cameras"),
+const cameraAssignmentSchema = z.object({
+  cameraId: z.string().min(1, "Camera id cannot be empty").max(100),
+  enabled: z.boolean().default(true),
 });
+
+export const detectorCamerasSchema = z
+  .object({
+    cameraIds: z
+      .array(z.string().min(1, "Camera id cannot be empty").max(100))
+      .min(0)
+      .max(100, "Cannot assign more than 100 cameras")
+      .optional(),
+    assignments: z
+      .array(cameraAssignmentSchema)
+      .min(1, "At least one assignment is required")
+      .max(100, "Cannot assign more than 100 cameras")
+      .optional(),
+  })
+  .refine((data) => data.cameraIds !== undefined || data.assignments !== undefined, {
+    message: "Provide cameraIds or assignments",
+  })
+  .refine((data) => !(data.cameraIds !== undefined && data.assignments !== undefined), {
+    message: "Provide either cameraIds or assignments, not both",
+  });
 
 export type DetectorQueryInput = z.infer<typeof detectorQuerySchema>;
 export type InstallDetectorInput = z.infer<typeof installDetectorSchema>;
+export type UpdateDetectorInput = z.infer<typeof updateDetectorSchema>;
 export type DetectorSettingsInput = z.infer<typeof detectorSettingsSchema>;
 export type DetectorCamerasInput = z.infer<typeof detectorCamerasSchema>;
 
@@ -315,7 +368,11 @@ export const auditLogQuerySchema = z.object({
     "role_deleted", "camera_added", "camera_updated", "camera_deleted",
     "camera_started", "camera_stopped",
     "ai_model_enabled", "ai_model_disabled", "ai_model_updated",
-    "detection_created", "detection_deleted", "alert_created", "report_generated", "settings_changed",
+    "detection_created", "detection_deleted",
+    "detector_created", "detector_updated", "detector_deleted",
+    "detector_enabled", "detector_disabled",
+    "detector_config_updated", "detector_cameras_updated",
+    "alert_created", "report_generated", "settings_changed",
   ]).optional(),
   module: z.string().optional(),
   status: z.enum(["success", "failed"]).optional(),

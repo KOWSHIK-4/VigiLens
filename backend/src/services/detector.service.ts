@@ -5,8 +5,10 @@ import {
   getDetectorCategories,
   getDetectorDefinitions,
 } from "@/detectors";
+import { deriveLifecycleStatus, lifecycleManager } from "@/engine/lifecycle";
+import type { DetectorRuntimeStatus } from "@/engine/types";
 import { ApiError } from "@/utils/errors";
-import type { AIModel, DetectorSettings, Prisma } from "@prisma/client";
+import type { AIModel, CameraType, DetectorSettings, Prisma } from "@prisma/client";
 
 export type DetectorStatus = "running" | "stopped" | "error";
 
@@ -16,7 +18,31 @@ const restartTimers = new Map<string, NodeJS.Timeout>();
 
 interface ModelWithRelations extends AIModel {
   settings: DetectorSettings | null;
-  cameraAssignments: Array<{ camera: { id: string; name: string } }>;
+  cameraAssignments: Array<{ enabled: boolean; camera: { id: string; name: string } }>;
+}
+
+export interface DetectorAssignmentInput {
+  cameraId: string;
+  enabled: boolean;
+}
+
+/** Maps a persisted camera type to the detector "supported input" vocabulary. */
+export function cameraInputFor(cameraType: CameraType): string {
+  switch (cameraType) {
+    case "usb":
+      return "webcam";
+    case "rtsp":
+    case "ip":
+    case "video_file":
+      return "video";
+    default:
+      return "video";
+  }
+}
+
+/** Whether a camera (by type) is compatible with a detector's supported inputs. */
+export function detectorSupportsCamera(supportedInput: string[], cameraType: CameraType): boolean {
+  return supportedInput.includes(cameraInputFor(cameraType));
 }
 
 function clearRestartTimer(id: string) {
@@ -42,21 +68,70 @@ function detectorInclude() {
   } satisfies Prisma.AIModelInclude;
 }
 
+interface LifecycleFields {
+  status: DetectorRuntimeStatus;
+  lastInferenceAt: string | null;
+  lastSuccessfulInferenceAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+}
+
+/**
+ * Derives the honest engine lifecycle status plus measured engine facts for
+ * an installed detector. The legacy 3-state `status` stays available for
+ * backwards compatibility; the UI and health surfaces use `runtimeStatus`
+ * so a detector is never shown as ready unless it actually ran.
+ */
+function runtimeLifecycleOf(
+  model: Pick<AIModel, "detectorKey" | "enabled" | "status">,
+  availability: string | undefined,
+): LifecycleFields {
+  const key = model.detectorKey;
+  const state = lifecycleManager.get(key);
+  lifecycleManager.setEnabled(key, model.enabled);
+  const status = deriveLifecycleStatus({
+    installed: true,
+    enabled: model.enabled,
+    availability: availability === "available" ? "available" : "unconfigured",
+    modelStatus: model.status,
+    aiReachable: state.aiReachable,
+    consecutiveFailures: state.consecutiveFailures,
+    lastSuccessfulInferenceAt: state.lastSuccessfulInferenceAt,
+  });
+  return {
+    status,
+    lastInferenceAt: state.lastInferenceAt,
+    lastSuccessfulInferenceAt: state.lastSuccessfulInferenceAt,
+    lastError: state.lastError,
+    lastErrorAt: state.lastErrorAt,
+  };
+}
+
 function serialize(model: ModelWithRelations) {
   const def = getDetectorDefinition(model.detectorKey);
   const status = detectorStatusOf(model);
+  const lifecycle = runtimeLifecycleOf(model, def?.availability);
   return {
     id: model.id,
     name: model.name,
     version: model.version,
     description: model.description,
     detectorKey: model.detectorKey,
+    type: def?.type ?? "object_detection",
+    supportedInput: def?.supportedInput ?? [],
     category: def?.category ?? "Other",
     icon: def?.icon ?? "brain",
     inferenceTimeMs: def?.inferenceTimeMs ?? 30,
     confidenceThreshold: model.confidenceThreshold,
     enabled: model.enabled,
     status,
+    // Honest lifecycle status (registered/configured/enabled/disabled/loading/
+    // ready/error/unavailable/unconfigured) — never "ready" without a real run.
+    runtimeStatus: lifecycle.status,
+    lastInferenceAt: lifecycle.lastInferenceAt,
+    lastSuccessfulInferenceAt: lifecycle.lastSuccessfulInferenceAt,
+    lastError: lifecycle.lastError,
+    lastErrorAt: lifecycle.lastErrorAt,
     gpuSupported: model.gpuSupported,
     modelPath: model.modelPath,
     lastRestartAt: model.lastRestartAt,
@@ -66,12 +141,14 @@ function serialize(model: ModelWithRelations) {
       ? {
           alertSeverity: model.settings.alertSeverity,
           detectionIntervalMs: model.settings.detectionIntervalMs,
+          alertCooldownMs: model.settings.alertCooldownMs,
           preferredProcessor: model.settings.preferredProcessor,
         }
       : null,
     cameras: model.cameraAssignments.map((a) => ({
       id: a.camera.id,
       name: a.camera.name,
+      enabled: a.enabled,
     })),
     cameraCount: model.cameraAssignments.length,
     // Raw model load status ("loaded" | "loading" | "disabled" | "error") —
@@ -109,6 +186,8 @@ export interface MarketplaceItem {
   description: string;
   category: string;
   icon: string;
+  type: string;
+  supportedInput: string[];
   defaultConfidenceThreshold: number;
   gpuSupported: boolean;
   modelPath: string;
@@ -117,9 +196,12 @@ export interface MarketplaceItem {
   id: string | null;
   enabled: boolean | null;
   status: DetectorStatus | null;
+  runtimeStatus: DetectorRuntimeStatus | null;
+  lastInferenceAt: string | null;
   confidenceThreshold: number | null;
   alertSeverity: DetectorSettings["alertSeverity"] | null;
   detectionIntervalMs: number | null;
+  alertCooldownMs: number | null;
   preferredProcessor: DetectorSettings["preferredProcessor"] | null;
   cameraCount: number;
 }
@@ -138,6 +220,7 @@ export const detectorService = {
       .map((def) => {
         const model = installedByKey.get(def.key);
         const settings = model?.settings;
+        const lifecycle = model ? runtimeLifecycleOf(model, def.availability) : null;
         return {
           key: def.key,
           name: def.name,
@@ -145,6 +228,8 @@ export const detectorService = {
           description: def.description,
           category: def.category,
           icon: def.icon,
+          type: def.type,
+          supportedInput: def.supportedInput,
           defaultConfidenceThreshold: def.defaultConfidenceThreshold,
           gpuSupported: def.gpuSupported,
           modelPath: def.modelPath,
@@ -153,9 +238,12 @@ export const detectorService = {
           id: model?.id ?? null,
           enabled: model?.enabled ?? null,
           status: model ? detectorStatusOf(model) : null,
+          runtimeStatus: lifecycle?.status ?? null,
+          lastInferenceAt: lifecycle?.lastInferenceAt ?? null,
           confidenceThreshold: model?.confidenceThreshold ?? null,
           alertSeverity: settings?.alertSeverity ?? null,
           detectionIntervalMs: settings?.detectionIntervalMs ?? null,
+          alertCooldownMs: settings?.alertCooldownMs ?? null,
           preferredProcessor: settings?.preferredProcessor ?? null,
           cameraCount: model?.cameraAssignments.length ?? 0,
         };
@@ -170,7 +258,9 @@ export const detectorService = {
     page: number;
     limit: number;
     search?: string;
-    status?: DetectorStatus;
+    status?: string;
+    type?: string;
+    enabled?: boolean;
     category?: string;
     sortBy?: string;
     sortOrder?: "asc" | "desc";
@@ -191,7 +281,17 @@ export const detectorService = {
       );
     }
     if (params.status) {
-      rows = rows.filter((r) => r.status === params.status);
+      if (params.status === "running" || params.status === "stopped" || params.status === "error") {
+        rows = rows.filter((r) => r.status === params.status);
+      } else {
+        rows = rows.filter((r) => r.runtimeStatus === params.status);
+      }
+    }
+    if (params.type) {
+      rows = rows.filter((r) => r.type === params.type);
+    }
+    if (params.enabled !== undefined) {
+      rows = rows.filter((r) => r.enabled === params.enabled);
     }
     if (params.category) {
       rows = rows.filter((r) => r.category === params.category);
@@ -284,10 +384,40 @@ export const detectorService = {
     return serialize({ ...updated, settings: model.settings, cameraAssignments: model.cameraAssignments });
   },
 
+  /** Generic detector update: name, description, version and enabled flag. */
+  async update(id: string, input: {
+    name?: string;
+    description?: string;
+    version?: string;
+    enabled?: boolean;
+  }) {
+    const model = await findModelOrThrow(id);
+
+    const data: Prisma.AIModelUpdateInput = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.description !== undefined) data.description = input.description;
+    if (input.version !== undefined) data.version = input.version;
+    if (input.enabled !== undefined) {
+      data.enabled = input.enabled;
+      if (!input.enabled && (model.status === "loaded" || model.status === "loading")) {
+        data.status = "disabled";
+        clearRestartTimer(id);
+      }
+    }
+
+    const updated = await prisma.aIModel.update({ where: { id }, data });
+    return serialize({
+      ...updated,
+      settings: model.settings,
+      cameraAssignments: model.cameraAssignments,
+    });
+  },
+
   async updateSettings(id: string, input: {
     confidenceThreshold?: number;
     alertSeverity?: DetectorSettings["alertSeverity"];
     detectionIntervalMs?: number;
+    alertCooldownMs?: number;
     preferredProcessor?: DetectorSettings["preferredProcessor"];
   }) {
     const model = await findModelOrThrow(id);
@@ -297,6 +427,7 @@ export const detectorService = {
       data: {
         alertSeverity: input.alertSeverity,
         detectionIntervalMs: input.detectionIntervalMs,
+        alertCooldownMs: input.alertCooldownMs,
         preferredProcessor: input.preferredProcessor,
       },
     });
@@ -316,20 +447,43 @@ export const detectorService = {
     });
   },
 
-  async assignCameras(id: string, cameraIds: string[]) {
+  async assignCameras(id: string, input: { cameraIds?: string[]; assignments?: DetectorAssignmentInput[] }) {
     const model = await findModelOrThrow(id);
+    const def = getDetectorDefinition(model.detectorKey);
 
-    const validCameras = await prisma.camera.count({
-      where: { id: { in: cameraIds } },
+    const rows = input.assignments
+      ? input.assignments.map((a) => ({ cameraId: a.cameraId, enabled: a.enabled }))
+      : (input.cameraIds ?? []).map((cameraId) => ({ cameraId, enabled: true }));
+
+    const uniqueIds = new Set(rows.map((r) => r.cameraId));
+    if (uniqueIds.size !== rows.length) {
+      throw new ApiError(400, "Camera ids must be unique");
+    }
+
+    const cameras = await prisma.camera.findMany({
+      where: { id: { in: rows.map((r) => r.cameraId) } },
+      select: { id: true, name: true, cameraType: true },
     });
-    if (validCameras !== cameraIds.length) {
+    if (cameras.length !== rows.length) {
       throw new ApiError(400, "One or more camera ids are invalid");
+    }
+
+    if (def) {
+      for (const camera of cameras) {
+        if (!detectorSupportsCamera(def.supportedInput, camera.cameraType)) {
+          throw new ApiError(
+            400,
+            `Camera "${camera.name}" (${camera.cameraType}) is not supported by detector "${def.name}". ` +
+              `Supported inputs: ${def.supportedInput.join(", ")}.`,
+          );
+        }
+      }
     }
 
     await prisma.$transaction([
       prisma.detectorCamera.deleteMany({ where: { aiModelId: id } }),
       prisma.detectorCamera.createMany({
-        data: cameraIds.map((cameraId) => ({ aiModelId: id, cameraId })),
+        data: rows.map((r) => ({ aiModelId: id, cameraId: r.cameraId, enabled: r.enabled })),
       }),
     ]);
 
@@ -341,7 +495,7 @@ export const detectorService = {
       throw new ApiError(404, "Detector not found");
     }
 
-    logger.info("Detector cameras assigned", { detectorId: id, cameraCount: cameraIds.length });
+    logger.info("Detector cameras assigned", { detectorId: id, cameraCount: rows.length });
     return serialize({ ...updated, settings: model.settings });
   },
 
@@ -434,3 +588,5 @@ export const detectorService = {
     return serialize({ ...model, settings: model.settings });
   },
 };
+
+export const SRC_MARKER = "src-detector-service-live";

@@ -3,8 +3,10 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createServer } from "node:net";
 
-const TEST_PORT = 4600 + (process.pid % 500);
-const BASE_URL = `http://localhost:${TEST_PORT}/api`;
+const TEST_PORT_BASE = 4600;
+const TEST_PORT_RANGE = 500;
+let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
+let BASE_URL = `http://localhost:${TEST_PORT}/api`;
 
 let server: ChildProcess | null = null;
 let passed = 0;
@@ -48,6 +50,19 @@ function isPortFree(port: number): Promise<boolean> {
   });
 }
 
+/**
+ * Picks a free loopback port for this test process. The PID-derived default
+ * can collide with ephemeral or system listeners (Windows keeps e.g. 5040
+ * bound), so walk offsets until a candidate is actually free.
+ */
+async function resolveTestPort(base: number, range: number): Promise<number> {
+  for (let offset = 0; offset < 100; offset++) {
+    const candidate = base + ((process.pid + offset) % range);
+    if (await isPortFree(candidate)) return candidate;
+  }
+  throw new Error(`no free test port in ${base}-${base + range}`);
+}
+
 function killProcessTree(child: ChildProcess) {
   if (!child.pid) return;
   if (process.platform === "win32") {
@@ -82,8 +97,11 @@ interface MarketplaceItem {
 }
 
 async function run() {
-  if (!(await isPortFree(TEST_PORT))) {
-    fail("test port reservation", `port ${TEST_PORT} already in use`);
+  try {
+    TEST_PORT = await resolveTestPort(TEST_PORT_BASE, TEST_PORT_RANGE);
+    BASE_URL = `http://localhost:${TEST_PORT}/api`;
+  } catch (err) {
+    fail("test port reservation", String(err));
     return;
   }
 

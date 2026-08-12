@@ -251,6 +251,13 @@ enum AuditLogAction {
   ai_model_updated
   detection_created
   detection_deleted
+  detector_created
+  detector_updated
+  detector_deleted
+  detector_enabled
+  detector_disabled
+  detector_config_updated
+  detector_cameras_updated
   alert_created
   report_generated
   settings_changed
@@ -302,6 +309,7 @@ model DetectorSettings {
   aiModelId           String              @unique @map("ai_model_id")
   alertSeverity       AlertSeverity       @default(info) @map("alert_severity")
   detectionIntervalMs Int                 @default(5000) @map("detection_interval_ms")
+  alertCooldownMs     Int                 @default(30000) @map("alert_cooldown_ms")
   preferredProcessor  ProcessorPreference @default(auto) @map("preferred_processor")
   createdAt           DateTime            @default(now()) @map("created_at")
   updatedAt           DateTime            @updatedAt @map("updated_at")
@@ -312,10 +320,11 @@ model DetectorSettings {
 }
 
 model DetectorCamera {
-  id          String   @id @default(uuid())
-  aiModelId   String   @map("ai_model_id")
-  cameraId    String   @map("camera_id")
-  assignedAt  DateTime @default(now()) @map("assigned_at")
+  id         String   @id @default(uuid())
+  aiModelId  String   @map("ai_model_id")
+  cameraId   String   @map("camera_id")
+  enabled    Boolean  @default(true)
+  assignedAt DateTime @default(now()) @map("assigned_at")
 
   aiModel AIModel @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
   camera  Camera  @relation(fields: [cameraId], references: [id], onDelete: Cascade)

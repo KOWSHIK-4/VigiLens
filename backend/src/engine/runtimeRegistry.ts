@@ -74,6 +74,7 @@ function toConfiguration(
     settings?: {
       alertSeverity?: DetectorConfiguration["alertSeverity"];
       detectionIntervalMs?: number;
+      alertCooldownMs?: number;
       processingMode?: ProcessingMode;
       inputResolution?: string;
     } | null;
@@ -88,7 +89,8 @@ function toConfiguration(
       db.settings?.detectionIntervalMs ?? defaults?.detectionIntervalMs ?? DEFAULT_CONFIG.detectionIntervalMs,
     maxDetectionsPerFrame:
       defaults?.maxDetectionsPerFrame ?? DEFAULT_CONFIG.maxDetectionsPerFrame,
-    alertCooldownMs: defaults?.alertCooldownMs ?? DEFAULT_CONFIG.alertCooldownMs,
+    alertCooldownMs:
+      db.settings?.alertCooldownMs ?? defaults?.alertCooldownMs ?? DEFAULT_CONFIG.alertCooldownMs,
     cameraIds: db.cameraAssignments ?? [],
     inputResolution: db.settings?.inputResolution ?? defaults?.inputResolution ?? DEFAULT_CONFIG.inputResolution,
     processingMode: db.settings?.processingMode ?? defaults?.processingMode ?? DEFAULT_CONFIG.processingMode,
@@ -151,6 +153,7 @@ class RuntimeDetectorRegistry {
             ? {
                 alertSeverity: model.settings.alertSeverity,
                 detectionIntervalMs: model.settings.detectionIntervalMs,
+                alertCooldownMs: model.settings.alertCooldownMs,
                 processingMode: model.settings.preferredProcessor,
               }
             : null,

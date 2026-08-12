@@ -7,6 +7,7 @@ import {
   detectorQuerySchema,
   detectorIdSchema,
   installDetectorSchema,
+  updateDetectorSchema,
   detectorSettingsSchema,
   detectorCamerasSchema,
 } from "@/types";
@@ -42,6 +43,13 @@ router.get(
   requirePermission("models.read"),
   validate(detectorIdSchema, "params"),
   detectorController.getById,
+);
+router.patch(
+  "/:id",
+  requirePermission("models.manage"),
+  validate(detectorIdSchema, "params"),
+  validate(updateDetectorSchema),
+  detectorController.update,
 );
 router.get(
   "/:id/health",

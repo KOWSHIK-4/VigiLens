@@ -3,6 +3,7 @@ import type {
   AuthRequest,
   DetectorQueryInput,
   InstallDetectorInput,
+  UpdateDetectorInput,
   DetectorSettingsInput,
   DetectorCamerasInput,
 } from "@/types";
@@ -12,6 +13,15 @@ import { getMergedDetectorHealth } from "@/engine/health";
 import { success, paginated } from "@/utils/apiResponse";
 import { logAudit } from "@/utils/auditLog";
 
+type DetectorAuditAction =
+  | "detector_created"
+  | "detector_updated"
+  | "detector_deleted"
+  | "detector_enabled"
+  | "detector_disabled"
+  | "detector_config_updated"
+  | "detector_cameras_updated";
+
 function getClientInfo(req: AuthRequest) {
   return {
     ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
@@ -19,7 +29,12 @@ function getClientInfo(req: AuthRequest) {
   };
 }
 
-async function audit(req: AuthRequest, action: "ai_model_enabled" | "ai_model_disabled" | "ai_model_updated", description: string, metadata: Record<string, unknown>) {
+async function audit(
+  req: AuthRequest,
+  action: DetectorAuditAction,
+  description: string,
+  metadata: Record<string, unknown>,
+) {
   const info = getClientInfo(req);
   const actor = await userService.findById(req.userId!).catch(() => null);
   await logAudit({
@@ -60,6 +75,8 @@ export const detectorController = {
         limit: q.limit,
         search: q.search,
         status: q.status,
+        type: q.type,
+        enabled: q.enabled,
         category: q.category,
         sortBy: q.sortBy,
         sortOrder: q.sortOrder,
@@ -85,7 +102,7 @@ export const detectorController = {
       const detector = await detectorService.install(body.detectorKey);
       await audit(
         req,
-        "ai_model_enabled",
+        "detector_created",
         `Detector installed: ${detector.name}`,
         { detectorId: detector.id, name: detector.name, detectorKey: detector.detectorKey },
       );
@@ -100,11 +117,27 @@ export const detectorController = {
       const result = await detectorService.uninstall(req.params.id as string);
       await audit(
         req,
-        "ai_model_disabled",
+        "detector_deleted",
         `Detector uninstalled: ${result.detectorKey}`,
         { detectorId: req.params.id, detectorKey: result.detectorKey },
       );
       success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async update(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const body = req.body as UpdateDetectorInput;
+      const detector = await detectorService.update(req.params.id as string, body);
+      await audit(
+        req,
+        "detector_updated",
+        `Detector updated: ${detector.name}`,
+        { detectorId: detector.id, name: detector.name, fields: Object.keys(body) },
+      );
+      success(res, detector);
     } catch (err) {
       next(err);
     }
@@ -115,7 +148,7 @@ export const detectorController = {
       const detector = await detectorService.setEnabled(req.params.id as string, true);
       await audit(
         req,
-        "ai_model_enabled",
+        "detector_enabled",
         `Detector enabled: ${detector.name}`,
         { detectorId: detector.id, name: detector.name },
       );
@@ -130,7 +163,7 @@ export const detectorController = {
       const detector = await detectorService.setEnabled(req.params.id as string, false);
       await audit(
         req,
-        "ai_model_disabled",
+        "detector_disabled",
         `Detector disabled: ${detector.name}`,
         { detectorId: detector.id, name: detector.name },
       );
@@ -148,8 +181,8 @@ export const detectorController = {
       );
       await audit(
         req,
-        "ai_model_updated",
-        `Detector settings updated: ${detector.name}`,
+        "detector_config_updated",
+        `Detector configuration updated: ${detector.name}`,
         {
           detectorId: detector.id,
           name: detector.name,
@@ -165,15 +198,16 @@ export const detectorController = {
   async assignCameras(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const body = req.body as DetectorCamerasInput;
-      const detector = await detectorService.assignCameras(req.params.id as string, body.cameraIds);
+      const detector = await detectorService.assignCameras(req.params.id as string, body);
+      const count = body.cameraIds?.length ?? body.assignments?.length ?? 0;
       await audit(
         req,
-        "ai_model_updated",
-        `Detector cameras assigned: ${detector.name} (${body.cameraIds.length} cameras)`,
+        "detector_cameras_updated",
+        `Detector camera assignments updated: ${detector.name} (${count} cameras)`,
         {
           detectorId: detector.id,
           name: detector.name,
-          cameraIds: body.cameraIds,
+          cameraIds: body.cameraIds ?? body.assignments?.map((a) => a.cameraId),
         },
       );
       success(res, detector);
@@ -196,7 +230,7 @@ export const detectorController = {
       const detector = await detectorService.restart(req.params.id as string);
       await audit(
         req,
-        "ai_model_updated",
+        "detector_updated",
         `Detector restart initiated: ${detector.name}`,
         { detectorId: detector.id, name: detector.name },
       );
