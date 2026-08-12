@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Settings,
   Download,
+  AlertCircle,
 } from "lucide-react";
 import { detectorService } from "@/services/detectors";
 import { engineService } from "@/services/engine";
@@ -22,6 +23,7 @@ import type { MarketplaceDetector } from "@/types";
 import DetectorIcon from "./DetectorIcon";
 import DetectorStatusBadge from "./DetectorStatusBadge";
 import DetectorAvailabilityBadge from "./DetectorAvailabilityBadge";
+import DetectorRuntimeStatusBadge from "./DetectorRuntimeStatusBadge";
 import EngineStatusBadge from "./EngineStatusBadge";
 
 interface DetectorDetailsDrawerProps {
@@ -29,6 +31,7 @@ interface DetectorDetailsDrawerProps {
   onClose: () => void;
   onConfigure: (detector: MarketplaceDetector) => void;
   onCameras: (detector: MarketplaceDetector) => void;
+  onEdit: (detector: MarketplaceDetector) => void;
   onRestart: (detector: MarketplaceDetector) => void;
 }
 
@@ -51,6 +54,7 @@ export default function DetectorDetailsDrawer({
   onClose,
   onConfigure,
   onCameras,
+  onEdit,
   onRestart,
 }: DetectorDetailsDrawerProps) {
   const isInstalled = Boolean(detector?.installed && detector?.id);
@@ -89,6 +93,7 @@ export default function DetectorDetailsDrawer({
 
   const installed = detector.installed && detector.id;
   const cameras = detail?.cameras ?? [];
+  const runtimeStatus = detail?.runtimeStatus ?? detector.runtimeStatus;
 
   return (
     <>
@@ -122,7 +127,9 @@ export default function DetectorDetailsDrawer({
         <div className="p-6 space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex flex-col items-start gap-1.5">
-              {installed && detector.status ? (
+              {installed && runtimeStatus ? (
+                <DetectorRuntimeStatusBadge status={runtimeStatus} />
+              ) : installed && detector.status ? (
                 <DetectorStatusBadge status={detector.status} />
               ) : (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -176,6 +183,11 @@ export default function DetectorDetailsDrawer({
               value={formatInterval(detector.detectionIntervalMs)}
             />
             <DetailItem
+              icon={<BellRing className="w-4 h-4" />}
+              label="Alert Cooldown"
+              value={formatInterval(detail?.settings?.alertCooldownMs ?? detector.alertCooldownMs)}
+            />
+            <DetailItem
               icon={<Cpu className="w-4 h-4" />}
               label="Processor"
               value={detector.preferredProcessor
@@ -194,6 +206,32 @@ export default function DetectorDetailsDrawer({
               label="GPU Support"
               value={detector.gpuSupported ? "Supported" : "CPU only"}
             />
+            <DetailItem
+              icon={<Cpu className="w-4 h-4" />}
+              label="Type"
+              value={detector.type?.replace("_", " ") ?? "—"}
+            />
+            <div className="col-span-2">
+              <DetailItem
+                icon={<Activity className="w-4 h-4" />}
+                label="Supported Inputs"
+                value={(detector.supportedInput ?? []).join(", ") || "—"}
+              />
+            </div>
+            <DetailItem
+              icon={<Activity className="w-4 h-4" />}
+              label="Last Inference"
+              value={detail?.lastInferenceAt
+                ? new Date(detail.lastInferenceAt).toLocaleString()
+                : "—"}
+            />
+            <div className="col-span-2">
+              <DetailItem
+                icon={<AlertCircle className="w-4 h-4" />}
+                label="Last Error"
+                value={detail?.lastError ?? detector.lastError ?? "—"}
+              />
+            </div>
             <div className="col-span-2">
               <DetailItem
                 icon={<FolderOpen className="w-4 h-4" />}
@@ -342,6 +380,15 @@ export default function DetectorDetailsDrawer({
                       >
                         <Camera className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span className="truncate">{cam.name}</span>
+                        <span
+                          className={`ml-auto flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            cam.enabled
+                              ? "bg-green-50 text-green-700"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {cam.enabled ? "Active" : "Paused"}
+                        </span>
                       </div>
                     ))}
                 {detector.cameraCount > 4 && cameras.length === 0 && (
@@ -369,6 +416,13 @@ export default function DetectorDetailsDrawer({
                 >
                   <Camera className="w-4 h-4" />
                   Cameras
+                </button>
+                <button
+                  onClick={() => onEdit(detector)}
+                  className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center"
+                >
+                  <Settings className="w-4 h-4" />
+                  Edit
                 </button>
                 <button
                   onClick={() => onRestart(detector)}

@@ -24,7 +24,8 @@ export default function DetectorCameraModal({
   onClose,
 }: DetectorCameraModalProps) {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [assigned, setAssigned] = useState<Set<string>>(new Set());
+  const [active, setActive] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
   const { data: camerasData, isLoading } = useQuery({
@@ -32,10 +33,23 @@ export default function DetectorCameraModal({
     queryFn: () => cameraService.getAll({ page: 1, limit: 100 }),
   });
 
+  const { data: detail } = useQuery({
+    queryKey: ["detectors", detector?.id],
+    queryFn: () => detectorService.getById(detector!.id!),
+    enabled: Boolean(detector?.id),
+  });
+
   useEffect(() => {
-    setSelected(new Set());
+    const nextAssigned = new Set<string>();
+    const nextActive = new Set<string>();
+    for (const cam of detail?.cameras ?? []) {
+      nextAssigned.add(cam.id);
+      if (cam.enabled) nextActive.add(cam.id);
+    }
+    setAssigned(nextAssigned);
+    setActive(nextActive);
     setSearch("");
-  }, [detector]);
+  }, [detector, detail]);
 
   const cameras = camerasData?.data ?? [];
 
@@ -49,7 +63,10 @@ export default function DetectorCameraModal({
   }, [camerasData, search]);
 
   const mutation = useMutation({
-    mutationFn: () => detectorService.assignCameras(detector!.id!, Array.from(selected)),
+    mutationFn: () => {
+      const rows = Array.from(assigned).map((cameraId) => ({ cameraId, enabled: active.has(cameraId) }));
+      return detectorService.assignCameras(detector!.id!, rows.length > 0 ? { assignments: rows } : { cameraIds: [] });
+    },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["detectors"] });
       onClose();
@@ -68,8 +85,25 @@ export default function DetectorCameraModal({
     },
   });
 
-  const toggle = (id: string) => {
-    setSelected((prev) => {
+  const toggleAssigned = (id: string) => {
+    setAssigned((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setActive((activePrev) => {
+          const a = new Set(activePrev);
+          a.delete(id);
+          return a;
+        });
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleActive = (id: string) => {
+    setActive((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -87,7 +121,8 @@ export default function DetectorCameraModal({
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Assign Cameras</h2>
             <p className="text-xs text-gray-500">
-              Select feeds monitored by {detector.name}
+              Select feeds monitored by {detector.name} — toggling Active pauses
+              detection on that feed without removing it
             </p>
           </div>
           <button
@@ -111,17 +146,23 @@ export default function DetectorCameraModal({
           </div>
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500">
-              {selected.size} of {cameras.length} selected
+              {assigned.size} of {cameras.length} assigned
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setSelected(new Set(cameras.map((c) => c.id)))}
+                onClick={() => {
+                  setAssigned(new Set(cameras.map((c) => c.id)));
+                  setActive(new Set(cameras.map((c) => c.id)));
+                }}
                 className="text-xs font-medium text-brand-600 hover:text-brand-700"
               >
                 Select all
               </button>
               <button
-                onClick={() => setSelected(new Set())}
+                onClick={() => {
+                  setAssigned(new Set());
+                  setActive(new Set());
+                }}
                 className="text-xs font-medium text-gray-500 hover:text-gray-700"
               >
                 Clear
@@ -142,32 +183,56 @@ export default function DetectorCameraModal({
             </div>
           ) : (
             <div className="space-y-1">
-              {filtered.map((camera: Camera) => (
-                <label
-                  key={camera.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                    selected.has(camera.id) ? "bg-brand-50" : "hover:bg-gray-50"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(camera.id)}
-                    onChange={() => toggle(camera.id)}
-                    className="w-4 h-4 rounded accent-brand-600"
-                  />
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <CameraIcon className="w-4 h-4 text-gray-500" />
+              {filtered.map((camera: Camera) => {
+                const isAssigned = assigned.has(camera.id);
+                const isActive = active.has(camera.id);
+                return (
+                  <div
+                    key={camera.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                      isAssigned ? "bg-brand-50" : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isAssigned}
+                      onChange={() => toggleAssigned(camera.id)}
+                      className="w-4 h-4 rounded accent-brand-600"
+                      aria-label={`Assign ${camera.name}`}
+                    />
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                      <CameraIcon className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {camera.name}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {camera.location || camera.cameraType} · {camera.status}
+                      </p>
+                    </div>
+                    {isAssigned && (
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isActive}
+                        onClick={() => toggleActive(camera.id)}
+                        className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                          isActive ? "bg-green-500" : "bg-gray-300"
+                        }`}
+                        aria-label={`${isActive ? "Pause" : "Activate"} ${camera.name}`}
+                        title={isActive ? "Active — click to pause" : "Paused — click to activate"}
+                      >
+                        <span
+                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                            isActive ? "translate-x-[18px]" : "translate-x-0.5"
+                          }`}
+                        />
+                      </button>
+                    )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {camera.name}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {camera.location || camera.cameraType} · {camera.status}
-                    </p>
-                  </div>
-                </label>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -16,6 +16,7 @@ import { showToast } from "@/utils/toast";
 import DetectorCard from "@/components/DetectorCard";
 import DetectorConfigDialog from "@/components/DetectorConfigDialog";
 import DetectorCameraModal from "@/components/DetectorCameraModal";
+import DetectorEditDialog from "@/components/DetectorEditDialog";
 import DetectorDetailsDrawer from "@/components/DetectorDetailsDrawer";
 import type { EngineDetector, MarketplaceDetector } from "@/types";
 
@@ -53,8 +54,10 @@ export default function DetectorsPage() {
   const [tab, setTab] = useState<Tab>("installed");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [configFor, setConfigFor] = useState<MarketplaceDetector | null>(null);
   const [camerasFor, setCamerasFor] = useState<MarketplaceDetector | null>(null);
+  const [editFor, setEditFor] = useState<MarketplaceDetector | null>(null);
   const [detailsFor, setDetailsFor] = useState<MarketplaceDetector | null>(null);
 
   const {
@@ -164,8 +167,12 @@ export default function DetectorsPage() {
 
   const installed = marketplace?.filter((d) => d.installed) ?? [];
   const available = marketplace?.filter((d) => !d.installed) ?? [];
-  const runningCount = installed.filter((d) => d.status === "running").length;
-  const errorCount = installed.filter((d) => d.status === "error").length;
+  const runningCount = installed.filter(
+    (d) => d.runtimeStatus === "ready" || d.status === "running",
+  ).length;
+  const errorCount = installed.filter(
+    (d) => d.runtimeStatus === "error" || d.status === "error",
+  ).length;
 
   const visible = (tab === "installed" ? installed : available).filter((d) => {
     const q = search.trim().toLowerCase();
@@ -175,7 +182,8 @@ export default function DetectorsPage() {
       d.key.toLowerCase().includes(q) ||
       d.description.toLowerCase().includes(q);
     const matchesCategory = !category || d.category === category;
-    return matchesSearch && matchesCategory;
+    const matchesType = !typeFilter || d.type === typeFilter;
+    return matchesSearch && matchesCategory && matchesType;
   });
 
   const selectedDetector = useMemo(() => {
@@ -238,6 +246,20 @@ export default function DetectorsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="input pl-10"
           />
+        </div>
+
+        <div className="relative">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="input pr-8 appearance-none cursor-pointer"
+            aria-label="Filter by detector type"
+          >
+            <option value="">All types</option>
+            <option value="object_detection">Object Detection</option>
+            <option value="classification">Classification</option>
+            <option value="segmentation">Segmentation</option>
+          </select>
         </div>
 
         <div className="flex gap-2 flex-wrap overflow-x-auto pb-1">
@@ -330,6 +352,7 @@ export default function DetectorsPage() {
               onInstall={(d) => installMutation.mutate(d)}
               onConfigure={(d) => setConfigFor(d)}
               onCameras={(d) => setCamerasFor(d)}
+              onEdit={(d) => setEditFor(d)}
               onRestart={(d) => restartMutation.mutate(d)}
               onDetails={(d) => setDetailsFor(d)}
             />
@@ -345,6 +368,10 @@ export default function DetectorsPage() {
         detector={camerasFor}
         onClose={() => setCamerasFor(null)}
       />
+      <DetectorEditDialog
+        detector={editFor}
+        onClose={() => setEditFor(null)}
+      />
       <DetectorDetailsDrawer
         detector={selectedDetector}
         onClose={() => setDetailsFor(null)}
@@ -355,6 +382,10 @@ export default function DetectorsPage() {
         onCameras={(d) => {
           setDetailsFor(null);
           setCamerasFor(d);
+        }}
+        onEdit={(d) => {
+          setDetailsFor(null);
+          setEditFor(d);
         }}
         onRestart={(d) => restartMutation.mutate(d)}
       />

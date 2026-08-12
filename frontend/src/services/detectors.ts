@@ -2,9 +2,11 @@ import api from "./api";
 import type {
   Detector,
   DetectorCameraRef,
+  DetectorCamerasInput,
   DetectorFilters,
   DetectorHealth,
   DetectorSettingsInput,
+  DetectorUpdateInput,
   MarketplaceDetector,
   PaginatedResponse,
 } from "@/types";
@@ -68,6 +70,14 @@ export const detectorService = {
     return data.data;
   },
 
+  async update(id: string, input: DetectorUpdateInput) {
+    const { data } = await api.patch<{ success: boolean; data: Detector }>(
+      `/detectors/${id}`,
+      input,
+    );
+    return data.data;
+  },
+
   async updateSettings(id: string, input: DetectorSettingsInput) {
     const { data } = await api.patch<{ success: boolean; data: Detector }>(
       `/detectors/${id}/settings`,
@@ -76,10 +86,10 @@ export const detectorService = {
     return data.data;
   },
 
-  async assignCameras(id: string, cameraIds: string[]) {
+  async assignCameras(id: string, input: DetectorCamerasInput) {
     const { data } = await api.put<{ success: boolean; data: Detector }>(
       `/detectors/${id}/cameras`,
-      { cameraIds },
+      input,
     );
     return data.data;
   },

@@ -4,6 +4,7 @@ import {
   Clock,
   Download,
   Gauge,
+  PencilLine,
   RefreshCw,
   Settings,
   Cpu,
@@ -14,6 +15,7 @@ import type { DetectorAvailability, DetectorEngineType, MarketplaceDetector } fr
 import DetectorIcon from "./DetectorIcon";
 import DetectorStatusBadge from "./DetectorStatusBadge";
 import DetectorAvailabilityBadge from "./DetectorAvailabilityBadge";
+import DetectorRuntimeStatusBadge from "./DetectorRuntimeStatusBadge";
 
 interface DetectorCardProps {
   detector: MarketplaceDetector;
@@ -24,6 +26,7 @@ interface DetectorCardProps {
   onInstall: (detector: MarketplaceDetector) => void;
   onConfigure: (detector: MarketplaceDetector) => void;
   onCameras: (detector: MarketplaceDetector) => void;
+  onEdit: (detector: MarketplaceDetector) => void;
   onRestart: (detector: MarketplaceDetector) => void;
   onDetails: (detector: MarketplaceDetector) => void;
 }
@@ -54,15 +57,22 @@ export default function DetectorCard({
   onInstall,
   onConfigure,
   onCameras,
+  onEdit,
   onRestart,
   onDetails,
 }: DetectorCardProps) {
   const isInstalled = detector.installed;
   const enabled = Boolean(detector.enabled);
+  const type = detector.type ?? engineType;
   const interval = detector.detectionIntervalMs
     ? detector.detectionIntervalMs < 1000
       ? `${detector.detectionIntervalMs}ms`
       : `${Math.round(detector.detectionIntervalMs / 1000)}s`
+    : null;
+  const cooldown = detector.alertCooldownMs
+    ? detector.alertCooldownMs < 1000
+      ? `${detector.alertCooldownMs}ms`
+      : `${Math.round(detector.alertCooldownMs / 1000)}s`
     : null;
 
   return (
@@ -90,7 +100,12 @@ export default function DetectorCard({
             </div>
           </div>
         </div>
-        {isInstalled && detector.status ? (
+        {isInstalled && detector.runtimeStatus ? (
+          <div className="flex flex-col items-end gap-1.5">
+            <DetectorRuntimeStatusBadge status={detector.runtimeStatus} />
+            {availability && <DetectorAvailabilityBadge availability={availability} />}
+          </div>
+        ) : isInstalled && detector.status ? (
           <div className="flex flex-col items-end gap-1.5">
             <DetectorStatusBadge status={detector.status} />
             {availability && <DetectorAvailabilityBadge availability={availability} />}
@@ -120,6 +135,12 @@ export default function DetectorCard({
               {interval}
             </span>
           )}
+          {cooldown && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+              <Clock className="w-3 h-3" />
+              Alert {cooldown}
+            </span>
+          )}
           {detector.preferredProcessor && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
               <Cpu className="w-3 h-3" />
@@ -130,10 +151,10 @@ export default function DetectorCard({
             <Camera className="w-3 h-3" />
             {detector.cameraCount} cam
           </span>
-          {engineType && (
+          {type && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 capitalize">
               <Cpu className="w-3 h-3" />
-              {engineType.replace("_", " ")}
+              {type.replace("_", " ")}
             </span>
           )}
         </div>
@@ -199,6 +220,15 @@ export default function DetectorCard({
               title="Assign cameras"
             >
               <Camera className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onEdit(detector)}
+              disabled={busy}
+              className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+              aria-label={`Edit ${detector.name}`}
+              title="Edit"
+            >
+              <PencilLine className="w-4 h-4" />
             </button>
             <button
               onClick={() => onRestart(detector)}

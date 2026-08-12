@@ -21,6 +21,15 @@ const intervalOptions = [
   { value: 60000, label: "1 minute" },
 ];
 
+const cooldownOptions = [
+  { value: 0, label: "Off (no cooldown)" },
+  { value: 5000, label: "5 seconds" },
+  { value: 15000, label: "15 seconds" },
+  { value: 30000, label: "30 seconds" },
+  { value: 60000, label: "1 minute" },
+  { value: 300000, label: "5 minutes" },
+];
+
 function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
@@ -36,6 +45,15 @@ function intervalToOption(ms: number | null): number {
   return 60000;
 }
 
+function cooldownToOption(ms: number | null): number {
+  if (ms == null) return 30000;
+  if (ms <= 0) return 0;
+  for (const opt of cooldownOptions) {
+    if (ms <= opt.value) return opt.value;
+  }
+  return 300000;
+}
+
 export default function DetectorConfigDialog({
   detector,
   onClose,
@@ -44,6 +62,7 @@ export default function DetectorConfigDialog({
   const [threshold, setThreshold] = useState(50);
   const [severity, setSeverity] = useState<"info" | "warning" | "critical">("info");
   const [intervalMs, setIntervalMs] = useState(5000);
+  const [cooldownMs, setCooldownMs] = useState(30000);
   const [processor, setProcessor] = useState<ProcessorPreference>("auto");
 
   useEffect(() => {
@@ -51,6 +70,7 @@ export default function DetectorConfigDialog({
       setThreshold(detector.confidenceThreshold ?? detector.defaultConfidenceThreshold);
       setSeverity(detector.alertSeverity ?? "info");
       setIntervalMs(intervalToOption(detector.detectionIntervalMs));
+      setCooldownMs(cooldownToOption(detector.alertCooldownMs));
       setProcessor(detector.preferredProcessor ?? "auto");
     }
   }, [detector]);
@@ -61,6 +81,7 @@ export default function DetectorConfigDialog({
         confidenceThreshold: threshold,
         alertSeverity: severity,
         detectionIntervalMs: intervalMs,
+        alertCooldownMs: cooldownMs,
         preferredProcessor: processor,
       }),
     onSuccess: (updated) => {
@@ -158,6 +179,27 @@ export default function DetectorConfigDialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <BellRing className="w-4 h-4 text-brand-600" />
+              Alert Cooldown
+            </label>
+            <select
+              value={cooldownMs}
+              onChange={(e) => setCooldownMs(Number(e.target.value))}
+              className="input"
+            >
+              {cooldownOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Minimum time between alerts for the same detector to prevent alert storms.
+            </p>
           </div>
 
           <div>

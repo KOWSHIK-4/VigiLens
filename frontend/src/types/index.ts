@@ -332,12 +332,14 @@ export type ProcessorPreference = "gpu" | "cpu" | "auto";
 export interface DetectorSettings {
   alertSeverity: "info" | "warning" | "critical";
   detectionIntervalMs: number;
+  alertCooldownMs: number;
   preferredProcessor: ProcessorPreference;
 }
 
 export interface DetectorCameraRef {
   id: string;
   name: string;
+  enabled: boolean;
 }
 
 export interface Detector {
@@ -352,6 +354,13 @@ export interface Detector {
   confidenceThreshold: number;
   enabled: boolean;
   status: DetectorStatus;
+  type: DetectorEngineType;
+  supportedInput: string[];
+  runtimeStatus: DetectorRuntimeStatus;
+  lastInferenceAt: string | null;
+  lastSuccessfulInferenceAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
   gpuSupported: boolean;
   modelPath: string;
   lastRestartAt: string | null;
@@ -369,6 +378,8 @@ export interface MarketplaceDetector {
   description: string;
   category: string;
   icon: string;
+  type: DetectorEngineType;
+  supportedInput: string[];
   defaultConfidenceThreshold: number;
   gpuSupported: boolean;
   modelPath: string;
@@ -377,9 +388,13 @@ export interface MarketplaceDetector {
   id: string | null;
   enabled: boolean | null;
   status: DetectorStatus | null;
+  runtimeStatus: DetectorRuntimeStatus | null;
+  lastInferenceAt: string | null;
+  lastError: string | null;
   confidenceThreshold: number | null;
   alertSeverity: DetectorSettings["alertSeverity"] | null;
   detectionIntervalMs: number | null;
+  alertCooldownMs: number | null;
   preferredProcessor: ProcessorPreference | null;
   cameraCount: number;
 }
@@ -403,7 +418,9 @@ export interface DetectorFilters {
   page?: number;
   limit?: number;
   search?: string;
-  status?: DetectorStatus;
+  status?: DetectorStatus | DetectorRuntimeStatus;
+  type?: DetectorEngineType;
+  enabled?: boolean;
   category?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
@@ -413,7 +430,25 @@ export interface DetectorSettingsInput {
   confidenceThreshold?: number;
   alertSeverity?: DetectorSettings["alertSeverity"];
   detectionIntervalMs?: number;
+  alertCooldownMs?: number;
   preferredProcessor?: ProcessorPreference;
+}
+
+export interface DetectorUpdateInput {
+  name?: string;
+  description?: string;
+  version?: string;
+  enabled?: boolean;
+}
+
+export interface DetectorCameraAssignment {
+  cameraId: string;
+  enabled: boolean;
+}
+
+export interface DetectorCamerasInput {
+  cameraIds?: string[];
+  assignments?: DetectorCameraAssignment[];
 }
 
 // --- Detector Engine v2 (frontend view of the engine API) ---
