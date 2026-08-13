@@ -14,7 +14,7 @@ export interface User {
   lockedAt: string | null;
   mustChangePassword: boolean;
   deletedAt: string | null;
-  permissions?: Permission[];
+  permissions?: Permission[] | string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -86,7 +86,7 @@ export interface Detection {
   id: string;
   timestamp: string;
   cameraId: string;
-  cameraName: string;
+  camera?: Camera | null;
   label: string;
   confidence: number;
   imageUrl: string;

@@ -15,8 +15,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { reportService } from "@/services/reports";
+import { showToast } from "@/utils/toast";
 import type { Report } from "@/types";
 import GenerateReportDialog from "@/components/GenerateReportDialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const typeConfig: Record<string, { label: string; color: string }> = {
   daily: { label: "Daily", color: "bg-blue-100 text-blue-700" },
@@ -51,6 +53,8 @@ export default function ReportsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Report | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -70,6 +74,16 @@ export default function ReportsPage() {
     mutationFn: (id: string) => reportService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reports"] });
+      setDeleteTarget(null);
+      setDeleteError("");
+      showToast({
+        severity: "info",
+        title: "Report deleted",
+        message: "The report has been removed.",
+      });
+    },
+    onError: () => {
+      setDeleteError("Failed to delete the report. Please try again.");
     },
   });
 
@@ -85,7 +99,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -255,7 +269,10 @@ export default function ReportsPage() {
                             </>
                           )}
                           <button
-                            onClick={() => deleteMutation.mutate(report.id)}
+                            onClick={() => {
+                              setDeleteError("");
+                              setDeleteTarget(report);
+                            }}
                             disabled={deleteMutation.isPending}
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete report"
@@ -319,6 +336,29 @@ export default function ReportsPage() {
       {showGenerate && (
         <GenerateReportDialog onClose={() => setShowGenerate(false)} />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Report"
+        message={
+          deleteTarget ? (
+            <>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-gray-700">
+                {deleteTarget.title}
+              </span>
+              ? This action cannot be undone.
+            </>
+          ) : null
+        }
+        busy={deleteMutation.isPending}
+        error={deleteError || undefined}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+      />
     </div>
   );
 }

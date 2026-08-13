@@ -20,8 +20,10 @@ export const detectionService = {
   },
 
   async getById(id: string): Promise<Detection> {
-    const { data } = await api.get<Detection>(`/detections/${id}`);
-    return data;
+    const { data } = await api.get<{ success: boolean; data: Detection }>(
+      `/detections/${id}`,
+    );
+    return data.data;
   },
 
   async remove(id: string): Promise<void> {
@@ -37,7 +39,19 @@ export const detectionService = {
   },
 
   async getStats() {
-    const { data } = await api.get("/detections/stats");
-    return data;
+    const { data } = await api.get<{ success: boolean; data: DashboardStats }>(
+      "/detections/stats",
+    );
+    return data.data;
   },
 };
+
+export interface DashboardStats {
+  totalDetections: number;
+  criticalAlerts: number;
+  activeCameras: number;
+  avgConfidence: number;
+  detectionsOverTime: { date: string; count: number }[];
+  alertsByType: { label: string; count: number }[];
+  recentDetections: Detection[];
+}

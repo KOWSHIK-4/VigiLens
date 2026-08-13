@@ -76,7 +76,7 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
             <DetailItem
               icon={<Camera className="w-4 h-4" />}
               label="Camera"
-              value={detection.cameraName}
+              value={detection.camera?.name ?? "—"}
             />
             <DetailItem
               icon={<Activity className="w-4 h-4" />}

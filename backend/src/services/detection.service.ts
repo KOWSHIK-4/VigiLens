@@ -22,8 +22,22 @@ interface CreateDetectionInput {
   boundingBox?: Record<string, number>;
   snapshotUrl?: string;
   processingTimeMs?: number;
+  /** Explicit status override; when omitted it is derived from confidence. */
+  status?: DetectionStatus;
   /** When true, no alert is created — the engine's alert stage handles it. */
   skipAlert?: boolean;
+}
+
+/**
+ * Derives a detection status from its confidence so the severity ladder
+ * (info -> warning -> critical) is actually populated. Higher confidence
+ * means the detector is more certain an event occurred, so it maps to a
+ * more urgent status.
+ */
+export function deriveDetectionStatus(confidence: number): DetectionStatus {
+  if (confidence >= 0.85) return "critical";
+  if (confidence >= 0.6) return "warning";
+  return "info";
 }
 
 function getAlertSeverity(status: string): AlertSeverity {
@@ -120,6 +134,7 @@ export const detectionService = {
         label: input.label,
         confidence: input.confidence,
         imageUrl: input.imageUrl || "",
+        status: input.status ?? deriveDetectionStatus(input.confidence),
         metadata: (input.metadata || {}) as Prisma.InputJsonValue,
         detectorId: input.detectorId,
         detectorKey: input.detectorKey,

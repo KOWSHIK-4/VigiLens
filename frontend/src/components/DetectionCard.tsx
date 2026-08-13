@@ -24,7 +24,7 @@ export default function DetectionCard({ detection }: { detection: Detection }) {
           >
             {detection.status}
           </span>
-          <span className="text-sm text-gray-500">{detection.cameraName}</span>
+          <span className="text-sm text-gray-500">{detection.camera?.name ?? "—"}</span>
         </div>
 
         <p className="font-medium text-gray-900 truncate">{detection.label}</p>

@@ -108,7 +108,13 @@ export const engineController = {
         if (!camera) throw new ApiError(400, `Unknown camera_id "${cameraId}"`);
       } else {
         const first = await prisma.camera.findFirst({ orderBy: { createdAt: "asc" } });
-        cameraId = first?.id ?? "engine-test";
+        if (!first) {
+          throw new ApiError(
+            400,
+            "No camera found: pass a valid camera_id or create a camera before processing frames",
+          );
+        }
+        cameraId = first.id;
       }
 
       const result = await engineService.processFrame(key, cameraId, req.file.buffer);

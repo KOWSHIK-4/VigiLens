@@ -52,11 +52,11 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 31 permissions across 10 categories and 4 roles: `super_admin`
+seeded with 33 permissions across 12 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
 Custom roles can be created and assigned. Accounts with status `disabled`
-cannot log in. Seed accounts (password `password123`):
+cannot log in. Seed accounts (password `admin123`):
 `super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
 `viewer@vigilens.io`, `disabled@vigilens.io`.
 
@@ -439,29 +439,28 @@ GET  /health
 Health endpoints are public (no authentication) and designed for load
 balancers, orchestrators, and uptime monitors.
 
-| Endpoint        | Auth | Description                                                        |
-|-----------------|------|--------------------------------------------------------------------|
-| `GET /health/live`    | No  | Liveness probe — returns `200 { status: "ok" }` once the process is up. |
-| `GET /health/ready`   | No  | Readiness probe — aggregates all dependency checks (database, storage, AI, cache, Redis). |
-| `GET /health/ai`      | No  | AI service health, version, uptime, and detection latency. |
-| `GET /health/cache`   | No  | Cache health (Redis). |
-| `GET /health/storage` | No  | Storage path, writability probe, free/total space, and usage percentage. |
-| `GET /health/redis`   | No  | Redis health detail (`not_configured` when no Redis URL is set). |
+| Endpoint          | Auth | Description                                                        |
+|-------------------|------|--------------------------------------------------------------------|
+| `GET /health`     | No  | Liveness probe — returns `200 { status: "ok", service: "vigilens-api", ... }` once the process is up. |
+| `GET /health/live`| No  | Alias of the liveness probe. |
+| `GET /health/ready` | No  | Readiness probe — runs dependency checks for PostgreSQL, Prisma, AI, storage and Redis and returns an overall status. |
 
 Readiness response example:
 
 ```json
 {
   "status": "degraded",
-  "checks": {
-    "database": { "status": "up", "version": "PostgreSQL 16.4" },
-    "storage": {
-      "status": "up",
-      "path": "/data/vigilens",
-      "freeBytes": 482344960000,
-      "totalBytes": 1024 }
-  },
-  "timestamp": "2026-08-08T10:00:00.000Z"
+  "services": [
+    { "name": "postgres", "label": "PostgreSQL", "status": "healthy", "responseTimeMs": 2, "version": "PostgreSQL 16.4", "detail": "vigilens" },
+    { "name": "prisma", "label": "Prisma ORM", "status": "healthy", "responseTimeMs": 1 },
+    { "name": "ai", "label": "AI Service", "status": "offline", "responseTimeMs": 3002, "detail": "fetch failed" },
+    { "name": "storage", "label": "Storage", "status": "healthy", "responseTimeMs": 4, "detail": "/data/vigilens (448.8 GB free of 1024.0 GB)" },
+    { "name": "redis", "label": "Redis / Cache", "status": "not_configured", "responseTimeMs": 0, "detail": "Redis cache is not configured" }
+  ],
+  "responseTimeMs": 3003,
+  "timestamp": "2026-08-08T10:00:00.000Z",
+  "version": "1.1.0",
+  "uptime": 120
 }
 ```
 
@@ -474,9 +473,9 @@ These endpoints require a JWT and the `monitoring.read` permission (granted to
 `admin` and `super_admin` roles by default).
 
 ```bash
-GET /api/system/health     # overall + per-service status, hostname, uptime, timestamp
-GET /api/system/resources  # cpu (percent), memory (used/total), disk (used/total/free)
-GET /api/system/metrics    # in-memory request and detection counters
+GET /api/system/health      # overall + per-service status, hostname, uptime, timestamp
+GET /api/system/monitoring  # resource snapshot: cpu (percent/cores), memory (used/total), disk (used/free/mount)
+GET /api/system/metrics     # in-memory request and detection counters
 ```
 
 `GET /api/system/metrics` returns a live snapshot of the current process:

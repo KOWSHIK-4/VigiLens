@@ -19,7 +19,7 @@ import { userService } from "@/services/users";
 import StatsCard from "@/components/StatsCard";
 import DetectionCard from "@/components/DetectionCard";
 import ModelStatusBadge from "@/components/ModelStatusBadge";
-import { can } from "@/utils/permissions";
+import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import type { Detection } from "@/types";
 
@@ -27,7 +27,7 @@ const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6"];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const showUserStats = can(user?.role, "users.read");
+  const showUserStats = hasPermission(user, "users.read");
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => detectionService.getStats(),

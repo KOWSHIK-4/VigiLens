@@ -4,6 +4,7 @@ build/
 .env
 .env.local
 *.log
+*.log.*
 .DS_Store
 coverage/
 .nyc_output/

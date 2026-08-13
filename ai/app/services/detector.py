@@ -79,8 +79,11 @@ class DetectorService:
 
 detector_service = DetectorService()
 
-from app.detectors import PersonDetector
-from app.detectors.yolo import YoloDetector
+# Imported at the bottom of the module on purpose: registering the
+# detector instances below requires the subclasses, which import this
+# module's singletons — importing at the top would create a cycle.
+from app.detectors import PersonDetector  # noqa: E402
+from app.detectors.yolo import YoloDetector  # noqa: E402
 
 detector_service.register(PersonDetector())
 # Vehicle detection uses the same YOLO COCO model, filtered to

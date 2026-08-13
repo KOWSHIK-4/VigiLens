@@ -9,6 +9,7 @@
 
 import { logger } from "@/config/logger";
 import { alertService } from "@/services/alert.service";
+import { logAudit } from "@/utils/auditLog";
 import type { AlertEvaluationStage } from "./pipeline";
 import type { NormalizedDetection, PipelineContext } from "./types";
 
@@ -53,11 +54,17 @@ export class CooldownAlertStage implements AlertEvaluationStage {
       const message = `${d.className} detected on camera ${d.cameraId} with ${(d.confidence * 100).toFixed(1)}% confidence.`;
 
       try {
-        await alertService.create({
+        const alert = await alertService.create({
           detectionId: d.id,
           severity,
           title,
           message,
+        });
+        await logAudit({
+          action: "alert_created",
+          module: "alerts",
+          description: `Alert created: ${title}`,
+          metadata: { alertId: alert.id, detectionId: d.id, severity },
         });
         this.registry.record(key, now);
       } catch (err) {

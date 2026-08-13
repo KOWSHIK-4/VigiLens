@@ -2,9 +2,27 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 const BASE_URL = process.env.E2E_API_URL || "http://localhost:4000/api";
 const FRONTEND_URL = process.env.E2E_FRONTEND_URL || "http://localhost:4173";
+const REQUEST_TIMEOUT_MS = 10_000;
+const GLOBAL_TIMEOUT_MS = 90_000;
 
 let passed = 0;
 let failed = 0;
+
+setTimeout(() => {
+  console.error(`\nFAIL  smoke test did not complete within ${GLOBAL_TIMEOUT_MS} ms`);
+  console.error(`${passed} passed, ${failed} failed`);
+  process.exit(1);
+}, GLOBAL_TIMEOUT_MS).unref();
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function ok(name: string) {
   passed += 1;
@@ -23,7 +41,7 @@ async function json(path: string, options: RequestInit = {}, token?: string) {
     ...(options.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetchWithTimeout(`${BASE_URL}${path}`, { ...options, headers });
   let body: unknown = null;
   try {
     body = await res.json();
@@ -37,7 +55,7 @@ async function main() {
   console.log(`E2E smoke test against ${BASE_URL} and ${FRONTEND_URL}`);
 
   try {
-    const front = await fetch(FRONTEND_URL);
+    const front = await fetchWithTimeout(FRONTEND_URL);
     if (front.ok) {
       ok(`frontend serves at ${FRONTEND_URL} (HTTP ${front.status})`);
     } else {

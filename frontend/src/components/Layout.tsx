@@ -14,12 +14,14 @@ import {
   Shield,
   Users,
   Activity,
+  Menu,
+  LogOut,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { alertService } from "@/services/alerts";
 import ToastItem from "./Toast";
 import { showToast, useToast } from "@/utils/toast";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import type { Alert } from "@/types";
@@ -52,6 +54,7 @@ export default function Layout() {
   const { toasts, dismiss } = useToast();
   const { user } = useAuth();
   const prevAlertIds = useRef<Set<string>>(new Set());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const visibleNav = navItems.filter(
     (item) => !item.permission || hasPermission(user, item.permission),
@@ -93,9 +96,53 @@ export default function Layout() {
 
   const unreadCount = unreadData ?? 0;
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
   return (
     <div className="flex h-screen bg-gray-50">
-      <aside className="w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
+      <div
+        className={`lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-gray-900 text-white flex items-center justify-between px-4`}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-2 hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="Open navigation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight leading-none">
+              VigiLens
+            </h1>
+            <p className="text-xs text-gray-400 mt-0.5">Security Monitoring</p>
+          </div>
+        </div>
+        <button
+          onClick={() => authService.logout()}
+          className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
+      </div>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 text-white flex flex-col flex-shrink-0 transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div className="p-6 border-b border-gray-700">
           <h1 className="text-2xl font-bold tracking-tight">VigiLens</h1>
           <p className="text-sm text-gray-400 mt-1">Security Monitoring</p>
@@ -178,12 +225,12 @@ export default function Layout() {
       </aside>
 
       <main className="flex-1 overflow-auto">
-        <div className="p-8">
+        <div className="p-4 md:p-8 pt-16 lg:pt-8">
           <Outlet />
         </div>
       </main>
 
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 sm:items-end">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
         ))}

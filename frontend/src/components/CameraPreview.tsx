@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Camera } from "@/types";
 import { Monitor, Video, Webcam, FileVideo, Wifi, WifiOff } from "lucide-react";
 
@@ -19,6 +19,10 @@ export function CameraPreview({ camera }: CameraPreviewProps) {
   const isLive = camera.status === "online";
   const isConnecting = camera.status === "connecting";
 
+  useEffect(() => {
+    setImgError(false);
+  }, [camera.status, camera.thumbnail]);
+
   if (camera.thumbnail && !imgError) {
     return (
       <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
@@ -36,6 +40,15 @@ export function CameraPreview({ camera }: CameraPreviewProps) {
 
   if (isLive) {
     const streamUrl = camera.sourceURL || camera.url;
+    if (imgError) {
+      return (
+        <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative flex flex-col items-center justify-center gap-2">
+          <WifiOff className="w-10 h-10 text-gray-600" />
+          <span className="text-gray-500 text-xs">Preview unavailable</span>
+          <ResolutionBadge resolution={camera.resolution} />
+        </div>
+      );
+    }
     return (
       <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative flex items-center justify-center">
         <img

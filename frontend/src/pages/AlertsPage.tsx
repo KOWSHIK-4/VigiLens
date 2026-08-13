@@ -14,7 +14,9 @@ import {
   EyeOff,
 } from "lucide-react";
 import { alertService } from "@/services/alerts";
+import { showToast } from "@/utils/toast";
 import type { Alert } from "@/types";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const severityConfig = {
   critical: {
@@ -62,6 +64,8 @@ export default function AlertsPage() {
   const [severity, setSeverity] = useState("");
   const [isRead, setIsRead] = useState("");
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -92,6 +96,16 @@ export default function AlertsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       queryClient.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
+      setDeleteTarget(null);
+      setDeleteError("");
+      showToast({
+        severity: "info",
+        title: "Alert deleted",
+        message: "The alert has been removed.",
+      });
+    },
+    onError: () => {
+      setDeleteError("Failed to delete the alert. Please try again.");
     },
   });
 
@@ -101,7 +115,7 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -240,7 +254,10 @@ export default function AlertsPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => deleteMutation.mutate(alert.id)}
+                      onClick={() => {
+                        setDeleteError("");
+                        setDeleteTarget(alert);
+                      }}
                       disabled={deleteMutation.isPending}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Delete alert"
@@ -297,6 +314,29 @@ export default function AlertsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Alert"
+        message={
+          deleteTarget ? (
+            <>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-gray-700">
+                {deleteTarget.title}
+              </span>
+              ? This action cannot be undone.
+            </>
+          ) : null
+        }
+        busy={deleteMutation.isPending}
+        error={deleteError || undefined}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+      />
     </div>
   );
 }

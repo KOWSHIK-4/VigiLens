@@ -10,6 +10,7 @@
 import { ApiError } from "@/utils/errors";
 import { logger } from "@/config/logger";
 import { detectionService } from "@/services/detection.service";
+import { logAudit } from "@/utils/auditLog";
 import { metricsService } from "@/services/metrics.service";
 import { aiServiceClient, AiServiceError, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
@@ -18,7 +19,7 @@ import { ConcretePipelineBuilder } from "./pipelineImpl";
 import { PostprocessStageImpl } from "./postprocess";
 import { IouTracker, type ObjectTracker } from "./tracking";
 import { NormalizationStageImpl } from "./normalize";
-import { CooldownAlertStage } from "./alerts";
+import { CooldownAlertStage, AlertCooldownRegistry } from "./alerts";
 import type {
   FrameInput,
   NormalizedDetection,
@@ -85,7 +86,7 @@ class AiInferenceStage implements InferenceStage {
 }
 
 /** Persistence stage: stores qualifying detections via detectionService. */
-class DetectionPersistenceStage implements PersistenceStage {
+export class DetectionPersistenceStage implements PersistenceStage {
   async persist(detections: NormalizedDetection[], ctx: PipelineContext): Promise<NormalizedDetection[]> {
     const persisted: NormalizedDetection[] = [];
     for (const d of detections) {
@@ -109,15 +110,28 @@ class DetectionPersistenceStage implements PersistenceStage {
         },
         skipAlert: true,
       });
+      await logAudit({
+        action: "detection_created",
+        module: "detections",
+        description: `Detection created: ${d.className}`,
+        metadata: {
+          detectionId: created.id,
+          label: d.className,
+          cameraId: d.cameraId,
+          detectorKey: d.detectorKey,
+          source: "detector-engine",
+        },
+      });
       persisted.push({ ...d, id: created.id });
     }
     return persisted;
   }
 }
 
-class EngineServiceImpl {
+export class EngineServiceImpl {
   private readonly client: AiServiceClient;
   private readonly metricsByKey = new Map<string, PipelineMetrics>();
+  private readonly alertCooldownRegistry = new AlertCooldownRegistry();
 
   constructor(client: AiServiceClient) {
     this.client = client;
@@ -144,7 +158,7 @@ class EngineServiceImpl {
       )
       .normalize(new NormalizationStageImpl())
       .persist(new DetectionPersistenceStage())
-      .alerts(new CooldownAlertStage())
+      .alerts(new CooldownAlertStage(this.alertCooldownRegistry))
       .build();
 
     return pipeline;

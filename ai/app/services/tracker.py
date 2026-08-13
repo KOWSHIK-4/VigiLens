@@ -5,7 +5,7 @@ backend and UI can group detections by identity. Deterministic and free of
 external tracker dependencies.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 

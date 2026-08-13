@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
-import type { EngineStoredDetection } from "@/types";
+import type { Camera, EngineStoredDetection } from "@/types";
 
 interface WebcamStats {
   fps: number;
@@ -38,6 +38,7 @@ export default function LiveCameraPage() {
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraId, setCameraId] = useState<string>("default");
+  const [cameras, setCameras] = useState<Camera[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const feedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -58,7 +59,9 @@ export default function LiveCameraPage() {
     cameraService
       .getAll({ page: 1, limit: 100 })
       .then((res) => {
-        if (!cancelled && res.data.length > 0) {
+        if (cancelled) return;
+        setCameras(res.data);
+        if (res.data.length > 0) {
           setCameraId(res.data[0].id);
         }
       })
@@ -138,14 +141,30 @@ export default function LiveCameraPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Live Camera</h2>
           <p className="text-gray-500 mt-1">
             Real-time person detection stream backed by engine data
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {cameras.length > 0 && (
+            <select
+              value={cameraId}
+              onChange={(e) => setCameraId(e.target.value)}
+              disabled={active}
+              className="input min-w-[180px] text-sm"
+              aria-label="Select camera"
+            >
+              {cameras.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.location ? ` (${c.location})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
           {!active ? (
             <button onClick={startStream} className="btn-primary">
               Start Camera

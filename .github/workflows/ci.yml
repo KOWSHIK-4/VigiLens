@@ -76,11 +76,19 @@ jobs:
         env:
           DATABASE_URL: postgresql://vigilens:vigilens_secret@localhost:5432/vigilens_test
 
+      - run: npm run prisma:seed
+        env:
+          DATABASE_URL: postgresql://vigilens:vigilens_secret@localhost:5432/vigilens_test
+
       - run: npm run lint
 
       - run: npm run typecheck
 
       - run: npm run build
+
+      - run: npm run test
+        env:
+          DATABASE_URL: postgresql://vigilens:vigilens_secret@localhost:5432/vigilens_test
 
   ai:
     name: AI Service Lint & Test

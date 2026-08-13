@@ -7,6 +7,7 @@ import DetectionDetailsDrawer from "@/components/DetectionDetailsDrawer";
 import { DeleteDetectionDialog } from "@/components/DeleteDetectionDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
+import { showToast } from "@/utils/toast";
 import type { Detection, DetectionFilters } from "@/types";
 import {
   Search,
@@ -102,6 +103,11 @@ export default function DetectionsPage() {
       URL.revokeObjectURL(url);
     } catch {
       console.error("Failed to export CSV");
+      showToast({
+        severity: "critical",
+        title: "Export failed",
+        message: "Could not generate the CSV. Please try again.",
+      });
     }
   };
 
@@ -117,7 +123,7 @@ export default function DetectionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Detection History</h2>
           <p className="text-gray-500 mt-1">
@@ -125,7 +131,7 @@ export default function DetectionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
             <input
               type="checkbox"
@@ -353,7 +359,7 @@ export default function DetectionsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm text-gray-600">
-                            {detection.cameraName}
+                            {detection.camera?.name ?? "—"}
                           </span>
                         </td>
                         <td className="px-4 py-3">
