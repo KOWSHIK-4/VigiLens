@@ -50,6 +50,7 @@ export const permissionDefinitions = [
   { key: "settings.manage", name: "Manage Settings", description: "Change system settings and configuration", category: "settings" },
   // Monitoring
   { key: "monitoring.read", name: "View System Monitoring", description: "View system health, status and performance metrics", category: "monitoring" },
+  { key: "monitoring.manage", name: "Manage Monitoring", description: "Start and stop the continuous monitoring scheduler", category: "monitoring" },
 ] as const;
 
 export type PermissionDefinitionKey = (typeof permissionDefinitions)[number]["key"];
@@ -88,6 +89,7 @@ export const rolePermissionMap: Record<string, string[]> = {
     "settings.read",
     "settings.manage",
     "monitoring.read",
+    "monitoring.manage",
   ],
   operator: [
     "dashboard.view",
@@ -319,6 +321,31 @@ async function main() {
       where: { aiModelId: detector.id },
       update: {},
       create: { aiModelId: detector.id },
+    });
+  }
+
+  const personModel = await prisma.aIModel.findUnique({ where: { detectorKey: "person" } });
+  const vehicleModel = await prisma.aIModel.findUnique({ where: { detectorKey: "vehicle" } });
+  const cameraAssignments = [
+    { modelId: personModel?.id, cameraId: "demo-camera-1", enabled: true },
+    { modelId: personModel?.id, cameraId: "demo-camera-2", enabled: true },
+    { modelId: vehicleModel?.id, cameraId: "demo-camera-2", enabled: true },
+  ];
+  for (const assignment of cameraAssignments) {
+    if (!assignment.modelId) continue;
+    await prisma.detectorCamera.upsert({
+      where: {
+        aiModelId_cameraId: {
+          aiModelId: assignment.modelId,
+          cameraId: assignment.cameraId,
+        },
+      },
+      update: { enabled: assignment.enabled },
+      create: {
+        aiModelId: assignment.modelId,
+        cameraId: assignment.cameraId,
+        enabled: assignment.enabled,
+      },
     });
   }
 
