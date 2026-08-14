@@ -12,6 +12,7 @@ import routes from "@/routes";
 import healthRoutes from "@/routes/health.routes";
 import { modelService } from "@/services/model.service";
 import { settingsService } from "@/services/settings.service";
+import { monitorScheduler } from "@/engine/monitor";
 
 const app = express();
 
@@ -64,6 +65,11 @@ async function start() {
       logger.error("Failed to seed default system settings", { error });
     }
 
+    if (config.monitor.enabled) {
+      monitorScheduler.start();
+      logger.info("Continuous monitoring auto-started (MONITOR_ENABLED=true)");
+    }
+
     const server = app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port}`);
     });
@@ -85,6 +91,7 @@ async function start() {
 
       server.close(async () => {
         try {
+          monitorScheduler.stop();
           await prisma.$disconnect();
           logger.info("HTTP server and database connections closed");
           process.exit(0);
