@@ -9,6 +9,7 @@ import {
   ScanEye,
   BarChart3,
   MonitorPlay,
+  Radar,
   ScrollText,
   Settings,
   Shield,
@@ -45,6 +46,12 @@ const adminNavItems = [
     path: "/system-monitoring",
     label: "System Health",
     icon: Activity,
+    permission: "monitoring.read",
+  },
+  {
+    path: "/monitoring",
+    label: "Monitoring",
+    icon: Radar,
     permission: "monitoring.read",
   },
 ];
