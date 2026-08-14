@@ -596,6 +596,8 @@ export type AuditLogAction =
   | "ai_model_updated"
   | "detection_created"
   | "detection_deleted"
+  | "monitor_started"
+  | "monitor_stopped"
   | "alert_created"
   | "report_generated"
   | "settings_changed";
@@ -669,6 +671,8 @@ export const AUDIT_ACTIONS: AuditLogAction[] = [
   "ai_model_updated",
   "detection_created",
   "detection_deleted",
+  "monitor_started",
+  "monitor_stopped",
   "alert_created",
   "report_generated",
   "settings_changed",
@@ -777,4 +781,50 @@ export interface SystemMetrics {
     processSeconds: number;
     sinceStartedSeconds: number;
   };
+}
+
+// --- Continuous Monitoring ---
+
+export type MonitorLoopStatus = "idle" | "running" | "ok" | "error" | "skipped";
+
+export interface MonitorCameraRef {
+  id: string;
+  name: string;
+  url: string;
+  cameraType: CameraType;
+}
+
+export interface MonitorLoop {
+  id: string;
+  detectorId: string;
+  detectorKey: string;
+  detectorName: string;
+  camera: MonitorCameraRef;
+  intervalMs: number;
+  status: MonitorLoopStatus;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  framesProcessed: number;
+  detectionsCreated: number;
+  errorCount: number;
+  consecutiveFailures: number;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  lastProcessingTimeMs: number | null;
+  videoPosSeconds: number;
+}
+
+export interface MonitorStatus {
+  running: boolean;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  loopCount: number;
+  framesProcessed: number;
+  detectionsCreated: number;
+  errorCount: number;
+  lastTickAt: string | null;
+  nextTickAt: string | null;
+  loops: MonitorLoop[];
 }
