@@ -40,6 +40,12 @@ export interface AiImageDetectionResponse {
 
 export interface AiServiceClient {
   detectImage(frame: Buffer, detectorKey?: string): Promise<AiImageDetectionResponse>;
+  captureFrame(
+    source: string,
+    cameraType: string,
+    videoPosSeconds?: number,
+    timeoutMs?: number,
+  ): Promise<Buffer>;
   isReachable(): Promise<boolean>;
 }
 
@@ -133,6 +139,52 @@ export class HttpAiServiceClient implements AiServiceClient {
           bbox: toBoundingBox(d.bbox),
         })),
       };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async captureFrame(
+    source: string,
+    cameraType: string,
+    videoPosSeconds = 0,
+    timeoutMs = 8000,
+  ): Promise<Buffer> {
+    if (!source) {
+      throw new AiServiceError("invalid_frame", "Camera source is required for frame capture");
+    }
+
+    const url = new URL("/capture", this.baseUrl);
+    url.searchParams.set("source", source);
+    url.searchParams.set("type", cameraType);
+    if (videoPosSeconds > 0) url.searchParams.set("video_pos_seconds", String(videoPosSeconds));
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new AiServiceError("timeout", `AI service timed out after ${timeoutMs}ms capturing a frame`);
+        }
+        throw new AiServiceError("unreachable", "AI service is unreachable", null);
+      }
+
+      if (!response.ok) {
+        throw new AiServiceError(
+          "http",
+          `AI service failed to capture frame from source "${source}": ${response.status}`,
+          response.status,
+        );
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length === 0) {
+        throw new AiServiceError("invalid_payload", "AI service returned an empty frame");
+      }
+      return buffer;
     } finally {
       clearTimeout(timer);
     }

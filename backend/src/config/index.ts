@@ -16,6 +16,10 @@ export const config = {
   ai: {
     serviceUrl: process.env.AI_SERVICE_URL || "http://localhost:8000",
   },
+  monitor: {
+    enabled: process.env.MONITOR_ENABLED === "true",
+    tickMs: parseInt(process.env.MONITOR_TICK_MS || "1000", 10),
+  },
   log: {
     level: process.env.LOG_LEVEL || "info",
   },
