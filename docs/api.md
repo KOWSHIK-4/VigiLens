@@ -431,8 +431,16 @@ Engine errors are explicit and never faked:
 ```bash
 POST /detect/image   # multipart/form-data with image file
 POST /detect/video   # multipart/form-data with video file
+GET  /capture        # ?source=<url|path>&type=usb|rtsp|ip|video_file[&video_pos_seconds=0]
 GET  /health
 ```
+
+`GET /capture` grabs a single JPEG frame from a camera source. `type` selects
+how the source is opened: `usb` (device path like `/dev/video0`), `rtsp` / `ip`
+(stream URL passed to OpenCV verbatim) or `video_file` (path, resolved against
+`MEDIA_ROOT` when relative). `video_pos_seconds` seeks a video file before
+reading. Returns `image/jpeg` with `Cache-Control: no-store`; `400` for an
+unsupported type and `502` when the source cannot be opened or yields no frame.
 
 ## Health Checks
 
@@ -496,6 +504,74 @@ GET /api/system/metrics     # in-memory request and detection counters
   "timestamp": "2026-08-08T10:00:00.000Z"
 }
 ```
+
+## Continuous Monitoring
+
+The monitoring scheduler runs the inference engine automatically on the
+cameras assigned to each enabled detector at its configured
+`detectionIntervalMs`. Frames are pulled from the AI service `/capture`
+endpoint, so the scheduler works for RTSP/IP/USB streams and video files
+without any browser involvement.
+
+`GET` endpoints require `monitoring.read`; `POST` endpoints require
+`monitoring.manage` (both granted to `admin` and `super_admin` by default).
+
+```bash
+GET  /api/monitor         # scheduler status + loop list
+POST /api/monitor/start   # start the scheduler (idempotent)
+POST /api/monitor/stop    # stop the scheduler (idempotent)
+```
+
+Start/stop actions are written to the audit log as `monitor_started` /
+`monitor_stopped`. The scheduler auto-starts at boot when `MONITOR_ENABLED=true`
+(`MONITOR_TICK_MS` controls how often the loop list is re-evaluated, default
+`1000`).
+
+`GET /api/monitor` response shape:
+
+```json
+{
+  "running": true,
+  "startedAt": "2026-08-14T10:00:00.000Z",
+  "stoppedAt": null,
+  "tickMs": 1000,
+  "loopCount": 2,
+  "framesProcessed": 12,
+  "detectionsCreated": 3,
+  "errorCount": 0,
+  "lastTickAt": "2026-08-14T10:00:05.000Z",
+  "nextTickAt": "2026-08-14T10:00:06.000Z",
+  "loops": [
+    {
+      "id": "359cb417-...::demo-camera-1",
+      "detectorId": "359cb417-...",
+      "detectorKey": "person",
+      "detectorName": "Person Detection",
+      "camera": { "id": "demo-camera-1", "name": "Main Entrance", "url": "rtsp://camera-stream", "cameraType": "rtsp" },
+      "intervalMs": 5000,
+      "status": "ok",
+      "nextRunAt": "2026-08-14T10:00:07.000Z",
+      "lastRunAt": "2026-08-14T10:00:05.000Z",
+      "lastSuccessAt": "2026-08-14T10:00:05.000Z",
+      "framesProcessed": 6,
+      "detectionsCreated": 2,
+      "errorCount": 0,
+      "consecutiveFailures": 0,
+      "lastError": null,
+      "lastErrorAt": null,
+      "lastProcessingTimeMs": 340,
+      "videoPosSeconds": 0
+    }
+  ]
+}
+```
+
+Only loops whose detector has a real AI model (`person`, `vehicle`), is
+`enabled` and `loaded`, and has at least one enabled camera assignment are
+listed. `status` is `idle` → `running` → `ok`/`error` per loop; failures are
+isolated per loop, and `videoPosSeconds` advances for `video_file` cameras so
+consecutive captures move forward through the recording instead of re-reading
+frame 0.
 
 ## Request Context & Errors
 

@@ -84,6 +84,14 @@ uvicorn app.main:app --reload
 ## Features
 
 - **Real-time Detection** — Process live camera streams with low latency
+- **Continuous Monitoring** — A scheduler runs the inference engine automatically
+  on the cameras assigned to each enabled detector at its configured
+  `detectionIntervalMs`. Frames are pulled through an AI-service `/capture`
+  endpoint (RTSP/IP/HTTP streams, USB webcams and video files), each detector
+  loop runs in isolation with per-loop counters, failure streaks and video-file
+  position tracking, and the whole scheduler can be started/stopped from the
+  UI or the API (`GET|POST /api/monitor`, `GET /api/monitor/start|stop`) and
+  auto-started at boot via `MONITOR_ENABLED`
 - **Multi-model Support** — Pluggable architecture for custom detection models
 - **Multi-Detector Inference Engine** — A staged pipeline (preprocess → inference →
   NMS → tracking → persistence → alerts) with measured, never-fabricated metrics,
@@ -95,7 +103,7 @@ uvicorn app.main:app --reload
   (CPU/memory/disk) and request/detection metrics view, and auto-refresh
 - **Production-Ready Ops** — Graceful shutdown on SIGTERM/SIGINT, request IDs
   for log correlation, centralized error handling, and hardened Docker images
-- **User & Role Management** — 4 built-in roles with 33 granular permissions, a
+- **User & Role Management** — 4 built-in roles with 34 granular permissions, a
   full users page (search, filters, sorting, pagination, status toggles,
   role assignment) and a role page with a permission editor; disabled accounts
   are blocked at login and on every request
