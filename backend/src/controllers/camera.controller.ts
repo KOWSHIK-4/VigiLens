@@ -204,4 +204,49 @@ export const cameraController = {
       next(err);
     }
   },
+
+  async capture(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const result = await cameraService.captureSnapshot(id);
+
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_captured",
+        module: "cameras",
+        description: `Frame captured for camera: ${result.camera?.name || id}`,
+        ...info,
+        metadata: {
+          cameraId: id,
+          responseTimeMs: result.responseTimeMs,
+          snapshotUrl: result.snapshotUrl,
+        },
+      });
+
+      success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getThumbnail(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const buffer = await cameraService.getSnapshot(id);
+
+      if (!buffer) {
+        return error(res, "No snapshot available for this camera yet", 404);
+      }
+
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "private, max-age=60");
+      return res.send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  },
 };

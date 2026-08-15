@@ -16,6 +16,8 @@ router.patch("/:id", requirePermission("cameras.manage"), validate(updateCameraS
 router.delete("/:id", requirePermission("cameras.manage"), cameraController.remove);
 router.post("/:id/start", requirePermission("cameras.control"), cameraController.start);
 router.post("/:id/stop", requirePermission("cameras.control"), cameraController.stop);
+router.post("/:id/capture", requirePermission("cameras.control"), cameraController.capture);
+router.get("/:id/thumbnail", requirePermission("cameras.read"), cameraController.getThumbnail);
 router.post("/:id/health", requirePermission("cameras.read"), cameraController.healthCheck);
 router.get("/:id/health-logs", requirePermission("cameras.read"), cameraController.getHealthLogs);
 
