@@ -166,6 +166,73 @@ async function runServiceTests() {
     }
   }
 
+  {
+    const rtspCam = await prisma.camera.create({
+      data: { name: "Health Probe RTSP", url: "rtsp://probe-stream", cameraType: "rtsp" },
+    });
+    ids.push(rtspCam.id);
+
+    const client = new FakeCaptureClient();
+    const healthy = await cameraService.healthCheck(rtspCam.id, client);
+    if (client.calls.length === 1 && client.calls[0].type === "rtsp") {
+      ok("healthCheck probes rtsp feeds through frame capture");
+    } else {
+      fail("rtsp probe", client.calls);
+    }
+    if (healthy?.status === "online" && healthy.isHealthy === true) {
+      ok("successful frame probe marks the camera online and healthy");
+    } else {
+      fail("healthy probe state", { status: healthy?.status, isHealthy: healthy?.isHealthy });
+    }
+    const log = await prisma.cameraHealthLog.findFirst({
+      where: { cameraId: rtspCam.id },
+      orderBy: { checkedAt: "desc" },
+    });
+    if (log?.status === "online" && log.message === "Frame captured successfully") {
+      ok("successful frame probe records an online health log");
+    } else {
+      fail("healthy probe log", log);
+    }
+
+    const failing = new FakeCaptureClient();
+    failing.error = new AiServiceError("timeout", "AI service timed out", null);
+    const unhealthy = await cameraService.healthCheck(rtspCam.id, failing);
+    if (unhealthy?.status === "error" && unhealthy.isHealthy === false) {
+      ok("failed frame probe marks the camera error and unhealthy");
+    } else {
+      fail("unhealthy probe state", { status: unhealthy?.status, isHealthy: unhealthy?.isHealthy });
+    }
+    const failLog = await prisma.cameraHealthLog.findFirst({
+      where: { cameraId: rtspCam.id },
+      orderBy: { checkedAt: "desc" },
+    });
+    if (failLog?.status === "error" && failLog.message === "AI service timed out") {
+      ok("failed frame probe records the AI error in the health log");
+    } else {
+      fail("unhealthy probe log", failLog);
+    }
+  }
+
+  {
+    const ipCam = await prisma.camera.create({
+      data: { name: "Health Probe IP", url: "http://127.0.0.1:9", cameraType: "ip" },
+    });
+    ids.push(ipCam.id);
+
+    const client = new FakeCaptureClient();
+    const checked = await cameraService.healthCheck(ipCam.id, client);
+    if (client.calls.length === 0) {
+      ok("healthCheck keeps the HTTP probe for ip cameras");
+    } else {
+      fail("ip probe should not call capture", client.calls);
+    }
+    if (checked?.status === "error" && checked.isHealthy === false) {
+      ok("unreachable ip camera is reported unhealthy");
+    } else {
+      fail("ip probe state", { status: checked?.status, isHealthy: checked?.isHealthy });
+    }
+  }
+
   await prisma.camera.deleteMany({ where: { id: { in: ids } } });
 }
 
