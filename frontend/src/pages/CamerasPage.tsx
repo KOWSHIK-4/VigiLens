@@ -14,6 +14,7 @@ import {
   Play,
   Square,
   Activity,
+  Camera as CameraIcon,
   Loader2,
 } from "lucide-react";
 import { showToast } from "@/utils/toast";
@@ -94,6 +95,25 @@ export default function CamerasPage() {
   const handleRefresh = (id: string) => {
     healthMutation.mutate(id);
   };
+
+  const [capturingId, setCapturingId] = useState<string | null>(null);
+
+  const captureMutation = useMutation({
+    mutationFn: (id: string) => cameraService.capture(id),
+    onMutate: (id: string) => setCapturingId(id),
+    onSuccess: (snapshot) => {
+      queryClient.invalidateQueries({ queryKey: ["cameras"] });
+      showToast({
+        severity: "info",
+        title: "Frame captured",
+        message: `${snapshot.camera.name} snapshot captured in ${snapshot.responseTimeMs} ms`,
+      });
+    },
+    onError: (err: unknown) => {
+      showToast({ severity: "critical", title: "Capture failed", message: getApiErrorMessage(err, "Failed to capture frame") });
+    },
+    onSettled: () => setCapturingId(null),
+  });
 
   const cameras = data?.data ?? [];
   const totalPages = data?.totalPages ?? 1;
@@ -182,9 +202,11 @@ export default function CamerasPage() {
                   onStart={() => startMutation.mutate(camera.id)}
                   onStop={() => stopMutation.mutate(camera.id)}
                   onHealthCheck={() => handleRefresh(camera.id)}
+                  onCapture={() => captureMutation.mutate(camera.id)}
                   isStarting={startMutation.isPending}
                   isStopping={stopMutation.isPending}
                   isChecking={healthMutation.isPending}
+                  isCapturing={capturingId === camera.id}
                 />
               );
             })}
@@ -263,9 +285,11 @@ function CameraCard({
   onStart,
   onStop,
   onHealthCheck,
+  onCapture,
   isStarting,
   isStopping,
   isChecking,
+  isCapturing,
 }: {
   camera: Camera;
   status: { dot: string; bg: string; label: string };
@@ -274,9 +298,11 @@ function CameraCard({
   onStart: () => void;
   onStop: () => void;
   onHealthCheck: () => void;
+  onCapture: () => void;
   isStarting: boolean;
   isStopping: boolean;
   isChecking: boolean;
+  isCapturing: boolean;
 }) {
   const isLive = camera.status === "online";
 
@@ -306,6 +332,11 @@ function CameraCard({
         <p className="text-gray-400">
           Last seen: {new Date(camera.lastSeen).toLocaleString()}
         </p>
+        {camera.lastSnapshotAt && (
+          <p className="text-gray-400">
+            Captured: {new Date(camera.lastSnapshotAt).toLocaleString()}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
@@ -336,6 +367,15 @@ function CameraCard({
           title="Health check"
         >
           <Activity className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} />
+        </button>
+
+        <button
+          onClick={onCapture}
+          disabled={isCapturing}
+          className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-sky-50 hover:text-sky-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+          title="Capture snapshot"
+        >
+          <CameraIcon className={`w-3.5 h-3.5 ${isCapturing ? "animate-pulse" : ""}`} />
         </button>
 
         <button
