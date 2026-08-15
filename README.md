@@ -84,6 +84,12 @@ uvicorn app.main:app --reload
 ## Features
 
 - **Real-time Detection** — Process live camera streams with low latency
+- **Camera Frame Capture & Snapshots** — Pull a frame from any camera type
+  (RTSP/IP/HTTP streams, USB webcams and video files) through the AI `/capture`
+  endpoint, persist it to storage, and view the live snapshot in the camera cards
+  with a one-click capture action; each capture records a `CameraHealthLog` entry
+  and a `camera_captured` audit action, and camera health checks verify
+  non-HTTP feeds by capturing a real frame
 - **Continuous Monitoring** — A scheduler runs the inference engine automatically
   on the cameras assigned to each enabled detector at its configured
   `detectionIntervalMs`. Frames are pulled through an AI-service `/capture`

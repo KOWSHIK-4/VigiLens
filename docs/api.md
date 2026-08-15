@@ -119,7 +119,29 @@ Detections are read-only for `viewer`/`operator` (require `detections.read`). De
 ```bash
 GET /cameras
 GET /cameras/:id
+POST /cameras/:id/capture          # capture a frame snapshot (cameras.control)
+GET /cameras/:id/thumbnail         # stream the latest snapshot as image/jpeg (cameras.read)
 ```
+
+Camera views require `cameras.read`; creating/editing/deleting cameras requires
+`cameras.manage`; start/stop and snapshot capture require `cameras.control`.
+
+`POST /cameras/:id/capture` pulls one frame from the camera's feed through the AI
+service `/capture` endpoint (RTSP/IP/HTTP streams, USB webcams and video files),
+persists it to `snapshots/<cameraId>.jpg` under the configured `storage_base_path`,
+updates the camera row (`thumbnail`, `lastSnapshotAt`, status, health), writes a
+`CameraHealthLog` entry and records a `camera_captured` audit action. A missing
+camera returns `404`; an unreachable or timed-out AI service returns `502` with a
+machine-readable code (`AI_SERVICE_UNREACHABLE`, `AI_SERVICE_TIMEOUT`,
+`AI_CAPTURE_FAILED`).
+
+`GET /cameras/:id/thumbnail` streams the latest captured frame as `image/jpeg`.
+It requires authentication, so the browser must fetch it as an authenticated blob
+(not a plain `<img>` tag) and returns `404` before the first capture.
+
+The health check (`POST /cameras/:id/health`) probes IP/HTTP cameras with a HEAD
+request and verifies RTSP/USB/video-file feeds by capturing a real frame through
+the AI service.
 
 ## AI Models
 
