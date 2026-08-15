@@ -214,7 +214,7 @@ export const cameraService = {
     });
   },
 
-  async healthCheck(id: string) {
+  async healthCheck(id: string, client: AiServiceClient = aiServiceClient) {
     const camera = await prisma.camera.findUnique({ where: { id } });
     if (!camera) return null;
 
@@ -223,23 +223,39 @@ export const cameraService = {
     let responseTime: number | null = null;
     let message: string | null = null;
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+    if (camera.cameraType === "ip" && /^https?:\/\//i.test(camera.url)) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
 
-      const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD" });
-      clearTimeout(timeout);
+        const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD" });
+        clearTimeout(timeout);
 
-      responseTime = Date.now() - start;
-      isHealthy = res.ok;
-      message = isHealthy ? "Camera responded successfully" : `HTTP ${res.status}`;
-    } catch (err) {
-      responseTime = Date.now() - start;
-      isHealthy = false;
-      message = err instanceof Error ? err.message : "Health check failed";
+        responseTime = Date.now() - start;
+        isHealthy = res.ok;
+        message = isHealthy ? "Camera responded successfully" : `HTTP ${res.status}`;
+      } catch (err) {
+        responseTime = Date.now() - start;
+        isHealthy = false;
+        message = err instanceof Error ? err.message : "Health check failed";
+      }
+    } else {
+      // rtsp / usb / video_file feeds cannot be probed over plain HTTP — the
+      // AI service captures an actual frame to verify the feed is reachable.
+      try {
+        await client.captureFrame(camera.url, camera.cameraType, 0, SNAPSHOT_TIMEOUT_MS);
+        responseTime = Date.now() - start;
+        isHealthy = true;
+        message = "Frame captured successfully";
+      } catch (err) {
+        responseTime = Date.now() - start;
+        isHealthy = false;
+        message = err instanceof Error ? err.message : "Health check failed";
+      }
     }
 
     const status: CameraStatus = isHealthy ? "online" : "error";
+    const now = new Date();
 
     await prisma.cameraHealthLog.create({
       data: {
@@ -255,8 +271,8 @@ export const cameraService = {
       data: {
         status,
         isHealthy,
-        lastHealthCheck: new Date(),
-        lastSeen: isHealthy ? new Date() : undefined,
+        lastHealthCheck: now,
+        lastSeen: isHealthy ? now : undefined,
       },
     });
   },
