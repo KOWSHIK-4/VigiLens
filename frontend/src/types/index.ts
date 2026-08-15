@@ -150,6 +150,7 @@ export interface Camera {
   thumbnail: string | null;
   isHealthy: boolean;
   lastHealthCheck: string | null;
+  lastSnapshotAt: string | null;
   lastSeen: string;
   createdAt: string;
   updatedAt: string;
@@ -591,11 +592,19 @@ export type AuditLogAction =
   | "camera_deleted"
   | "camera_started"
   | "camera_stopped"
+  | "camera_captured"
   | "ai_model_enabled"
   | "ai_model_disabled"
   | "ai_model_updated"
   | "detection_created"
   | "detection_deleted"
+  | "detector_created"
+  | "detector_updated"
+  | "detector_deleted"
+  | "detector_enabled"
+  | "detector_disabled"
+  | "detector_config_updated"
+  | "detector_cameras_updated"
   | "monitor_started"
   | "monitor_stopped"
   | "alert_created"
@@ -666,11 +675,19 @@ export const AUDIT_ACTIONS: AuditLogAction[] = [
   "camera_deleted",
   "camera_started",
   "camera_stopped",
+  "camera_captured",
   "ai_model_enabled",
   "ai_model_disabled",
   "ai_model_updated",
   "detection_created",
   "detection_deleted",
+  "detector_created",
+  "detector_updated",
+  "detector_deleted",
+  "detector_enabled",
+  "detector_disabled",
+  "detector_config_updated",
+  "detector_cameras_updated",
   "monitor_started",
   "monitor_stopped",
   "alert_created",

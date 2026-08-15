@@ -1,6 +1,13 @@
 import api from "./api";
 import type { Camera, CreateCameraInput, UpdateCameraInput, CameraFilters, CameraHealthLog, PaginatedResponse } from "@/types";
 
+export interface CapturedSnapshot {
+  camera: Camera;
+  snapshotUrl: string;
+  responseTimeMs: number;
+  capturedAt: string;
+}
+
 export const cameraService = {
   async getAll(filters?: CameraFilters): Promise<PaginatedResponse<Camera>> {
     const params = new URLSearchParams();
@@ -54,5 +61,15 @@ export const cameraService = {
   async getHealthLogs(id: string, limit = 50): Promise<CameraHealthLog[]> {
     const { data } = await api.get<{ success: boolean; data: CameraHealthLog[] }>(`/cameras/${id}/health-logs?limit=${limit}`);
     return data.data;
+  },
+
+  async capture(id: string): Promise<CapturedSnapshot> {
+    const { data } = await api.post<{ success: boolean; data: CapturedSnapshot }>(`/cameras/${id}/capture`);
+    return data.data;
+  },
+
+  async getThumbnail(id: string): Promise<Blob> {
+    const { data } = await api.get<Blob>(`/cameras/${id}/thumbnail`, { responseType: "blob" });
+    return data;
   },
 };
