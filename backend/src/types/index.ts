@@ -366,7 +366,7 @@ export const auditLogQuerySchema = z.object({
     "user_created", "user_updated", "user_deleted", "user_locked",
     "user_unlocked", "role_changed", "role_created", "role_updated",
     "role_deleted", "camera_added", "camera_updated", "camera_deleted",
-    "camera_started", "camera_stopped",
+    "camera_started", "camera_stopped", "camera_captured",
     "ai_model_enabled", "ai_model_disabled", "ai_model_updated",
     "detection_created", "detection_deleted",
     "detector_created", "detector_updated", "detector_deleted",

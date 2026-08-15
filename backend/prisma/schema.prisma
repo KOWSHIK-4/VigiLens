@@ -120,6 +120,7 @@ model Camera {
   thumbnail      String?
   isHealthy      Boolean      @default(true) @map("is_healthy")
   lastHealthCheck DateTime?   @map("last_health_check")
+  lastSnapshotAt DateTime?    @map("last_snapshot_at")
   status         CameraStatus @default(offline)
   lastSeen       DateTime     @default(now()) @map("last_seen")
   createdAt      DateTime     @default(now()) @map("created_at")
@@ -246,6 +247,7 @@ enum AuditLogAction {
   camera_deleted
   camera_started
   camera_stopped
+  camera_captured
   ai_model_enabled
   ai_model_disabled
   ai_model_updated
