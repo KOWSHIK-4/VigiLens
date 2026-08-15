@@ -1,6 +1,78 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { prisma } from "@/config/prisma";
+import { logger } from "@/config/logger";
+import { ApiError } from "@/utils/errors";
+import { settingsService } from "@/services/settings.service";
+import { aiServiceClient, AiServiceError, type AiServiceClient } from "@/engine/aiClient";
 import type { CameraStatus, CameraType, Prisma } from "@prisma/client";
 import type { CreateCameraInput, UpdateCameraInput } from "@/types";
+
+const SNAPSHOT_TIMEOUT_MS = 10_000;
+const SNAPSHOT_SUBDIR = "snapshots";
+
+function snapshotFilePath(id: string, dir: string): string {
+  return path.join(dir, `${id}.jpg`);
+}
+
+async function resolveSnapshotDir(): Promise<string> {
+  const base = await settingsService.getValue("storage", "storage_base_path");
+  const basePath = typeof base === "string" && base ? base : "/data/vigilens";
+  return path.join(basePath, SNAPSHOT_SUBDIR);
+}
+
+function mapCaptureError(err: unknown): ApiError {
+  if (err instanceof AiServiceError) {
+    switch (err.reason) {
+      case "unreachable":
+        return new ApiError(502, "AI capture service is unreachable", {
+          code: "AI_SERVICE_UNREACHABLE",
+        });
+      case "timeout":
+        return new ApiError(502, "Timed out capturing a frame from the camera", {
+          code: "AI_SERVICE_TIMEOUT",
+        });
+      case "http":
+        return new ApiError(502, `AI service failed to capture the frame: ${err.message}`, {
+          code: "AI_CAPTURE_FAILED",
+        });
+      case "invalid_frame":
+        return new ApiError(422, err.message, { code: "AI_CAPTURE_FAILED" });
+      default:
+        return new ApiError(502, `AI capture failed: ${err.message}`, {
+          code: "AI_CAPTURE_FAILED",
+        });
+    }
+  }
+  if (err instanceof ApiError) return err;
+  return new ApiError(
+    502,
+    `Failed to capture a frame: ${err instanceof Error ? err.message : String(err)}`,
+    { code: "CAMERA_CAPTURE_FAILED" },
+  );
+}
+
+async function recordCaptureFailure(id: string, message: string, responseTimeMs: number) {
+  const now = new Date();
+  await Promise.all([
+    prisma.camera.update({
+      where: { id },
+      data: {
+        status: "error",
+        isHealthy: false,
+        lastHealthCheck: now,
+      },
+    }),
+    prisma.cameraHealthLog.create({
+      data: {
+        cameraId: id,
+        status: "error",
+        message,
+        responseTime: responseTimeMs,
+      },
+    }),
+  ]);
+}
 
 interface FindAllParams {
   page: number;
@@ -195,5 +267,70 @@ export const cameraService = {
       orderBy: { checkedAt: "desc" },
       take: limit,
     });
+  },
+
+  async captureSnapshot(
+    id: string,
+    client: AiServiceClient = aiServiceClient,
+    snapshotDir?: string,
+  ) {
+    const camera = await prisma.camera.findUnique({ where: { id } });
+    if (!camera) {
+      throw new ApiError(404, "Camera not found");
+    }
+
+    const startedAt = Date.now();
+    try {
+      const frame = await client.captureFrame(
+        camera.url,
+        camera.cameraType,
+        0,
+        SNAPSHOT_TIMEOUT_MS,
+      );
+      const responseTimeMs = Date.now() - startedAt;
+
+      const dir = snapshotDir ?? (await resolveSnapshotDir());
+      await mkdir(dir, { recursive: true });
+      await writeFile(snapshotFilePath(id, dir), frame);
+
+      const capturedAt = new Date();
+      const snapshotUrl = `/api/cameras/${id}/thumbnail`;
+      const updated = await prisma.camera.update({
+        where: { id },
+        data: {
+          thumbnail: snapshotUrl,
+          status: "online",
+          isHealthy: true,
+          lastHealthCheck: capturedAt,
+          lastSnapshotAt: capturedAt,
+          lastSeen: capturedAt,
+        },
+      });
+      await prisma.cameraHealthLog.create({
+        data: {
+          cameraId: id,
+          status: "online",
+          message: "Frame captured successfully",
+          responseTime: responseTimeMs,
+        },
+      });
+
+      return { camera: updated, snapshotUrl, responseTimeMs, capturedAt };
+    } catch (err) {
+      const responseTimeMs = Date.now() - startedAt;
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("Camera snapshot capture failed", { id, message });
+      await recordCaptureFailure(id, message, responseTimeMs);
+      throw mapCaptureError(err);
+    }
+  },
+
+  async getSnapshot(id: string, snapshotDir?: string) {
+    const dir = snapshotDir ?? (await resolveSnapshotDir());
+    try {
+      return await readFile(snapshotFilePath(id, dir));
+    } catch {
+      return null;
+    }
   },
 };
