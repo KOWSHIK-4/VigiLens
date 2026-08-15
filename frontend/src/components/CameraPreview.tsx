@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Camera } from "@/types";
+import { cameraService } from "@/services/cameras";
 import { Monitor, Video, Webcam, FileVideo, Wifi, WifiOff } from "lucide-react";
 
 const typeIcons = {
@@ -14,20 +15,43 @@ interface CameraPreviewProps {
 }
 
 export function CameraPreview({ camera }: CameraPreviewProps) {
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const Icon = typeIcons[camera.cameraType] || Monitor;
   const isLive = camera.status === "online";
   const isConnecting = camera.status === "connecting";
 
   useEffect(() => {
-    setImgError(false);
-  }, [camera.status, camera.thumbnail]);
+    let objectUrl: string | null = null;
+    let cancelled = false;
 
-  if (camera.thumbnail && !imgError) {
+    setImgError(false);
+    setSnapshotUrl(null);
+
+    if (camera.thumbnail) {
+      cameraService
+        .getThumbnail(camera.id)
+        .then((blob) => {
+          if (cancelled) return;
+          objectUrl = URL.createObjectURL(blob);
+          setSnapshotUrl(objectUrl);
+        })
+        .catch(() => {
+          if (!cancelled) setImgError(true);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [camera.id, camera.thumbnail]);
+
+  if (snapshotUrl && !imgError) {
     return (
       <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative">
         <img
-          src={camera.thumbnail}
+          src={snapshotUrl}
           alt={camera.name}
           className="w-full h-full object-cover"
           onError={() => setImgError(true)}
