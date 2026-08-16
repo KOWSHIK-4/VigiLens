@@ -72,7 +72,8 @@ class AiInferenceStage implements InferenceStage {
       );
     }
 
-    const result = await this.client.detectImage(frame.image, model);
+    const threshold = Math.max(0.01, ctx.detector.confidenceThreshold / 100);
+    const result = await this.client.detectImage(frame.image, model, threshold);
     if (result.image_width && result.image_height) {
       frame.width = result.image_width;
       frame.height = result.image_height;

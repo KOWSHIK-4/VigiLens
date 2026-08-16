@@ -39,7 +39,11 @@ export interface AiImageDetectionResponse {
 }
 
 export interface AiServiceClient {
-  detectImage(frame: Buffer, detectorKey?: string): Promise<AiImageDetectionResponse>;
+  detectImage(
+    frame: Buffer,
+    detectorKey?: string,
+    confidence?: number,
+  ): Promise<AiImageDetectionResponse>;
   captureFrame(
     source: string,
     cameraType: string,
@@ -77,7 +81,11 @@ export class HttpAiServiceClient implements AiServiceClient {
     this.timeoutMs = timeoutMs;
   }
 
-  async detectImage(frame: Buffer, detectorKey?: string): Promise<AiImageDetectionResponse> {
+  async detectImage(
+    frame: Buffer,
+    detectorKey?: string,
+    confidence?: number,
+  ): Promise<AiImageDetectionResponse> {
     if (!frame || frame.length === 0) {
       throw new AiServiceError("invalid_frame", "Empty frame buffer cannot be inferred");
     }
@@ -91,6 +99,9 @@ export class HttpAiServiceClient implements AiServiceClient {
 
     const url = new URL("/detect/image", this.baseUrl);
     if (detectorKey) url.searchParams.set("detector", detectorKey);
+    if (confidence !== undefined) {
+      url.searchParams.set("confidence", String(confidence));
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

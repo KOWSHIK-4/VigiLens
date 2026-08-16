@@ -136,6 +136,24 @@ async function run() {
   expectEqual(okResult.count, 1, "valid payload returns detections");
   expectEqual(okResult.detections[0].bbox.x1, 1, "bbox coordinates are integer-rounded");
 
+  // 9. Confidence override is forwarded as a query parameter.
+  let seenUrl: string | null = null;
+  globalThis.fetch = async (input: unknown) => {
+    seenUrl = String(input);
+    return makeResponse({
+      success: true,
+      count: 0,
+      detections: [],
+      output_path: "/tmp/out.jpg",
+    });
+  };
+  await client.detectImage(frame, "person_detector", 0.42);
+  expectEqual(seenUrl?.includes("confidence=0.42"), true, "confidence override forwarded as query param");
+
+  // 10. No confidence param when override is omitted.
+  await client.detectImage(frame, "person_detector");
+  expectEqual(seenUrl?.includes("confidence="), false, "confidence query param omitted by default");
+
   globalThis.fetch = originalFetch;
 
   console.log(`\nEngine hardening unit tests: ${passed} passed, ${failed} failed`);
