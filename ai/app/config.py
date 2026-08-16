@@ -10,7 +10,11 @@ class Settings:
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
     max_image_size: int = int(os.getenv("MAX_IMAGE_SIZE", "4096"))
     backend_url: str = os.getenv("BACKEND_URL", "http://localhost:4000")
-    backend_internal_key: str = os.getenv("BACKEND_INTERNAL_KEY", "")
+    # Shared secret for machine-to-machine ingestion. Must match the backend
+    # INTERNAL_API_KEY so webcam detections pass the X-Internal-Key guard.
+    backend_internal_key: str = os.getenv(
+        "BACKEND_INTERNAL_KEY", "dev-internal-key-change-in-production"
+    )
     media_root: str = os.getenv("MEDIA_ROOT", "/data/vigilens/media")
     capture_open_timeout_ms: int = int(os.getenv("CAPTURE_OPEN_TIMEOUT_MS", "5000"))
 

@@ -164,6 +164,7 @@ class ConcretePipeline implements InferencePipeline {
       if (frameCapture) {
         const t = nowTuple();
         frame = await frameCapture.process(frame, ctx);
+        ctx.frame = frame;
         ctx.stageTimes.frameCapture = elapsedMs(t);
       }
 
@@ -171,6 +172,7 @@ class ConcretePipeline implements InferencePipeline {
       if (preprocess) {
         const t = nowTuple();
         frame = await preprocess.process(frame, ctx);
+        ctx.frame = frame;
         ctx.stageTimes.preprocess = elapsedMs(t);
       }
 

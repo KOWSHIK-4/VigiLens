@@ -111,6 +111,16 @@ export interface NormalizedDetection extends TrackedDetection {
   processingTimeMs: number;
 }
 
+/** A camera source the engine can capture a frame from when no bytes are provided. */
+export interface FrameSource {
+  /** Camera URL passed to the AI service `/capture` endpoint. */
+  url: string;
+  /** Camera transport type (usb, rtsp, ip, video_file). */
+  cameraType: string;
+  /** Seek position for video_file cameras. */
+  videoPosSeconds?: number;
+}
+
 /** A single frame entering the pipeline. */
 export interface FrameInput {
   cameraId: string;
@@ -119,6 +129,8 @@ export interface FrameInput {
   detector?: DetectorDescriptor;
   /** Raw encoded frame bytes (jpeg/png) or a pre-decoded buffer. */
   image: Buffer;
+  /** Camera source used by the frame capture stage when `image` is empty. */
+  source?: FrameSource;
   width?: number;
   height?: number;
   frameNumber: number;

@@ -21,6 +21,8 @@ import { IouTracker, type ObjectTracker } from "./tracking";
 import { NormalizationStageImpl } from "./normalize";
 import { CooldownAlertStage, AlertCooldownRegistry } from "./alerts";
 import { onDetectorRestart } from "./engineHooks";
+import { aiDetectorModel, isDetectorRunnable } from "./modelCatalog";
+import { AiServiceFrameCaptureStage } from "./capture";
 import type {
   FrameInput,
   NormalizedDetection,
@@ -36,16 +38,6 @@ import type {
   PreprocessingStage,
   TrackingStage,
 } from "./pipeline";
-
-/**
- * Maps backend detector keys to the registered AI service model. Keys
- * without an entry have no real model and are handled by the
- * `UnconfiguredExecutor` path.
- */
-const AI_DETECTOR_MODELS: Record<string, string> = {
-  person: "person_detector",
-  vehicle: "vehicle_detector",
-};
 
 /** Preprocessing: pass-through stage (real decoding happens in AI service). */
 class PassThroughPreprocessStage implements PreprocessingStage {
@@ -66,7 +58,7 @@ class AiInferenceStage implements InferenceStage {
   }
 
   async process(frame: FrameInput, ctx: PipelineContext): Promise<RawDetection[]> {
-    const model = AI_DETECTOR_MODELS[ctx.detector.key];
+    const model = aiDetectorModel(ctx.detector.key);
     if (!model) {
       throw new Error(
         `No AI model configured for detector "${ctx.detector.key}" — the engine does not fabricate detections.`,
@@ -145,7 +137,7 @@ export class EngineServiceImpl {
   }
 
   async isDetectorRunnable(key: string): Promise<boolean> {
-    return Boolean(AI_DETECTOR_MODELS[key]);
+    return isDetectorRunnable(key);
   }
 
   buildPipeline(key: string): InferencePipeline {
@@ -156,6 +148,7 @@ export class EngineServiceImpl {
     }
 
     const pipeline = new ConcretePipelineBuilder()
+      .frameCapture(new AiServiceFrameCaptureStage(this.client))
       .preprocess(new PassThroughPreprocessStage())
       .inference(new AiInferenceStage(this.client))
       .postprocess(new PostprocessStageImpl())
@@ -182,10 +175,18 @@ export class EngineServiceImpl {
    * unavailable) for manual troubleshooting runs. It never bypasses the
    * hard `unconfigured` guard: a detector with no trained model cannot
    * run inference — the engine does not fabricate detections.
+   *
+   * `options.source` supplies a camera source the frame capture stage uses
+   * to fetch a fresh frame when `image` is empty (the `process-live` path).
    */
-  async processFrame(key: string, cameraId: string, image: Buffer, options: { force?: boolean } = {}): Promise<PipelineResult> {
+  async processFrame(
+    key: string,
+    cameraId: string,
+    image: Buffer,
+    options: { force?: boolean; source?: FrameInput["source"] } = {},
+  ): Promise<PipelineResult> {
     const { force = false } = options;
-    if (!image || image.length === 0) {
+    if ((!image || image.length === 0) && !options.source) {
       throw new ApiError(400, "Empty frame buffer cannot be processed", { code: "INVALID_FRAME" });
     }
 
@@ -222,6 +223,7 @@ export class EngineServiceImpl {
       detectorId: descriptor.id,
       detector: descriptor,
       image,
+      source: options.source,
       frameNumber: 1,
     };
 
