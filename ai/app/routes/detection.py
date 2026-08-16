@@ -8,11 +8,13 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
+from app.services.capture import usb_device_index
 from app.services.detector import detector_service
+from app.services.stats import stream_stats
 from app.services.tracker import IouTracker
 
 logger = logging.getLogger(__name__)
@@ -20,29 +22,52 @@ router = APIRouter(prefix="/detect", tags=["detection"])
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
+# Backend detector keys map to the AI service's registered model names.
+BACKEND_DETECTOR_MAP = {
+    "person": "person_detector",
+    "vehicle": "vehicle_detector",
+}
 
-# --- Shared webcam stats (single-user) ---
-_webcam_stats: dict = {}
-_stats_lock = threading.Lock()
+
+def resolve_ai_detector_name(detector: str) -> str:
+    """Translate a backend detector key to an AI service detector name."""
+    return BACKEND_DETECTOR_MAP.get(detector, detector)
 
 
-def _update_stats(
-    fps: float,
-    persons: int,
-    confidence: float,
-    total_persons: int,
-    image_width: int = 0,
-    image_height: int = 0,
-) -> None:
-    with _stats_lock:
-        _webcam_stats.update(
-            fps=round(fps, 1),
-            persons=persons,
-            confidence=round(confidence, 4),
-            total_persons=total_persons,
-            image_width=image_width,
-            image_height=image_height,
-        )
+def backend_detector_key(ai_detector_name: str) -> str:
+    """Reverse map an AI detector name back to the backend detector key."""
+    for key, name in BACKEND_DETECTOR_MAP.items():
+        if name == ai_detector_name:
+            return key
+    return ai_detector_name
+
+
+def resolve_webcam_device(device: str) -> int | str:
+    """Resolve a webcam device selector to an OpenCV-friendly value.
+
+    ``0``, ``video0`` and ``/dev/video0`` become the device index 0;
+    any other value is passed to OpenCV as-is (e.g. a platform path).
+    """
+    value = (device or "0").strip()
+    if not value:
+        return 0
+    if value.isdigit():
+        return int(value)
+    index = usb_device_index(value)
+    if index is not None:
+        return index
+    return value
+
+
+def _open_webcam(device: int | str) -> cv2.VideoCapture:
+    """Open a webcam device, falling back to the default backend."""
+    if isinstance(device, int):
+        cap = cv2.VideoCapture(device, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(device)
+    else:
+        cap = cv2.VideoCapture(device)
+    return cap
 
 
 class _FPSCounter:
@@ -72,7 +97,7 @@ def _draw_overlay(
     cv2.addWeighted(overlay, 0.4, image, 0.6, 0, image)
     cv2.putText(image, f"FPS: {fps:.1f}", (10, 28),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
-    cv2.putText(image, f"Persons: {person_count}", (10, 52),
+    cv2.putText(image, f"Objects: {person_count}", (10, 52),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
     if max_conf > 0:
         cv2.putText(image, f"Conf: {max_conf:.0%}", (10, 76),
@@ -166,15 +191,33 @@ async def list_detectors():
 
 
 @router.get("/webcam/stats")
-async def webcam_stats():
-    return _webcam_stats
+async def webcam_stats(
+    camera_id: str | None = Query(None, description="Stream camera id"),
+    detector: str | None = Query(None, description="Stream detector key"),
+):
+    """Live stats for a stream, or the most recent stream when unspecified."""
+    return stream_stats.get(camera_id, detector)
+
+
+MAX_CONSECUTIVE_READ_FAILURES = 10
+RECONNECT_ATTEMPTS = 3
+RECONNECT_DELAY_SECONDS = 1.0
 
 
 @router.get("/webcam")
 async def detect_webcam(
     camera_id: str = "default",
+    detector: str = "person",
+    device: str = "0",
     snapshot_enabled: bool = True,
 ):
+    ai_detector_name = resolve_ai_detector_name(detector)
+    try:
+        detector_obj = detector_service.get(ai_detector_name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    stream_key = backend_detector_key(ai_detector_name)
+
     def save_detection(
         cam_id: str,
         detections: list,
@@ -193,12 +236,12 @@ async def detect_webcam(
                             "label": det["class_name"],
                             "confidence": det["confidence"],
                             "image_url": image_path,
-                            "detector_key": "person",
+                            "detector_key": stream_key,
                             "class_name": det["class_name"],
                             "track_id": det.get("track_id"),
                             "bounding_box": det["bbox"],
                             "metadata": {
-                                "detector_type": "person_detector",
+                                "detector_type": ai_detector_name,
                                 "source": "webcam",
                             },
                         },
@@ -207,18 +250,17 @@ async def detect_webcam(
             logger.debug("Failed to save detection to backend", exc_info=True)
 
     def generate():
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        device_value = resolve_webcam_device(device)
+        cap = _open_webcam(device_value)
         if not cap.isOpened():
-            cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            logger.error("Could not open webcam")
+            logger.error("Could not open webcam device %r", device_value)
             return
 
-        person_detector = detector_service.get("person_detector")
         tracker = IouTracker()
         fps_counter = _FPSCounter()
         frame_no = 0
-        total_persons = 0
+        consecutive_failures = 0
+        total_objects = 0
         snapshot_interval = 30
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -226,10 +268,31 @@ async def detect_webcam(
             while True:
                 ret, frame = cap.read()
                 if not ret:
-                    break
+                    consecutive_failures += 1
+                    if consecutive_failures > MAX_CONSECUTIVE_READ_FAILURES:
+                        logger.warning(
+                            "Webcam read failed repeatedly, attempting reconnect"
+                        )
+                        cap.release()
+                        reconnected = False
+                        for _ in range(RECONNECT_ATTEMPTS):
+                            time.sleep(RECONNECT_DELAY_SECONDS)
+                            cap = _open_webcam(device_value)
+                            if cap.isOpened():
+                                reconnected = True
+                                break
+                        if not reconnected:
+                            logger.error(
+                                "Webcam disconnected and could not be reopened"
+                            )
+                            break
+                        tracker.reset()
+                        consecutive_failures = 0
+                    continue
 
+                consecutive_failures = 0
                 frame_no += 1
-                detections = person_detector.detect(frame)
+                detections = detector_obj.detect(frame)
                 tracked = tracker.update(
                     [
                         {
@@ -245,16 +308,27 @@ async def detect_webcam(
                         for d in detections
                     ]
                 )
-                annotated = person_detector.draw(frame, detections)
+                annotated = detector_obj.draw(frame, detections)
 
                 fps = fps_counter.update()
-                person_count = len(tracked)
-                total_persons += person_count
+                object_count = len(tracked)
+                total_objects += object_count
                 max_conf = max((d["confidence"] for d in tracked), default=0.0)
                 image_height, image_width = frame.shape[:2]
 
-                _update_stats(fps, person_count, max_conf, total_persons, image_width, image_height)
-                _draw_overlay(annotated, fps, person_count, max_conf)
+                stats = {
+                    "fps": round(fps, 1),
+                    "objects": object_count,
+                    "confidence": round(max_conf, 4),
+                    "total_objects": total_objects,
+                    "image_width": int(image_width),
+                    "image_height": int(image_height),
+                }
+                if stream_key == "person":
+                    stats["persons"] = object_count
+                    stats["total_persons"] = total_objects
+                stream_stats.update(camera_id, stream_key, stats)
+                _draw_overlay(annotated, fps, object_count, max_conf)
 
                 if tracked and frame_no % snapshot_interval == 0:
                     image_path = ""
