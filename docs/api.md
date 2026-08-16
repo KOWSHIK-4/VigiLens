@@ -448,14 +448,40 @@ Engine errors are explicit and never faked:
 - `409` `{ "code": "DETECTOR_DISABLED" }` — detector is disabled
 - `502` `{ "code": "DETECTOR_INFERENCE_FAILED" }` — AI service error/unreachable
 
+`POST /engines/:key/process-live` runs one-shot inference on a camera source
+without an image upload. Query/body: `camera_id` (required), optional
+`video_pos_seconds`, optional `force=true`. The engine captures a fresh frame
+from the camera through the AI service `/capture` endpoint, then runs the full
+pipeline. The response mirrors `process` and adds `latencyMs` (measured
+end-to-end) and `source`:
+
+```json
+{
+  "key": "person",
+  "cameraId": "demo-camera-1",
+  "source": { "cameraType": "rtsp", "videoPosSeconds": 0 },
+  "latencyMs": 912.4,
+  "count": 2,
+  "detections": [],
+  "metrics": { "framesProcessed": 1, "totalProcessingTimeMs": 900.2, "errorCount": 0 },
+  "processedAt": "2026-08-16T21:30:00.000Z"
+}
+```
+
 ## AI Service
 
 ```bash
-POST /detect/image   # multipart/form-data with image file
-POST /detect/video   # multipart/form-data with video file
+POST /detect/image   # multipart/form-data with image file[&detector=&confidence=0..1]
+POST /detect/video   # multipart/form-data with video file[&detector=&confidence=0..1]
+GET  /detect/webcam  # ?camera_id=&detector=&device=&confidence=0..1 (MJPEG stream)
+GET  /detect/webcam/stats  # ?camera_id=&detector= (per-stream stats)
 GET  /capture        # ?source=<url|path>&type=usb|rtsp|ip|video_file[&video_pos_seconds=0]
 GET  /health
 ```
+
+`detector` selects the model (`person_detector`, `vehicle_detector`, or a
+registered detector name); `confidence` overrides the confidence floor (0..1,
+default 0.5) for the call and is validated (`422` outside the range).
 
 `GET /capture` grabs a single JPEG frame from a camera source. `type` selects
 how the source is opened: `usb` (device path like `/dev/video0`), `rtsp` / `ip`

@@ -1,0 +1,52 @@
+# Known Limitations
+
+Honest list of what VigiLens does and does not do in its current form.
+
+## Models
+
+- **No model weights are committed.** The AI service expects weights at
+  `MODEL_PATH` (default `/app/models`). Until they are mounted, detectors
+  report `ARCHITECTURE READY`; without any, the engine returns
+  `501 DETECTOR_UNCONFIGURED` instead of guessing.
+- Only object-detection-style detectors exist (`person`, `vehicle`). There
+  are no classification or segmentation models, and no face recognition.
+- Labels come from YOLO class names; a `vehicle` box labeled `car` is
+  expected behavior for the YOLO COCO-class model.
+
+## Runtime
+
+- Inference is performed by a single Python AI service; capture and
+  inference are not distributed across machines.
+- GPU vs CPU execution follows the `preferredProcessor` setting; the
+  backend does not enforce the choice — it is a scheduling hint.
+- The monitor scheduler runs in-process. Restarting the backend clears
+  per-loop runtime state (counters, video position), not the persisted
+  detections.
+- Webcam streams are per-process; multiple simultaneous streams from one
+  device are not supported (one process owns the capture device).
+
+## Security
+
+- The `X-Internal-Key` shared secret defaults to
+  `dev-internal-key-change-in-production` for development parity. It MUST be
+  overridden in any real deployment via `INTERNAL_API_KEY` (backend) and
+  `BACKEND_INTERNAL_KEY` (AI service).
+- Camera credentials (`username`/`password`) are stored in the database in
+  plain text; they are used only to reach private RTSP/HTTP sources.
+
+## Data & metrics
+
+- Detection timestamps use server time; cross-region deployments would need
+  timezone-aware reporting.
+- Per-frame metrics are aggregated in memory (`metricsByKey`); long-running
+  processes accumulate counters until a detector restart.
+- CSV export streams all matching rows into memory before sending — very
+  large ranges should use filters.
+
+## Frontend
+
+- The live camera page uses the AI service's `/detect/webcam` MJPEG stream
+  and polls stats; it is a demo-grade viewer, not a low-latency WebRTC
+  player.
+- Snapshot thumbnails are served from the backend media root; clean up old
+  files with external tooling.
