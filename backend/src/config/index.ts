@@ -13,6 +13,11 @@ export const config = {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   },
+  security: {
+    /** Shared secret for machine-to-machine ingestion (AI service -> backend). */
+    internalApiKey:
+      process.env.INTERNAL_API_KEY || "dev-internal-key-change-in-production",
+  },
   ai: {
     serviceUrl: process.env.AI_SERVICE_URL || "http://localhost:8000",
   },

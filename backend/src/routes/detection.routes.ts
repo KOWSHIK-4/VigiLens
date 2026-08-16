@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { detectionController } from "@/controllers/detection.controller";
 import { authenticate } from "@/middleware/auth";
+import { requireInternalKey } from "@/middleware/internal";
 import { requirePermission } from "@/middleware/permissions";
 
 const router = Router();
 
-router.post("/internal", detectionController.create);
+router.post("/internal", requireInternalKey, detectionController.create);
 
 router.use(authenticate);
 

@@ -181,7 +181,10 @@ async def detect_webcam(
         image_path: str,
     ) -> None:
         try:
-            with httpx.Client(timeout=3.0) as client:
+            headers = {}
+            if settings.backend_internal_key:
+                headers["X-Internal-Key"] = settings.backend_internal_key
+            with httpx.Client(timeout=3.0, headers=headers) as client:
                 for det in detections:
                     client.post(
                         f"{settings.backend_url}/api/detections/internal",

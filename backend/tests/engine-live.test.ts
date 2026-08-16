@@ -144,8 +144,10 @@ async function run() {
   }
 
   // A live detection ingested through the internal endpoint is visible.
+  const internalKey = process.env.INTERNAL_API_KEY || "dev-internal-key-change-in-production";
   const ingest = await request("/detections/internal", {
     method: "POST",
+    headers: { "X-Internal-Key": internalKey },
     body: JSON.stringify({
       camera_id: "demo-camera-1",
       label: "person",
