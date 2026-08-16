@@ -1,4 +1,5 @@
 import { prisma } from "@/config/prisma";
+import { logger } from "@/config/logger";
 import { ApiError } from "@/utils/errors";
 import type {
   AlertSeverity,
@@ -6,6 +7,11 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "@/utils/auditLog";
+import { AlertCooldownRegistry } from "@/engine/alerts";
+
+/** Shared dedup registry for machine-to-machine ingestion alerts. */
+const alertCooldownRegistry = new AlertCooldownRegistry();
+const DEFAULT_ALERT_COOLDOWN_MS = 30_000;
 
 interface CreateDetectionInput {
   cameraId: string;
@@ -26,6 +32,12 @@ interface CreateDetectionInput {
   status?: DetectionStatus;
   /** When true, no alert is created — the engine's alert stage handles it. */
   skipAlert?: boolean;
+  /**
+   * When true, at most one alert per (detector, camera, label) is created
+   * within the detector's configured alert cooldown. Used by the internal
+   * machine-to-machine ingestion so continuous streams cannot flood alerts.
+   */
+  applyAlertCooldown?: boolean;
 }
 
 /**
@@ -51,8 +63,17 @@ function getAlertSeverity(status: string): AlertSeverity {
   }
 }
 
-function getAlertTitle(label: string, status: string): string {
-  const prefix =
+/** Alert cooldown for a detector key from its settings, or the default. */
+async function resolveAlertCooldownMs(detectorKey?: string): Promise<number> {
+  if (!detectorKey) return DEFAULT_ALERT_COOLDOWN_MS;
+  const model = await prisma.aIModel.findUnique({
+    where: { detectorKey },
+    select: { settings: { select: { alertCooldownMs: true } } },
+  });
+  return model?.settings?.alertCooldownMs ?? DEFAULT_ALERT_COOLDOWN_MS;
+}
+
+function getAlertTitle(label: string, status: string): string {  const prefix =
     status === "critical"
       ? "Critical"
       : status === "warning"
@@ -152,6 +173,15 @@ export const detectionService = {
       return detection;
     }
 
+    if (input.applyAlertCooldown) {
+      const key = `${input.detectorKey ?? input.label}:${input.cameraId}:${input.label}`;
+      const cooldownMs = await resolveAlertCooldownMs(input.detectorKey);
+      if (!alertCooldownRegistry.shouldRaise(key, Date.now(), cooldownMs)) {
+        logger.debug("Alert suppressed by cooldown", { key, cooldownMs });
+        return detection;
+      }
+    }
+
     const severity = getAlertSeverity(detection.status);
     const title = getAlertTitle(detection.label, detection.status);
     const message = getAlertMessage(
@@ -175,6 +205,11 @@ export const detectionService = {
       description: `Alert created: ${title}`,
       metadata: { alertId: alert.id, detectionId: detection.id, severity },
     });
+
+    if (input.applyAlertCooldown) {
+      const key = `${input.detectorKey ?? input.label}:${input.cameraId}:${input.label}`;
+      alertCooldownRegistry.record(key, Date.now());
+    }
 
     return detection;
   },

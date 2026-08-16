@@ -65,6 +65,7 @@ export const detectionController = {
         modelVersion: model_version,
         processingTimeMs: processing_time_ms,
         skipAlert: skip_alert === true,
+        applyAlertCooldown: res.locals.internal === true,
       });
       const info = {
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",

@@ -25,5 +25,6 @@ export function requireInternalKey(
       code: "INVALID_INTERNAL_KEY",
     });
   }
+  res.locals.internal = true;
   next();
 }
