@@ -19,8 +19,13 @@ class PersonDetector(BaseDetector):
     def name(self) -> str:
         return "person_detector"
 
-    def detect(self, image: np.ndarray) -> List[Detection]:
-        results = self._model(image, verbose=False, conf=self.CONFIDENCE_THRESHOLD)[0]
+    def detect(
+        self,
+        image: np.ndarray,
+        confidence_threshold: float | None = None,
+    ) -> List[Detection]:
+        conf = confidence_threshold if confidence_threshold is not None else self.CONFIDENCE_THRESHOLD
+        results = self._model(image, verbose=False, conf=conf)[0]
         detections: list[Detection] = []
         for box in results.boxes:
             cls_id = int(box.cls[0])

@@ -14,7 +14,16 @@ class Detection:
 class BaseDetector(ABC):
 
     @abstractmethod
-    def detect(self, image: np.ndarray) -> List[Detection]:
+    def detect(
+        self,
+        image: np.ndarray,
+        confidence_threshold: float | None = None,
+    ) -> List[Detection]:
+        """Run inference over an image.
+
+        ``confidence_threshold`` overrides the detector's default
+        confidence floor for this call when provided (0..1).
+        """
         ...
 
     @abstractmethod

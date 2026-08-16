@@ -42,8 +42,13 @@ class YoloDetector(BaseDetector):
     def name(self) -> str:
         return self._detector_name
 
-    def detect(self, image: np.ndarray) -> List[Detection]:
-        results = self._model(image, verbose=False, conf=self._conf_threshold)[0]
+    def detect(
+        self,
+        image: np.ndarray,
+        confidence_threshold: float | None = None,
+    ) -> List[Detection]:
+        conf = confidence_threshold if confidence_threshold is not None else self._conf_threshold
+        results = self._model(image, verbose=False, conf=conf)[0]
         detections: list[Detection] = []
         for box in results.boxes:
             cls_id = int(box.cls[0])

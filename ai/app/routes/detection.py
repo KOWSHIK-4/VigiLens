@@ -111,13 +111,14 @@ def _draw_overlay(
 async def detect_image(
     file: UploadFile = File(...),
     detector: str | None = None,
+    confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     try:
         image_data = await file.read()
-        detections, image = detector_service.detect_image(image_data, detector)
+        detections, image = detector_service.detect_image(image_data, detector, confidence)
 
         dets_json = [
             {
@@ -156,6 +157,7 @@ async def detect_image(
 async def detect_video(
     file: UploadFile = File(...),
     detector: str | None = None,
+    confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
 ):
     if not file.content_type or not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
@@ -168,7 +170,7 @@ async def detect_video(
         with open(tmp_path, "wb") as f:
             f.write(content)
 
-        all_detections, out_path = detector_service.detect_video_frames(tmp_path, detector)
+        all_detections, out_path = detector_service.detect_video_frames(tmp_path, detector, confidence)
 
         return {
             "success": True,
@@ -210,6 +212,7 @@ async def detect_webcam(
     detector: str = "person",
     device: str = "0",
     snapshot_enabled: bool = True,
+    confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
 ):
     ai_detector_name = resolve_ai_detector_name(detector)
     try:
@@ -292,7 +295,7 @@ async def detect_webcam(
 
                 consecutive_failures = 0
                 frame_no += 1
-                detections = detector_obj.detect(frame)
+                detections = detector_obj.detect(frame, confidence_threshold=confidence)
                 tracked = tracker.update(
                     [
                         {

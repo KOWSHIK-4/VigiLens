@@ -36,16 +36,26 @@ class DetectorService:
             for name, detector in self._detectors.items()
         ]
 
-    def detect_image(self, image_data: bytes, detector_name: str | None = None) -> tuple[List[Detection], np.ndarray]:
+    def detect_image(
+        self,
+        image_data: bytes,
+        detector_name: str | None = None,
+        confidence_threshold: float | None = None,
+    ) -> tuple[List[Detection], np.ndarray]:
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("Could not decode image data")
         detector = self.get(detector_name)
-        detections = detector.detect(image)
+        detections = detector.detect(image, confidence_threshold=confidence_threshold)
         return detections, image
 
-    def detect_video_frames(self, video_path: str, detector_name: str | None = None) -> tuple[list, str]:
+    def detect_video_frames(
+        self,
+        video_path: str,
+        detector_name: str | None = None,
+        confidence_threshold: float | None = None,
+    ) -> tuple[list, str]:
         detector = self.get(detector_name)
 
         cap = cv2.VideoCapture(video_path)
@@ -65,7 +75,7 @@ class DetectorService:
             ret, frame = cap.read()
             if not ret:
                 break
-            detections = detector.detect(frame)
+            detections = detector.detect(frame, confidence_threshold=confidence_threshold)
             annotated = detector.draw(frame, detections)
             writer.write(annotated)
             all_detections.append(
