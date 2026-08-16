@@ -7,6 +7,7 @@ import {
 } from "@/detectors";
 import { deriveLifecycleStatus, lifecycleManager } from "@/engine/lifecycle";
 import type { DetectorRuntimeStatus } from "@/engine/types";
+import { notifyDetectorRestart } from "@/engine/engineHooks";
 import { ApiError } from "@/utils/errors";
 import type { AIModel, CameraType, DetectorSettings, Prisma } from "@prisma/client";
 
@@ -546,6 +547,7 @@ export const detectorService = {
       throw new ApiError(409, "Detector is already restarting");
     }
 
+    notifyDetectorRestart();
     clearRestartTimer(id);
 
     const restarting = await prisma.aIModel.update({

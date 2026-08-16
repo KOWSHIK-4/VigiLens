@@ -20,6 +20,7 @@ import { PostprocessStageImpl } from "./postprocess";
 import { IouTracker, type ObjectTracker } from "./tracking";
 import { NormalizationStageImpl } from "./normalize";
 import { CooldownAlertStage, AlertCooldownRegistry } from "./alerts";
+import { onDetectorRestart } from "./engineHooks";
 import type {
   FrameInput,
   NormalizedDetection,
@@ -133,17 +134,26 @@ export class EngineServiceImpl {
   private readonly client: AiServiceClient;
   private readonly metricsByKey = new Map<string, PipelineMetrics>();
   private readonly alertCooldownRegistry = new AlertCooldownRegistry();
+  private readonly trackersByKey = new Map<string, ObjectTracker>();
 
   constructor(client: AiServiceClient) {
     this.client = client;
+    onDetectorRestart(() => {
+      this.trackersByKey.clear();
+      this.metricsByKey.clear();
+    });
   }
 
   async isDetectorRunnable(key: string): Promise<boolean> {
     return Boolean(AI_DETECTOR_MODELS[key]);
   }
 
-  buildPipeline(): InferencePipeline {
-    const tracker: ObjectTracker = new IouTracker();
+  buildPipeline(key: string): InferencePipeline {
+    let tracker = this.trackersByKey.get(key);
+    if (!tracker) {
+      tracker = new IouTracker();
+      this.trackersByKey.set(key, tracker);
+    }
 
     const pipeline = new ConcretePipelineBuilder()
       .preprocess(new PassThroughPreprocessStage())
@@ -206,7 +216,7 @@ export class EngineServiceImpl {
       );
     }
 
-    const pipeline = this.buildPipeline();
+    const pipeline = this.buildPipeline(key);
     const input: FrameInput = {
       cameraId,
       detectorId: descriptor.id,
