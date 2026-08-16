@@ -28,5 +28,10 @@ router.post(
   upload.single("image"),
   engineController.processImage,
 );
+router.post(
+  "/:key/process-live",
+  requirePermission("models.manage"),
+  engineController.processLive,
+);
 
 export default router;

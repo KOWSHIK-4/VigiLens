@@ -140,4 +140,73 @@ export const engineController = {
       next(err);
     }
   },
+
+  /**
+   * One-shot live frame processing: the engine captures a fresh frame
+   * from the camera source through the AI service and runs inference on
+   * it. No image bytes are required — the capture stage fills the frame.
+   */
+  async processLive(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const key = req.params.key as string;
+      const cameraId =
+        (typeof req.body?.camera_id === "string" && req.body.camera_id.trim()) ||
+        (typeof req.query?.camera_id === "string" && (req.query.camera_id as string).trim()) ||
+        "";
+      if (!cameraId) {
+        throw new ApiError(400, "camera_id is required for live processing", {
+          code: "INVALID_CAMERA_ID",
+        });
+      }
+      const camera = await prisma.camera.findUnique({ where: { id: cameraId } });
+      if (!camera) {
+        throw new ApiError(400, `Unknown camera_id "${cameraId}"`, {
+          code: "INVALID_CAMERA_ID",
+        });
+      }
+
+      const rawPos = req.body?.video_pos_seconds ?? req.query?.video_pos_seconds;
+      const videoPosSeconds =
+        typeof rawPos === "string" && rawPos.trim()
+          ? Math.max(0, parseFloat(rawPos))
+          : typeof rawPos === "number" && Number.isFinite(rawPos)
+            ? Math.max(0, rawPos)
+            : 0;
+
+      const force = req.body?.force === true || req.query?.force === "true";
+      const startedAt = process.hrtime.bigint();
+      const result = await engineService.processFrame(key, cameraId, Buffer.alloc(0), {
+        force,
+        source: {
+          url: camera.url,
+          cameraType: camera.cameraType,
+          videoPosSeconds,
+        },
+      });
+      const latencyMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+
+      success(res, {
+        key,
+        cameraId,
+        source: { cameraType: camera.cameraType, videoPosSeconds },
+        latencyMs: Math.round(latencyMs * 100) / 100,
+        detections: result.detections.map((d) => ({
+          id: d.id,
+          className: d.className,
+          confidence: d.confidence,
+          bbox: d.bbox,
+          normalized: d.normalized,
+          trackId: d.trackId,
+          detectorKey: d.detectorKey,
+          processingTimeMs: d.processingTimeMs,
+          timestamp: d.timestamp.toISOString(),
+        })),
+        count: result.detections.length,
+        metrics: result.metrics,
+        processedAt: result.processedAt.toISOString(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
 };
