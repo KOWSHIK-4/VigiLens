@@ -5,11 +5,17 @@ import {
   getDetectorDefinitions,
 } from "@/detectors";
 import { ApiError } from "@/utils/errors";
+import { aiServiceClient } from "@/engine/aiClient";
+import { aiDetectorModel } from "@/engine/modelCatalog";
 import type {
   AIModel,
   ModelStatus,
   Prisma,
 } from "@prisma/client";
+
+/** 1x1 black JPEG sent to the AI service for a real inference probe. */
+const PROBE_JPEG_BASE64 =
+  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
 
 export interface CreateModelInput {
   name: string;
@@ -303,19 +309,51 @@ export const modelService = {
 
     const def = getDetectorDefinition(model.detectorKey);
     const detector = def ? def.name : model.name;
-    const inferenceTimeMs = 24 + (model.detectorKey.length % 7) * 6;
+    const threshold = model.confidenceThreshold / 100;
+    const modelName = aiDetectorModel(model.detectorKey) ?? model.detectorKey;
+    const frame = Buffer.from(PROBE_JPEG_BASE64, "base64");
 
-    logger.info("AI model tested", { modelId: id });
-
-    return {
-      success: true,
-      modelId: model.id,
-      modelName: model.name,
-      message: `${detector} responded successfully`,
-      inferenceTimeMs,
-      framesProcessed: 1,
-      detections: 0,
-      thresholdApplied: model.confidenceThreshold,
-    };
+    // Probe the real AI inference backend: a synthetic frame runs through
+    // the registered model and the latency is measured. When the backend
+    // is unreachable no fabricated metrics are reported — the response
+    // states exactly why inference could not be measured.
+    const startedAt = Date.now();
+    try {
+      const result = await aiServiceClient.detectImage(frame, modelName, threshold);
+      const inferenceTimeMs = Date.now() - startedAt;
+      logger.info("AI model test inference succeeded", {
+        modelId: id,
+        modelName,
+        inferenceTimeMs,
+        detections: result.count,
+      });
+      return {
+        success: true,
+        modelId: model.id,
+        modelName: model.name,
+        message: `${detector} responded successfully`,
+        inferenceTimeMs,
+        framesProcessed: 1,
+        detections: result.count,
+        thresholdApplied: model.confidenceThreshold,
+      };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown error";
+      logger.warn("AI model test inference could not be measured", {
+        modelId: id,
+        modelName,
+        reason,
+      });
+      return {
+        success: true,
+        modelId: model.id,
+        modelName: model.name,
+        message: `${detector} is loaded, but live inference could not be measured: ${reason}`,
+        inferenceTimeMs: null,
+        framesProcessed: 0,
+        detections: 0,
+        thresholdApplied: model.confidenceThreshold,
+      };
+    }
   },
 };
