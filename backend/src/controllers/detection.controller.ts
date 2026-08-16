@@ -4,6 +4,7 @@ import { prisma } from "@/config/prisma";
 import { detectionService } from "@/services/detection.service";
 import { metricsService } from "@/services/metrics.service";
 import { success, paginated } from "@/utils/apiResponse";
+import { ApiError } from "@/utils/errors";
 import { logAudit } from "@/utils/auditLog";
 
 export const detectionController = {
@@ -22,7 +23,35 @@ export const detectionController = {
         class_name,
         model_version,
         processing_time_ms,
+        skip_alert,
       } = req.body;
+
+      if (typeof camera_id !== "string" || !camera_id.trim()) {
+        throw new ApiError(400, "Camera id is required", { code: "INVALID_CAMERA_ID" });
+      }
+      const camera = await prisma.camera.findUnique({
+        where: { id: camera_id },
+        select: { id: true },
+      });
+      if (!camera) {
+        throw new ApiError(400, `Unknown camera "${camera_id}"`, {
+          code: "INVALID_CAMERA_ID",
+        });
+      }
+      if (typeof label !== "string" || !label.trim()) {
+        throw new ApiError(400, "Detection label is required", { code: "INVALID_LABEL" });
+      }
+      if (
+        typeof confidence !== "number" ||
+        !Number.isFinite(confidence) ||
+        confidence < 0 ||
+        confidence > 1
+      ) {
+        throw new ApiError(400, "Confidence must be a number between 0 and 1", {
+          code: "INVALID_CONFIDENCE",
+        });
+      }
+
       const detection = await detectionService.create({
         cameraId: camera_id,
         label,
@@ -35,6 +64,7 @@ export const detectionController = {
         className: class_name,
         modelVersion: model_version,
         processingTimeMs: processing_time_ms,
+        skipAlert: skip_alert === true,
       });
       const info = {
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",

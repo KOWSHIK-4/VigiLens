@@ -193,6 +193,66 @@ async function run() {
     fail("POST /detections/internal with valid key persists a detection", accepted);
   }
 
+  // Payload validation: unknown camera -> 400 INVALID_CAMERA_ID.
+  const badCamera = await request("/detections/internal", {
+    method: "POST",
+    headers: { "X-Internal-Key": validKey },
+    body: JSON.stringify({ ...VALID_BODY, camera_id: "no-such-camera" }),
+  });
+  if (badCamera.status === 400 && (badCamera.body as { code?: string }).code === "INVALID_CAMERA_ID") {
+    ok("POST /detections/internal rejects an unknown camera (400 INVALID_CAMERA_ID)");
+  } else {
+    fail("POST /detections/internal rejects an unknown camera", badCamera);
+  }
+
+  // Payload validation: missing camera -> 400 INVALID_CAMERA_ID.
+  const noCamera = await request("/detections/internal", {
+    method: "POST",
+    headers: { "X-Internal-Key": validKey },
+    body: JSON.stringify({ ...VALID_BODY, camera_id: undefined }),
+  });
+  if (noCamera.status === 400 && (noCamera.body as { code?: string }).code === "INVALID_CAMERA_ID") {
+    ok("POST /detections/internal requires a camera id (400 INVALID_CAMERA_ID)");
+  } else {
+    fail("POST /detections/internal requires a camera id", noCamera);
+  }
+
+  // Payload validation: confidence out of range -> 400 INVALID_CONFIDENCE.
+  const highConfidence = await request("/detections/internal", {
+    method: "POST",
+    headers: { "X-Internal-Key": validKey },
+    body: JSON.stringify({ ...VALID_BODY, confidence: 1.5 }),
+  });
+  if (highConfidence.status === 400 && (highConfidence.body as { code?: string }).code === "INVALID_CONFIDENCE") {
+    ok("POST /detections/internal rejects confidence above 1 (400 INVALID_CONFIDENCE)");
+  } else {
+    fail("POST /detections/internal rejects confidence above 1", highConfidence);
+  }
+
+  // Payload validation: missing label -> 400 INVALID_LABEL.
+  const noLabel = await request("/detections/internal", {
+    method: "POST",
+    headers: { "X-Internal-Key": validKey },
+    body: JSON.stringify({ ...VALID_BODY, label: undefined }),
+  });
+  if (noLabel.status === 400 && (noLabel.body as { code?: string }).code === "INVALID_LABEL") {
+    ok("POST /detections/internal requires a label (400 INVALID_LABEL)");
+  } else {
+    fail("POST /detections/internal requires a label", noLabel);
+  }
+
+  // skip_alert is plumbed through and the ingestion still succeeds.
+  const skipped = await request("/detections/internal", {
+    method: "POST",
+    headers: { "X-Internal-Key": validKey },
+    body: JSON.stringify({ ...VALID_BODY, track_id: "skip-101", skip_alert: true }),
+  });
+  if (skipped.status === 201) {
+    ok("POST /detections/internal accepts skip_alert:true (201)");
+  } else {
+    fail("POST /detections/internal accepts skip_alert:true", skipped);
+  }
+
   console.log(`\nInternal API security tests: ${passed} passed, ${failed} failed`);
   if (server) killProcessTree(server);
   process.exit(failed === 0 ? 0 : 1);
