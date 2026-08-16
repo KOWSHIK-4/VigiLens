@@ -1,13 +1,20 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
-import type { Camera, EngineStoredDetection } from "@/types";
+import type {
+  Camera,
+  EngineDetector,
+  EngineLiveProcessResponse,
+  EngineStoredDetection,
+} from "@/types";
 
 interface WebcamStats {
   fps: number;
-  persons: number;
+  objects: number;
+  total_objects: number;
+  persons?: number;
+  total_persons?: number;
   confidence: number;
-  total_persons: number;
   image_width: number;
   image_height: number;
 }
@@ -15,7 +22,6 @@ interface WebcamStats {
 const AI_STREAM_URL = "/detect/webcam";
 const AI_STATS_URL = "/detect/webcam/stats";
 const POLL_INTERVAL = 1000;
-const DETECTOR_KEY = "person";
 
 function formatTime(iso: string) {
   try {
@@ -29,12 +35,29 @@ function formatConfidence(conf: number) {
   return `${(conf * 100).toFixed(0)}%`;
 }
 
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case "online":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "connecting":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "error":
+      return "bg-red-100 text-red-800 border-red-200";
+    default:
+      return "bg-gray-100 text-gray-600 border-gray-200";
+  }
+}
+
 export default function LiveCameraPage() {
   const imgRef = useRef<HTMLImageElement>(null);
   const [active, setActive] = useState(false);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [stats, setStats] = useState<WebcamStats | null>(null);
   const [detections, setDetections] = useState<EngineStoredDetection[]>([]);
+  const [detectors, setDetectors] = useState<EngineDetector[]>([]);
+  const [detectorKey, setDetectorKey] = useState<string>("person");
+  const [liveResult, setLiveResult] = useState<EngineLiveProcessResponse | null>(null);
+  const [processingLive, setProcessingLive] = useState(false);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraId, setCameraId] = useState<string>("default");
@@ -42,31 +65,41 @@ export default function LiveCameraPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const feedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const selectedCamera = cameras.find((c) => c.id === cameraId) ?? null;
+
   const refreshFeed = useCallback(async () => {
     try {
       setLoadingFeed(true);
-      const data = await engineService.getDetections(DETECTOR_KEY, 20);
+      const data = await engineService.getDetections(detectorKey, 20);
       setDetections(data.detections);
     } catch {
       /* feed poll silently fails while stream is warming up */
     } finally {
       setLoadingFeed(false);
     }
-  }, []);
+  }, [detectorKey]);
 
   useEffect(() => {
     let cancelled = false;
-    cameraService
-      .getAll({ page: 1, limit: 100 })
-      .then((res) => {
+    Promise.all([
+      engineService.getAll(),
+      cameraService.getAll({ page: 1, limit: 100 }),
+    ])
+      .then(([engines, camRes]) => {
         if (cancelled) return;
-        setCameras(res.data);
-        if (res.data.length > 0) {
-          setCameraId(res.data[0].id);
+        const runnable = engines.filter((e) => e.availability === "available");
+        const available = runnable.length > 0 ? runnable : engines;
+        setDetectors(available);
+        if (available.length > 0) {
+          setDetectorKey(available[0].key);
+        }
+        setCameras(camRes.data);
+        if (camRes.data.length > 0) {
+          setCameraId(camRes.data[0].id);
         }
       })
       .catch(() => {
-        /* fall back to default camera id */
+        /* fall back to defaults */
       });
     return () => {
       cancelled = true;
@@ -75,23 +108,28 @@ export default function LiveCameraPage() {
 
   const startStream = useCallback(() => {
     setError(null);
-    setStreamUrl(`${AI_STREAM_URL}?camera_id=${encodeURIComponent(cameraId)}&t=${Date.now()}`);
+    setStreamUrl(
+      `${AI_STREAM_URL}?camera_id=${encodeURIComponent(cameraId)}&detector=${encodeURIComponent(detectorKey)}&t=${Date.now()}`,
+    );
     setActive(true);
     void refreshFeed();
-  }, [cameraId, refreshFeed]);
+  }, [cameraId, detectorKey, refreshFeed]);
 
   const stopStream = useCallback(() => {
     setStreamUrl(null);
     setActive(false);
     setStats(null);
     setDetections([]);
+    setLiveResult(null);
   }, []);
 
   useEffect(() => {
     if (active) {
       pollRef.current = setInterval(async () => {
         try {
-          const res = await fetch(AI_STATS_URL);
+          const res = await fetch(
+            `${AI_STATS_URL}?camera_id=${encodeURIComponent(cameraId)}&detector=${encodeURIComponent(detectorKey)}`,
+          );
           if (res.ok) {
             const data: WebcamStats = await res.json();
             setStats(data);
@@ -124,12 +162,28 @@ export default function LiveCameraPage() {
         feedRef.current = null;
       }
     };
-  }, [active, refreshFeed]);
+  }, [active, cameraId, detectorKey, refreshFeed]);
 
   const handleImgError = useCallback(() => {
     setError("Failed to connect to camera stream. Make sure the AI service is running.");
     stopStream();
   }, [stopStream]);
+
+  const handleProcessLive = useCallback(async () => {
+    if (!selectedCamera || processingLive) return;
+    setProcessingLive(true);
+    setError(null);
+    try {
+      const result = await engineService.processLive(detectorKey, selectedCamera.id);
+      setLiveResult(result);
+      void refreshFeed();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Live processing failed";
+      setError(`Live inference failed: ${message}`);
+    } finally {
+      setProcessingLive(false);
+    }
+  }, [selectedCamera, detectorKey, processingLive, refreshFeed]);
 
   const overlayBoxes = detections
     .filter((d) => d.boundingBox)
@@ -139,16 +193,34 @@ export default function LiveCameraPage() {
       return { detection: d, frameW, frameH };
     });
 
+  const objectCount = stats?.objects ?? stats?.persons ?? 0;
+  const totalObjectCount = stats?.total_objects ?? stats?.total_persons ?? 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Live Camera</h2>
           <p className="text-gray-500 mt-1">
-            Real-time person detection stream backed by engine data
+            Real-time detection stream backed by engine data
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {detectors.length > 0 && (
+            <select
+              value={detectorKey}
+              onChange={(e) => setDetectorKey(e.target.value)}
+              disabled={active}
+              className="input min-w-[160px] text-sm"
+              aria-label="Select detector"
+            >
+              {detectors.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.name} ({d.key})
+                </option>
+              ))}
+            </select>
+          )}
           {cameras.length > 0 && (
             <select
               value={cameraId}
@@ -226,6 +298,34 @@ export default function LiveCameraPage() {
               </div>
             )}
           </div>
+
+          {selectedCamera && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusBadgeClass(selectedCamera.status)}`}
+              >
+                <span
+                  className={`inline-block w-2 h-2 rounded-full ${
+                    selectedCamera.status === "online"
+                      ? "bg-green-500"
+                      : selectedCamera.status === "connecting"
+                        ? "bg-amber-500"
+                        : selectedCamera.status === "error"
+                          ? "bg-red-500"
+                          : "bg-gray-400"
+                  }`}
+                />
+                {selectedCamera.status}
+              </span>
+              <span className="text-sm text-gray-500">
+                {selectedCamera.name}
+                {selectedCamera.cameraType ? ` · ${selectedCamera.cameraType}` : ""}
+              </span>
+              <span className="text-sm text-gray-500">
+                Detector: <span className="font-medium text-gray-700">{detectorKey}</span>
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -236,15 +336,15 @@ export default function LiveCameraPage() {
             </p>
           </div>
           <div className="card">
-            <p className="text-sm font-medium text-gray-500">Persons Detected</p>
+            <p className="text-sm font-medium text-gray-500">Objects Detected</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {stats?.persons ?? "--"}
+              {objectCount || "--"}
             </p>
           </div>
           <div className="card">
-            <p className="text-sm font-medium text-gray-500">Total Persons</p>
+            <p className="text-sm font-medium text-gray-500">Total Objects</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {stats?.total_persons ?? "--"}
+              {totalObjectCount || "--"}
             </p>
           </div>
           <div className="card">
@@ -254,6 +354,41 @@ export default function LiveCameraPage() {
                 ? formatConfidence(stats.confidence)
                 : "--"}
             </p>
+          </div>
+          <div className="card">
+            <button
+              onClick={() => void handleProcessLive()}
+              disabled={processingLive || !selectedCamera}
+              className="btn-primary w-full"
+            >
+              {processingLive ? "Processing..." : "Process Live Frame"}
+            </button>
+            <p className="text-sm text-gray-500 mt-3">
+              Capture one fresh frame from the selected camera and run
+              inference now.
+            </p>
+            {liveResult && (
+              <dl className="mt-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Detections</dt>
+                  <dd className="font-medium text-gray-900">{liveResult.count}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Latency</dt>
+                  <dd className="font-medium text-gray-900">
+                    {liveResult.latencyMs != null
+                      ? `${liveResult.latencyMs.toFixed(1)} ms`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Processed</dt>
+                  <dd className="font-medium text-gray-900">
+                    {formatTime(liveResult.processedAt)}
+                  </dd>
+                </div>
+              </dl>
+            )}
           </div>
         </div>
       </div>

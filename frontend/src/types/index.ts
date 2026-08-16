@@ -573,6 +573,11 @@ export interface EngineProcessResponse {
   processedAt: string;
 }
 
+export interface EngineLiveProcessResponse extends EngineProcessResponse {
+  latencyMs: number | null;
+  source?: { cameraType: string; videoPosSeconds: number } | null;
+}
+
 export type AuditLogAction =
   | "user_login"
   | "user_logout"

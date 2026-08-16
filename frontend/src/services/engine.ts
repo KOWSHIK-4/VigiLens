@@ -3,6 +3,7 @@ import type {
   EngineDetectionsResponse,
   EngineDetector,
   EngineHealth,
+  EngineLiveProcessResponse,
   EngineMetrics,
   EngineProcessResponse,
 } from "@/types";
@@ -52,6 +53,15 @@ export const engineService = {
       `/engines/${key}/process`,
       form,
       { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data.data;
+  },
+
+  async processLive(key: string, cameraId: string, videoPosSeconds = 0) {
+    const { data } = await api.post<{ success: boolean; data: EngineLiveProcessResponse }>(
+      `/engines/${key}/process-live`,
+      null,
+      { params: { camera_id: cameraId, video_pos_seconds: videoPosSeconds } },
     );
     return data.data;
   },
