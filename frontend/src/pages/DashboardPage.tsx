@@ -36,7 +36,10 @@ export default function DashboardPage() {
 
   const { data: activeModel } = useQuery({
     queryKey: ["models", "active"],
-    queryFn: () => modelService.getActive().catch(() => null),
+    queryFn: () => modelService.getActive().catch((err) => {
+      console.warn("Failed to fetch active model:", err);
+      return null;
+    }),
     refetchInterval: 30000,
   });
 

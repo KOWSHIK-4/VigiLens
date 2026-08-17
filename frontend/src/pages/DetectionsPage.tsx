@@ -101,8 +101,8 @@ export default function DetectionsPage() {
       a.download = `detections-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      console.error("Failed to export CSV");
+    } catch (err) {
+      console.error("Failed to export CSV:", err);
       showToast({
         severity: "critical",
         title: "Export failed",
