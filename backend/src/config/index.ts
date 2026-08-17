@@ -1,5 +1,19 @@
 import "dotenv/config";
 
+const INSECURE_DEFAULTS = [
+  { key: "JWT_SECRET", value: process.env.JWT_SECRET, insecure: "dev-secret-change-in-production" },
+  { key: "INTERNAL_API_KEY", value: process.env.INTERNAL_API_KEY, insecure: "dev-internal-key-change-in-production" },
+] as const;
+
+if (process.env.NODE_ENV === "production") {
+  for (const { key, value, insecure } of INSECURE_DEFAULTS) {
+    if (!value || value === insecure) {
+      // eslint-disable-next-line no-console
+      console.error(`[SECURITY] ${key} is using the insecure default. Set a unique value in production.`);
+    }
+  }
+}
+
 export const config = {
   port: parseInt(process.env.PORT || "4000", 10),
   nodeEnv: process.env.NODE_ENV || "development",
