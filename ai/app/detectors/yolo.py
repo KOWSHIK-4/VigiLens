@@ -54,12 +54,12 @@ class YoloDetector(BaseDetector):
             cls_id = int(box.cls[0])
             if self._class_filter is not None and cls_id not in self._class_filter:
                 continue
-            conf = float(box.conf[0])
+            box_conf = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append(
                 Detection(
                     class_name=self._class_names.get(cls_id, str(cls_id)),
-                    confidence=round(conf, 4),
+                    confidence=round(box_conf, 4),
                     bbox=(x1, y1, x2, y2),
                 )
             )

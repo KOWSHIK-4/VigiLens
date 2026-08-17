@@ -29,14 +29,14 @@ class PersonDetector(BaseDetector):
         detections: list[Detection] = []
         for box in results.boxes:
             cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
+            box_conf = float(box.conf[0])
             if cls_id != self.PERSON_CLASS_ID:
                 continue
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append(
                 Detection(
                     class_name="person",
-                    confidence=round(conf, 4),
+                    confidence=round(box_conf, 4),
                     bbox=(x1, y1, x2, y2),
                 )
             )
