@@ -98,8 +98,8 @@ export default function LiveCameraPage() {
           setCameraId(camRes.data[0].id);
         }
       })
-      .catch(() => {
-        /* fall back to defaults */
+      .catch((err) => {
+        console.warn("Failed to load engine/camera data:", err);
       });
     return () => {
       cancelled = true;
