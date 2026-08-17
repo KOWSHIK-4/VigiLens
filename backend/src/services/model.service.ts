@@ -54,9 +54,11 @@ function scheduleLoad(id: string) {
       logger.info("AI model loaded", { modelId: id });
     } catch (error) {
       logger.error("Failed to finalize model load", { modelId: id, error });
-      await prisma.aIModel
-        .update({ where: { id }, data: { status: "error" } })
-        .catch(() => undefined);
+      try {
+        await prisma.aIModel.update({ where: { id }, data: { status: "error" } });
+      } catch (fallbackError) {
+        logger.error("Failed to mark model as error", { modelId: id, fallbackError });
+      }
     }
   }, LOAD_DELAY_MS);
   pendingLoads.set(id, timer);

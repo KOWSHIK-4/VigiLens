@@ -567,9 +567,11 @@ export const detectorService = {
         logger.info("Detector restarted", { detectorId: id });
       } catch (error) {
         logger.error("Detector restart failed to finalize", { detectorId: id, error });
-        await prisma.aIModel
-          .update({ where: { id }, data: { status: "error" } })
-          .catch(() => undefined);
+        try {
+          await prisma.aIModel.update({ where: { id }, data: { status: "error" } });
+        } catch (fallbackError) {
+          logger.error("Failed to mark detector as error", { detectorId: id, fallbackError });
+        }
       }
     }, RESTART_DELAY_MS);
     restartTimers.set(id, timer);
