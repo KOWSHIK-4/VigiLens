@@ -103,11 +103,6 @@ export const modelService = {
       });
     }
 
-    const registeredKeys = definitions.map((d) => d.key);
-    await prisma.aIModel.deleteMany({
-      where: { detectorKey: { notIn: registeredKeys } },
-    });
-
     const defaultModel = await prisma.aIModel.findFirst({
       where: { detectorKey: definitions[0]?.key },
     });
