@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +17,20 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting VigiLens AI Service...")
+    logger.info("Registered detectors: %s", list(detector_service._detectors.keys()))
+    logger.info("VigiLens AI Service ready")
+    yield
+
+
 app = FastAPI(
     title="VigiLens AI Service",
     version="1.0.0",
     description="AI-powered security detection service",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -33,10 +44,3 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(detection_router)
 app.include_router(capture_router)
-
-
-@app.on_event("startup")
-async def startup():
-    logger.info("Starting VigiLens AI Service...")
-    logger.info("Registered detectors: %s", list(detector_service._detectors.keys()))
-    logger.info("VigiLens AI Service ready")
