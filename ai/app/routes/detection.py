@@ -250,7 +250,7 @@ async def detect_webcam(
                         },
                     )
         except Exception:
-            logger.debug("Failed to save detection to backend", exc_info=True)
+            logger.warning("Failed to save detection to backend", exc_info=True)
 
     def generate():
         device_value = resolve_webcam_device(device)
