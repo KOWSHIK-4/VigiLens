@@ -1,5 +1,5 @@
 import type { Detection } from "@/types";
-import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle } from "lucide-react";
+import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle, Box, Cpu, Hash } from "lucide-react";
 
 interface DetectionDetailsDrawerProps {
   detection: Detection | null;
@@ -89,6 +89,34 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
                 {statusIcons[detection.status]} {detection.status}
               </span>
             </div>
+            {detection.detectorKey && (
+              <DetailItem
+                icon={<Cpu className="w-4 h-4" />}
+                label="Detector"
+                value={detection.detectorKey}
+              />
+            )}
+            {detection.trackId && (
+              <DetailItem
+                icon={<Hash className="w-4 h-4" />}
+                label="Track ID"
+                value={detection.trackId}
+              />
+            )}
+            {detection.processingTimeMs != null && (
+              <DetailItem
+                icon={<Activity className="w-4 h-4" />}
+                label="Inference"
+                value={`${detection.processingTimeMs.toFixed(1)} ms`}
+              />
+            )}
+            {detection.boundingBox && (
+              <DetailItem
+                icon={<Box className="w-4 h-4" />}
+                label="Bounding Box"
+                value={`(${detection.boundingBox.x1}, ${detection.boundingBox.y1}) → (${detection.boundingBox.x2}, ${detection.boundingBox.y2})`}
+              />
+            )}
             <div className="col-span-2">
               <DetailItem
                 icon={<Clock className="w-4 h-4" />}

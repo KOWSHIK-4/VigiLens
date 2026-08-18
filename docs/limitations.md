@@ -30,7 +30,13 @@ Honest list of what VigiLens does and does not do in its current form.
 - The `X-Internal-Key` shared secret defaults to
   `dev-internal-key-change-in-production` for development parity. It MUST be
   overridden in any real deployment via `INTERNAL_API_KEY` (backend) and
-  `BACKEND_INTERNAL_KEY` (AI service).
+  `BACKEND_INTERNAL_KEY` (AI service). In production (`NODE_ENV=production`),
+  the server refuses to start if insecure defaults are detected.
+- The AI service's webcam stats endpoint (`/detect/webcam/stats`) supports
+  optional header-based auth via `AI_STATS_REQUIRE_AUTH=true`. Disabled by
+  default for development convenience.
+- The AI service's CORS origins are configurable via `CORS_ORIGINS` env var.
+  When unset, all origins are allowed (development mode).
 - Camera credentials (`username`/`password`) are stored in the database in
   plain text; they are used only to reach private RTSP/HTTP sources.
 
