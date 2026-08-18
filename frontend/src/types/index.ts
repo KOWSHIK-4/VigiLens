@@ -91,6 +91,14 @@ export interface Detection {
   confidence: number;
   imageUrl: string;
   status: "critical" | "warning" | "info";
+  /** Engine v2 fields (populated when detection comes from the engine pipeline). */
+  detectorKey?: string | null;
+  className?: string | null;
+  trackId?: string | null;
+  boundingBox?: { x1: number; y1: number; x2: number; y2: number } | null;
+  processingTimeMs?: number | null;
+  modelVersion?: string | null;
+  snapshotUrl?: string | null;
 }
 
 export interface DetectionWithCamera extends Detection {
