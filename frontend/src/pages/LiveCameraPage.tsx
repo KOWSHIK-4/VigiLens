@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
+import api from "@/services/api";
 import type {
   Camera,
   EngineDetector,
@@ -127,13 +128,11 @@ export default function LiveCameraPage() {
     if (active) {
       pollRef.current = setInterval(async () => {
         try {
-          const res = await fetch(
-            `${AI_STATS_URL}?camera_id=${encodeURIComponent(cameraId)}&detector=${encodeURIComponent(detectorKey)}`,
+          const { data } = await api.get<WebcamStats>(
+            AI_STATS_URL,
+            { params: { camera_id: cameraId, detector: detectorKey } },
           );
-          if (res.ok) {
-            const data: WebcamStats = await res.json();
-            setStats(data);
-          }
+          setStats(data);
         } catch {
           /* stats poll silently fails */
         }
@@ -188,8 +187,8 @@ export default function LiveCameraPage() {
   const overlayBoxes = detections
     .filter((d) => d.boundingBox)
     .map((d) => {
-      const frameW = stats?.image_width || d.boundingBox!.x2;
-      const frameH = stats?.image_height || d.boundingBox!.y2;
+      const frameW = stats?.image_width || (d.boundingBox!.x2 > 0 ? d.boundingBox!.x2 : 640);
+      const frameH = stats?.image_height || (d.boundingBox!.y2 > 0 ? d.boundingBox!.y2 : 480);
       return { detection: d, frameW, frameH };
     });
 
