@@ -7,10 +7,10 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "@/utils/auditLog";
-import { AlertCooldownRegistry } from "@/engine/alerts";
+import { AlertCooldownRegistry, sharedAlertCooldownRegistry } from "@/engine/alerts";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
-const alertCooldownRegistry = new AlertCooldownRegistry();
+const alertCooldownRegistry = sharedAlertCooldownRegistry;
 const DEFAULT_ALERT_COOLDOWN_MS = 30_000;
 
 interface CreateDetectionInput {

@@ -31,6 +31,9 @@ export class AlertCooldownRegistry {
   }
 }
 
+/** Shared cooldown registry used by both the engine pipeline and M2M ingestion. */
+export const sharedAlertCooldownRegistry = new AlertCooldownRegistry();
+
 export class CooldownAlertStage implements AlertEvaluationStage {
   readonly name = "alerts";
   private readonly registry: AlertCooldownRegistry;
