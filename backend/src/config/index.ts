@@ -6,11 +6,19 @@ const INSECURE_DEFAULTS = [
 ] as const;
 
 if (process.env.NODE_ENV === "production") {
+  const failures: string[] = [];
   for (const { key, value, insecure } of INSECURE_DEFAULTS) {
     if (!value || value === insecure) {
-      // eslint-disable-next-line no-console
-      console.error(`[SECURITY] ${key} is using the insecure default. Set a unique value in production.`);
+      failures.push(key);
     }
+  }
+  if (failures.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[SECURITY] FATAL: Insecure secret defaults detected in production: ${failures.join(", ")}. ` +
+      "Set unique values for each via environment variables. The server will not start with insecure defaults.",
+    );
+    process.exit(1);
   }
 }
 

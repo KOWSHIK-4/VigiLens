@@ -1,7 +1,14 @@
+import logging
 import os
+import sys
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+_INSECURE_KEY = "dev-internal-key-change-in-production"
 
 
 class Settings:
@@ -13,10 +20,22 @@ class Settings:
     # Shared secret for machine-to-machine ingestion. Must match the backend
     # INTERNAL_API_KEY so webcam detections pass the X-Internal-Key guard.
     backend_internal_key: str = os.getenv(
-        "BACKEND_INTERNAL_KEY", "dev-internal-key-change-in-production"
+        "BACKEND_INTERNAL_KEY", _INSECURE_KEY,
     )
     media_root: str = os.getenv("MEDIA_ROOT", "/data/vigilens/media")
     capture_open_timeout_ms: int = int(os.getenv("CAPTURE_OPEN_TIMEOUT_MS", "5000"))
+
+    def __init__(self) -> None:
+        node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
+        if node_env == "production":
+            key = self.backend_internal_key
+            if not key or key == _INSECURE_KEY:
+                logger.critical(
+                    "FATAL: BACKEND_INTERNAL_KEY is using the insecure default in "
+                    "production. Set a unique value via environment variable. "
+                    "The server will not start with insecure defaults.",
+                )
+                sys.exit(1)
 
 
 settings = Settings()
