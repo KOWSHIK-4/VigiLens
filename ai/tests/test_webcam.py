@@ -83,6 +83,24 @@ def test_webcam_stats_endpoint_scoped_by_stream():
     assert response.json()["objects"] == 2
 
 
+def test_webcam_stats_rejects_missing_internal_key_when_auth_required(monkeypatch):
+    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    stream_stats.clear()
+    response = client.get("/detect/webcam/stats")
+    assert response.status_code == 401
+
+
+def test_webcam_stats_accepts_valid_internal_key_when_auth_required(monkeypatch):
+    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    stream_stats.clear()
+    stream_stats.update("cam-1", "person", {"fps": 10.0, "objects": 1})
+    response = client.get(
+        "/detect/webcam/stats",
+        headers={"X-Internal-Key": "dev-internal-key-change-in-production"},
+    )
+    assert response.status_code == 200
+
+
 def test_webcam_route_rejects_unknown_detector():
     response = client.get("/detect/webcam", params={"detector": "does_not_exist"})
     assert response.status_code == 404

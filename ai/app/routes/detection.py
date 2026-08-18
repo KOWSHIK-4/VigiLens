@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Header, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
@@ -194,10 +194,12 @@ async def list_detectors():
 
 @router.get("/webcam/stats")
 async def webcam_stats(
+    request: Request,
     camera_id: str | None = Query(None, description="Stream camera id"),
     detector: str | None = Query(None, description="Stream detector key"),
 ):
     """Live stats for a stream, or the most recent stream when unspecified."""
+    _verify_internal_key(request)
     return stream_stats.get(camera_id, detector)
 
 
@@ -206,8 +208,24 @@ RECONNECT_ATTEMPTS = 3
 RECONNECT_DELAY_SECONDS = 1.0
 
 
+def _verify_internal_key(request: Request) -> None:
+    """Verify the X-Internal-Key header matches the shared secret.
+
+    When no key is configured the check is skipped (local development).
+    """
+    required = settings.backend_internal_key
+    if not required:
+        return
+    if os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() not in ("1", "true"):
+        return
+    provided = request.headers.get("x-internal-key", "")
+    if provided != required:
+        raise HTTPException(status_code=401, detail="Invalid or missing internal key")
+
+
 @router.get("/webcam")
 async def detect_webcam(
+    request: Request,
     camera_id: str = "default",
     detector: str = "person",
     device: str = "0",
@@ -257,6 +275,22 @@ async def detect_webcam(
         cap = _open_webcam(device_value)
         if not cap.isOpened():
             logger.error("Could not open webcam device %r", device_value)
+            err_img = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                err_img,
+                "Camera unavailable - device not found or in use",
+                (30, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 255),
+                2,
+            )
+            _, buf = cv2.imencode(".jpg", err_img)
+            yield (
+                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                + buf.tobytes()
+                + b"\r\n"
+            )
             return
 
         tracker = IouTracker()
