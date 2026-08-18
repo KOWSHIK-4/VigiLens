@@ -162,7 +162,7 @@ export const detectionService = {
         modelVersion: input.modelVersion,
         trackId: input.trackId,
         className: input.className,
-        boundingBox: (input.boundingBox || undefined) as Prisma.InputJsonValue | undefined,
+        ...(input.boundingBox ? { boundingBox: input.boundingBox as Prisma.InputJsonValue } : {}),
         snapshotUrl: input.snapshotUrl,
         processingTimeMs: input.processingTimeMs,
       },

@@ -10,7 +10,7 @@ import type { NormalizationStage } from "./pipeline";
 import type { FrameInput, NormalizedBox, NormalizedDetection, PipelineContext, TrackedDetection } from "./types";
 
 function toNormalizedBox(bbox: TrackedDetection["bbox"], width: number, height: number): NormalizedBox {
-  if (!width || !height) return { x: 0, y: 0, width: 1, height: 1 };
+  if (!width || !height) return { x: 0, y: 0, width: 0, height: 0 };
   const x = Math.max(0, bbox.x1 / width);
   const y = Math.max(0, bbox.y1 / height);
   const w = Math.min(1, (bbox.x2 - bbox.x1) / width);
