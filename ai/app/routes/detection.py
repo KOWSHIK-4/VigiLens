@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import threading
@@ -192,7 +193,14 @@ async def detect_video(
         with open(tmp_path, "wb") as f:
             f.write(content)
 
-        all_detections, out_path = detector_service.detect_video_frames(tmp_path, detector, confidence)
+        loop = asyncio.get_running_loop()
+        all_detections, out_path = await loop.run_in_executor(
+            None,
+            detector_service.detect_video_frames,
+            tmp_path,
+            detector,
+            confidence,
+        )
 
         return {
             "success": True,
