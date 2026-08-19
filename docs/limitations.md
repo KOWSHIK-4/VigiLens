@@ -4,10 +4,11 @@ Honest list of what VigiLens does and does not do in its current form.
 
 ## Models
 
-- **No model weights are committed.** The AI service expects weights at
-  `MODEL_PATH` (default `/app/models`). Until they are mounted, detectors
-  report `ARCHITECTURE READY`; without any, the engine returns
-  `501 DETECTOR_UNCONFIGURED` instead of guessing.
+- **Bundled model weights.** The repo ships `yolo11n.pt` (YOLOv11-nano,
+  ~5.5 MB) at `ai/yolo11n.pt`. The Docker build copies it into the
+  container and the AI service loads it automatically. Heavier models
+  (e.g. YOLOv11-medium) can be swapped by replacing the file or
+  mounting a different path.
 - Only object-detection-style detectors exist (`person`, `vehicle`). There
   are no classification or segmentation models, and no face recognition.
 - Labels come from YOLO class names; a `vehicle` box labeled `car` is

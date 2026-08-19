@@ -38,8 +38,8 @@ Status of every VigiLens capability against the three-tier rubric:
 
 | Detector | Backend key | AI model | Status |
 |----------|-------------|----------|--------|
-| Person detection | `person` | `person_detector` | ARCHITECTURE READY — model weights are loaded by the AI service at deploy time; no weights are committed to the repo |
-| Vehicle detection | `vehicle` | `vehicle_detector` | ARCHITECTURE READY — `class_filter` [car] YOLO; requires weights |
+| Person detection | `person` | `person_detector` | IMPLEMENTED — `yolo11n.pt` bundled in repo, real YOLO inference |
+| Vehicle detection | `vehicle` | `vehicle_detector` | IMPLEMENTED — `yolo11n.pt` with COCO class filter [car, motorcycle, bus, truck] |
 | Any other key | — | — | MODEL NOT AVAILABLE — reported `unconfigured`, engine refuses with `501 DETECTOR_UNCONFIGURED` |
 
 ### Detector lifecycle
@@ -68,5 +68,5 @@ Status of every VigiLens capability against the three-tier rubric:
 ## Known non-goals
 
 - No face recognition / attribute models (labels come from YOLO classes).
-- No GPU-resident model weights committed to the repository.
+- No GPU-resident model weights committed to the repository (CPU inference only; GPU is a scheduling hint).
 - No distributed streaming (single-PC capture); see `limitations.md`.
