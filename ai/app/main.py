@@ -34,14 +34,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_cors_origins = os.getenv("CORS_ORIGINS", "").split(",")
-_app = os.getenv("CORS_ORIGIN", "")
-if _app and _app not in _cors_origins:
-    _cors_origins.append(_app)
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+_app_origin = os.getenv("CORS_ORIGIN", "").strip()
+if _app_origin and _app_origin not in _cors_origins:
+    _cors_origins.append(_app_origin)
+
+_node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
+if not _cors_origins:
+    if _node_env == "production":
+        logger.critical(
+            "No CORS origins configured in production. Set CORS_ORIGINS or "
+            "CORS_ORIGIN environment variable. Falling back to same-origin only."
+        )
+        _cors_origins = []
+    else:
+        logger.warning("No CORS origins configured — allowing all origins (development only)")
+        _cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins if _cors_origins != [""] else ["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

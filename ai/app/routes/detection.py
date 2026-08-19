@@ -22,6 +22,27 @@ router = APIRouter(prefix="/detect", tags=["detection"])
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
+# Keep at most this many annotated snapshots on disk to prevent unbounded
+# storage growth during long-running live streams.
+_MAX_OUTPUT_FILES = 500
+
+
+def _prune_output_dir() -> None:
+    """Remove oldest files in OUTPUT_DIR when the count exceeds the cap."""
+    try:
+        if not OUTPUT_DIR.exists():
+            return
+        files = sorted(OUTPUT_DIR.iterdir(), key=lambda f: f.stat().st_mtime)
+        if len(files) <= _MAX_OUTPUT_FILES:
+            return
+        for stale in files[: len(files) - _MAX_OUTPUT_FILES]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+    except Exception:
+        logger.debug("Output pruning failed", exc_info=True)
+
 # Backend detector keys map to the AI service's registered model names.
 BACKEND_DETECTOR_MAP = {
     "person": "person_detector",
@@ -134,6 +155,7 @@ async def detect_image(
         detector_obj = detector_service.get(detector)
         annotated = detector_obj.draw(image, detections)
         cv2.imwrite(out_path, annotated)
+        _prune_output_dir()
 
         h, w = image.shape[:2]
         return {
@@ -373,6 +395,8 @@ async def detect_webcam(
                         snapshot_name = f"webcam_{int(time.time())}_{frame_no}.jpg"
                         image_path = str(OUTPUT_DIR / snapshot_name)
                         cv2.imwrite(image_path, annotated)
+                        if frame_no % (snapshot_interval * 10) == 0:
+                            _prune_output_dir()
 
                     threading.Thread(
                         target=save_detection,
