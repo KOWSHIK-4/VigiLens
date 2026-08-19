@@ -1,4 +1,5 @@
-from .base import BaseDetector
+from .base import BaseDetector, Detection
 from .person import PersonDetector
+from .yolo import YoloDetector
 
-__all__ = ["BaseDetector", "PersonDetector"]
+__all__ = ["BaseDetector", "Detection", "PersonDetector", "YoloDetector"]

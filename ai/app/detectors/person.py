@@ -1,54 +1,16 @@
-from typing import List
-import numpy as np
-import cv2
-from ultralytics import YOLO
+from app.detectors.yolo import YoloDetector
 
-from app.detectors.base import BaseDetector, Detection
+# COCO class 0 = person.
+PERSON_CLASS_NAMES = {0: "person"}
 
 
-class PersonDetector(BaseDetector):
-
-    MODEL_NAME = "yolo11n.pt"
-    PERSON_CLASS_ID = 0
-    CONFIDENCE_THRESHOLD = 0.5
+class PersonDetector(YoloDetector):
+    """Person-specific YOLO detector filtered to COCO class 0."""
 
     def __init__(self):
-        self._model = YOLO(self.MODEL_NAME)
-
-    @property
-    def name(self) -> str:
-        return "person_detector"
-
-    def detect(
-        self,
-        image: np.ndarray,
-        confidence_threshold: float | None = None,
-    ) -> List[Detection]:
-        conf = confidence_threshold if confidence_threshold is not None else self.CONFIDENCE_THRESHOLD
-        results = self._model(image, verbose=False, conf=conf)[0]
-        detections: list[Detection] = []
-        for box in results.boxes:
-            cls_id = int(box.cls[0])
-            box_conf = float(box.conf[0])
-            if cls_id != self.PERSON_CLASS_ID:
-                continue
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            detections.append(
-                Detection(
-                    class_name="person",
-                    confidence=round(box_conf, 4),
-                    bbox=(x1, y1, x2, y2),
-                )
-            )
-        return detections
-
-    def draw(self, image: np.ndarray, detections: List[Detection]) -> np.ndarray:
-        annotated = image.copy()
-        for d in detections:
-            x1, y1, x2, y2 = d.bbox
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"{d.class_name} {d.confidence:.2f}"
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(annotated, (x1, y1 - th - 6), (x1 + tw + 4, y1), (0, 255, 0), -1)
-            cv2.putText(annotated, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        return annotated
+        super().__init__(
+            detector_name="person_detector",
+            model_name="yolo11n.pt",
+            class_filter=[0],
+            class_names=PERSON_CLASS_NAMES,
+        )
