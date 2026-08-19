@@ -5,6 +5,8 @@ const INSECURE_DEFAULTS = [
   { key: "INTERNAL_API_KEY", value: process.env.INTERNAL_API_KEY, insecure: "dev-internal-key-change-in-production" },
 ] as const;
 
+const INSECURE_DB_PASSWORDS = ["vigilens_secret", "postgres", "password", "admin"];
+
 if (process.env.NODE_ENV === "production") {
   const failures: string[] = [];
   for (const { key, value, insecure } of INSECURE_DEFAULTS) {
@@ -12,9 +14,21 @@ if (process.env.NODE_ENV === "production") {
       failures.push(key);
     }
   }
+
+  const dbUrl = process.env.DATABASE_URL || "";
+  const dbPasswordMatch = dbUrl.match(/:\/\/[^:]+:([^@]+)@/);
+  if (dbPasswordMatch) {
+    const dbPassword = dbPasswordMatch[1];
+    if (INSECURE_DB_PASSWORDS.includes(dbPassword)) {
+      failures.push("DATABASE_URL (contains default/weak password)");
+    }
+  } else if (!process.env.DATABASE_URL) {
+    failures.push("DATABASE_URL (not set)");
+  }
+
   if (failures.length > 0) {
     console.error(
-      `[SECURITY] FATAL: Insecure secret defaults detected in production: ${failures.join(", ")}. ` +
+      `[SECURITY] FATAL: Insecure defaults detected in production: ${failures.join(", ")}. ` +
       "Set unique values for each via environment variables. The server will not start with insecure defaults.",
     );
     process.exit(1);
