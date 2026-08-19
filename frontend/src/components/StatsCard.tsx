@@ -14,7 +14,7 @@ export default function StatsCard({ title, value, change, icon }: StatsCardProps
       </div>
       <p className="text-3xl font-bold text-gray-900">{value}</p>
       {change && (
-        <p className="text-sm text-green-600 mt-1">{change} from last week</p>
+        <p className="text-sm text-gray-500 mt-1">{change}</p>
       )}
     </div>
   );

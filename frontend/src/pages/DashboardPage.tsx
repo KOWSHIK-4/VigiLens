@@ -80,12 +80,10 @@ export default function DashboardPage() {
         <StatsCard
           title="Total Detections"
           value={stats?.totalDetections ?? 0}
-          change="+12%"
         />
         <StatsCard
           title="Critical Alerts"
           value={stats?.criticalAlerts ?? 0}
-          change="-3%"
         />
         <StatsCard
           title="Active Cameras"
@@ -102,12 +100,10 @@ export default function DashboardPage() {
           <StatsCard
             title="Total Users"
             value={userStats?.total ?? 0}
-            change="+8%"
           />
           <StatsCard
             title="Online Now"
             value={userStats?.online ?? 0}
-            change="+15%"
           />
           <StatsCard
             title="Active Users"
