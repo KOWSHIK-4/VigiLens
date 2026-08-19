@@ -29,12 +29,10 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - MODEL_PATH=/app/models
       - LOG_LEVEL=INFO
       - BACKEND_URL=http://backend:4000
       - BACKEND_INTERNAL_KEY=${INTERNAL_API_KEY:-dev-internal-key-change-in-production}
-    volumes:
-      - ai_models:/app/models
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -97,5 +95,4 @@ services:
 
 volumes:
   postgres_data:
-  ai_models:
   storage_data:
