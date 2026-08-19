@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 import { modelService } from "@/services/models";
+import { getApiErrorMessage } from "@/utils/apiError";
 import type { AIModel, CreateModelInput } from "@/types";
 
 interface ModelFormDialogProps {
@@ -44,13 +44,6 @@ function toForm(model: AIModel): ModelFormState {
     gpuSupported: model.gpuSupported,
     modelPath: model.modelPath,
   };
-}
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
 }
 
 function validate(form: ModelFormState, isEdit: boolean): Record<string, string> {
@@ -109,7 +102,7 @@ function ModelFormDialog({ open, onClose, model }: ModelFormDialogProps) {
       onClose();
     },
     onError: (err) => {
-      setServerError(getErrorMessage(err));
+      setServerError(getApiErrorMessage(err));
     },
   });
 
@@ -291,7 +284,7 @@ export function DeleteModelDialog({ open, onClose, model }: DeleteModelDialogPro
       onClose();
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
     },
   });
 

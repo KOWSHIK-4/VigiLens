@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "react-router-dom";
-import axios from "axios";
 import {
   AlertTriangle,
   Archive,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { settingsService } from "@/services/settings";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import type {
   SettingsCategory,
   SettingsUpdateInput,
@@ -90,13 +90,6 @@ const CATEGORY_META: Record<SettingsCategory, CategoryMeta> = {
     icon: Archive,
   },
 };
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 function ModifiedChip() {
   return (
@@ -400,7 +393,7 @@ export default function SettingsPage() {
       showToast({
         severity: "critical",
         title: "Failed to save settings",
-        message: getErrorMessage(err),
+        message: getApiErrorMessage(err),
       });
     },
   });
@@ -443,7 +436,7 @@ export default function SettingsPage() {
       showToast({
         severity: "critical",
         title: "Failed to reset settings",
-        message: getErrorMessage(err),
+        message: getApiErrorMessage(err),
       });
     },
   });

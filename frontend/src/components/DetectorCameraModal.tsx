@@ -1,22 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { X, Loader2, Camera as CameraIcon, Search, Save, VideoOff } from "lucide-react";
 import { detectorService } from "@/services/detectors";
 import { cameraService } from "@/services/cameras";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import type { Camera, MarketplaceDetector } from "@/types";
 
 interface DetectorCameraModalProps {
   detector: MarketplaceDetector | null;
   onClose: () => void;
-}
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
 }
 
 export default function DetectorCameraModal({
@@ -80,7 +73,7 @@ export default function DetectorCameraModal({
       showToast({
         severity: "critical",
         title: "Failed to assign cameras",
-        message: getErrorMessage(err),
+        message: getApiErrorMessage(err),
       });
     },
   });

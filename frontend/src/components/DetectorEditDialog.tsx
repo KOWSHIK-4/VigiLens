@@ -1,21 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { X, Loader2, Save } from "lucide-react";
 import { detectorService } from "@/services/detectors";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import type { MarketplaceDetector } from "@/types";
 
 interface DetectorEditDialogProps {
   detector: MarketplaceDetector | null;
   onClose: () => void;
-}
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
 }
 
 export default function DetectorEditDialog({
@@ -55,7 +48,7 @@ export default function DetectorEditDialog({
       showToast({
         severity: "critical",
         title: "Failed to update detector",
-        message: getErrorMessage(err),
+        message: getApiErrorMessage(err),
       });
     },
   });

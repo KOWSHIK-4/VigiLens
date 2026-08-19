@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { X, Loader2, Gauge, BellRing, Clock, Cpu, Save } from "lucide-react";
 import { detectorService } from "@/services/detectors";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import type { MarketplaceDetector, ProcessorPreference } from "@/types";
 
 interface DetectorConfigDialogProps {
@@ -29,13 +29,6 @@ const cooldownOptions = [
   { value: 60000, label: "1 minute" },
   { value: 300000, label: "5 minutes" },
 ];
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 function intervalToOption(ms: number | null): number {
   if (!ms) return 5000;
@@ -97,7 +90,7 @@ export default function DetectorConfigDialog({
       showToast({
         severity: "critical",
         title: "Failed to save configuration",
-        message: getErrorMessage(err),
+        message: getApiErrorMessage(err),
       });
     },
   });

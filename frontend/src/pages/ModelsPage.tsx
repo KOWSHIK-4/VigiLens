@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import {
   ArrowDown,
   ArrowUp,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { modelService } from "@/services/models";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import ModelStatusBadge from "@/components/ModelStatusBadge";
 import {
   AddModelDialog,
@@ -45,13 +45,6 @@ const sortableColumns = [
   { key: "gpuSupported", label: "GPU" },
   { key: "updatedAt", label: "Updated" },
 ];
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 function VersionBadge({ version }: { version: string }) {
   return (
@@ -220,7 +213,7 @@ export default function ModelsPage() {
       showToast({
         severity: "critical",
         title: "Update failed",
-        message: `${model.name}: ${getErrorMessage(err)}`,
+        message: `${model.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -240,7 +233,7 @@ export default function ModelsPage() {
       showToast({
         severity: "critical",
         title: "Threshold update failed",
-        message: `${model.name}: ${getErrorMessage(err)}`,
+        message: `${model.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -259,7 +252,7 @@ export default function ModelsPage() {
       showToast({
         severity: "critical",
         title: "Load failed",
-        message: `${model.name}: ${getErrorMessage(err)}`,
+        message: `${model.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -278,7 +271,7 @@ export default function ModelsPage() {
       showToast({
         severity: "critical",
         title: "Unload failed",
-        message: `${model.name}: ${getErrorMessage(err)}`,
+        message: `${model.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -296,7 +289,7 @@ export default function ModelsPage() {
       showToast({
         severity: "critical",
         title: "Test failed",
-        message: `${model.name}: ${getErrorMessage(err)}`,
+        message: `${model.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });

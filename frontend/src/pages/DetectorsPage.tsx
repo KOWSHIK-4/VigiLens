@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import {
   Search,
   RefreshCw,
@@ -13,6 +12,7 @@ import {
 import { detectorService } from "@/services/detectors";
 import { engineService } from "@/services/engine";
 import { showToast } from "@/utils/toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 import DetectorCard from "@/components/DetectorCard";
 import DetectorConfigDialog from "@/components/DetectorConfigDialog";
 import DetectorCameraModal from "@/components/DetectorCameraModal";
@@ -21,13 +21,6 @@ import DetectorDetailsDrawer from "@/components/DetectorDetailsDrawer";
 import type { EngineDetector, MarketplaceDetector } from "@/types";
 
 type Tab = "installed" | "available";
-
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message;
-  }
-  return err instanceof Error ? err.message : "Something went wrong";
-}
 
 function CardSkeleton() {
   return (
@@ -105,7 +98,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Update failed",
-        message: `${detector.name}: ${getErrorMessage(err)}`,
+        message: `${detector.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -124,7 +117,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Install failed",
-        message: `${detector.name}: ${getErrorMessage(err)}`,
+        message: `${detector.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
@@ -143,7 +136,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Restart failed",
-        message: `${detector.name}: ${getErrorMessage(err)}`,
+        message: `${detector.name}: ${getApiErrorMessage(err)}`,
       });
     },
   });
