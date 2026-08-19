@@ -4,3 +4,9 @@ dist
 *.log
 Dockerfile
 .dockerignore
+tests
+coverage
+.vscode
+.idea
+.git
+.github

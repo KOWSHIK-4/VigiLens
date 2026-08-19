@@ -4,3 +4,12 @@ dist
 *.log
 Dockerfile
 .dockerignore
+tests
+coverage
+.nyc_output
+*.test.ts
+*.vitest.test.ts
+.vscode
+.idea
+.git
+.github
