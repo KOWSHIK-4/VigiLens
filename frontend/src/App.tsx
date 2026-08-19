@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthProvider from "@/components/AuthProvider";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import LoginPage from "@/pages/LoginPage";
 import ChangePasswordPage from "@/pages/ChangePasswordPage";
+import NotFoundPage from "@/pages/NotFoundPage";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CamerasPage = lazy(() => import("@/pages/CamerasPage"));
@@ -41,6 +43,14 @@ function PageFallback() {
   );
 }
 
+function LazyRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageFallback />}>{children}</Suspense>
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -69,124 +79,125 @@ export default function App() {
             <Route
               index
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <DashboardPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="cameras"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <CamerasPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="detections"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <DetectionsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="analytics"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <AnalyticsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="live-camera"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <LiveCameraPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="alerts"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <AlertsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="reports"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <ReportsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="models"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <ModelsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="detectors"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <DetectorsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="users"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <UsersPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="roles"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <RolesPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="audit-logs"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <AuditLogsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="settings"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <SettingsPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="system-monitoring"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <SystemMonitoringPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
             <Route
               path="monitoring"
               element={
-                <Suspense fallback={<PageFallback />}>
+                <LazyRoute>
                   <MonitoringPage />
-                </Suspense>
+                </LazyRoute>
               }
             />
           </Route>
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
