@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from fastapi import APIRouter, Header, UploadFile, File, HTTPException, Query, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
@@ -233,13 +233,16 @@ RECONNECT_DELAY_SECONDS = 1.0
 def _verify_internal_key(request: Request) -> None:
     """Verify the X-Internal-Key header matches the shared secret.
 
-    When no key is configured the check is skipped (local development).
+    In production the check is always enforced. In development it can be
+    disabled by setting AI_STATS_REQUIRE_AUTH=false.
     """
     required = settings.backend_internal_key
     if not required:
         return
-    if os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() not in ("1", "true"):
-        return
+    node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
+    if node_env != "production":
+        if os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() not in ("1", "true"):
+            return
     provided = request.headers.get("x-internal-key", "")
     if provided != required:
         raise HTTPException(status_code=401, detail="Invalid or missing internal key")
@@ -270,7 +273,7 @@ async def detect_webcam(
             headers = {}
             if settings.backend_internal_key:
                 headers["X-Internal-Key"] = settings.backend_internal_key
-            with httpx.Client(timeout=3.0, headers=headers) as client:
+            with httpx.Client(timeout=10.0, headers=headers) as client:
                 for det in detections:
                     client.post(
                         f"{settings.backend_url}/api/detections/internal",
