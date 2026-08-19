@@ -36,8 +36,9 @@ Honest list of what VigiLens does and does not do in its current form.
 - The AI service's webcam stats endpoint (`/detect/webcam/stats`) supports
   optional header-based auth via `AI_STATS_REQUIRE_AUTH=true`. Disabled by
   default for development convenience.
-- The AI service's CORS origins are configurable via `CORS_ORIGINS` env var.
-  When unset, all origins are allowed (development mode).
+- The AI service's CORS origins are configurable via `CORS_ORIGINS` or
+  `CORS_ORIGIN` env var. In production, if no origins are configured the
+  service defaults to same-origin only (no cross-origin requests).
 - Camera credentials (`username`/`password`) are stored in the database in
   plain text; they are used only to reach private RTSP/HTTP sources.
 
