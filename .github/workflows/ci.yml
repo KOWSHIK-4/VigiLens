@@ -86,6 +86,8 @@ jobs:
 
       - run: npm run build
 
+      - run: npx vitest run
+
       - run: npm run test
         env:
           DATABASE_URL: postgresql://vigilens:vigilens_secret@localhost:5432/vigilens_test
