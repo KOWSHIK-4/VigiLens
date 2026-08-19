@@ -7,7 +7,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "@/utils/auditLog";
-import { AlertCooldownRegistry, sharedAlertCooldownRegistry } from "@/engine/alerts";
+import { sharedAlertCooldownRegistry } from "@/engine/alerts";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
 const alertCooldownRegistry = sharedAlertCooldownRegistry;

@@ -13,7 +13,6 @@ if (process.env.NODE_ENV === "production") {
     }
   }
   if (failures.length > 0) {
-    // eslint-disable-next-line no-console
     console.error(
       `[SECURITY] FATAL: Insecure secret defaults detected in production: ${failures.join(", ")}. ` +
       "Set unique values for each via environment variables. The server will not start with insecure defaults.",
