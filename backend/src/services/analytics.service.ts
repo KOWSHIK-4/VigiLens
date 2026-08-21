@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/config/prisma";
 
 interface PeriodParams {
@@ -305,7 +306,8 @@ export const analyticsService = {
   },
 
   async getConfidenceDistribution(params: PeriodParams): Promise<ConfidenceBucket[]> {
-    const cacheKey = `analytics:confidence:${params.period || "30"}`;
+    const rangeKey = params.period || `${params.from ?? "all"}..${params.to ?? "all"}`;
+    const cacheKey = `analytics:confidence:${rangeKey}`;
     const cached = cacheGet<ConfidenceBucket[]>(cacheKey);
     if (cached) return cached;
 
@@ -315,36 +317,46 @@ export const analyticsService = {
         ? { gte: new Date(params.from) }
         : undefined;
 
-    const where = dateFilter ? { timestamp: dateFilter } : {};
+    // Single-pass aggregation in PostgreSQL instead of loading every
+    // detection row into Node memory.
+    const rows = await prisma.$queryRaw<
+      Array<{ b0: bigint; b1: bigint; b2: bigint; b3: bigint; b4: bigint; b5: bigint; total: bigint }>
+    >(
+      dateFilter
+        ? Prisma.sql`
+            SELECT
+              COUNT(*) FILTER (WHERE confidence >= 0    AND confidence < 0.2) AS "b0",
+              COUNT(*) FILTER (WHERE confidence >= 0.2  AND confidence < 0.4) AS "b1",
+              COUNT(*) FILTER (WHERE confidence >= 0.4  AND confidence < 0.6) AS "b2",
+              COUNT(*) FILTER (WHERE confidence >= 0.6  AND confidence < 0.8) AS "b3",
+              COUNT(*) FILTER (WHERE confidence >= 0.8  AND confidence < 0.9) AS "b4",
+              COUNT(*) FILTER (WHERE confidence >= 0.9)                        AS "b5",
+              COUNT(*)                                                         AS "total"
+            FROM detections
+            WHERE timestamp >= ${dateFilter.gte}
+          `
+        : Prisma.sql`
+            SELECT
+              COUNT(*) FILTER (WHERE confidence >= 0    AND confidence < 0.2) AS "b0",
+              COUNT(*) FILTER (WHERE confidence >= 0.2  AND confidence < 0.4) AS "b1",
+              COUNT(*) FILTER (WHERE confidence >= 0.4  AND confidence < 0.6) AS "b2",
+              COUNT(*) FILTER (WHERE confidence >= 0.6  AND confidence < 0.8) AS "b3",
+              COUNT(*) FILTER (WHERE confidence >= 0.8  AND confidence < 0.9) AS "b4",
+              COUNT(*) FILTER (WHERE confidence >= 0.9)                        AS "b5",
+              COUNT(*)                                                         AS "total"
+            FROM detections
+          `,
+    );
 
-    const detections = await prisma.detection.findMany({
-      where,
-      select: { confidence: true },
-    });
+    const counts = rows[0] ?? { b0: 0n, b1: 0n, b2: 0n, b3: 0n, b4: 0n, b5: 0n, total: 0n };
+    const total = Number(counts.total);
+    const ranges = ["0-20%", "20-40%", "40-60%", "60-80%", "80-90%", "90-100%"];
+    const bucketCounts = [counts.b0, counts.b1, counts.b2, counts.b3, counts.b4, counts.b5].map(Number);
 
-    const buckets = [
-      { range: "0-20%", min: 0, max: 0.2, count: 0 },
-      { range: "20-40%", min: 0.2, max: 0.4, count: 0 },
-      { range: "40-60%", min: 0.4, max: 0.6, count: 0 },
-      { range: "60-80%", min: 0.6, max: 0.8, count: 0 },
-      { range: "80-90%", min: 0.8, max: 0.9, count: 0 },
-      { range: "90-100%", min: 0.9, max: 1.01, count: 0 },
-    ];
-
-    for (const d of detections) {
-      for (const b of buckets) {
-        if (d.confidence >= b.min && d.confidence < b.max) {
-          b.count++;
-          break;
-        }
-      }
-    }
-
-    const total = detections.length;
-    const result: ConfidenceBucket[] = buckets.map((b) => ({
-      range: b.range,
-      count: b.count,
-      percentage: total > 0 ? Math.round((b.count / total) * 10000) / 100 : 0,
+    const result: ConfidenceBucket[] = ranges.map((range, i) => ({
+      range,
+      count: bucketCounts[i],
+      percentage: total > 0 ? Math.round((bucketCounts[i] / total) * 10000) / 100 : 0,
     }));
 
     cacheSet(cacheKey, result, 120_000);
