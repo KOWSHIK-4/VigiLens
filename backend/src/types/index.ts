@@ -21,16 +21,37 @@ export const loginSchema = z.object({
 export const detectionQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   status: z.enum(["critical", "warning", "info"]).optional(),
   cameraId: z.string().uuid().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date")
+    .optional(),
+  dateTo: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date")
+    .optional(),
   confidenceMin: z.coerce.number().min(0).max(1).optional(),
   confidenceMax: z.coerce.number().min(0).max(1).optional(),
-  sortBy: z.string().optional(),
+  sortBy: z.enum(["timestamp", "confidence", "label", "status", "cameraId"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
+
+export type DetectionQueryInput = z.infer<typeof detectionQuerySchema>;
+
+/** A date string that JavaScript can actually parse (guards `new Date(x)`). */
+export const dateStringSchema = z
+  .string()
+  .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date");
+
+export const analyticsQuerySchema = z.object({
+  period: z.enum(["7", "30", "90"]).optional(),
+  from: dateStringSchema.optional(),
+  to: dateStringSchema.optional(),
+});
+
+export type AnalyticsQueryInput = z.infer<typeof analyticsQuerySchema>;
 
 const urlByType = {
   usb: { pattern: /^(\/dev\/|[a-zA-Z]:\\)/, message: "USB camera URL should start with /dev/ or a drive letter" },
@@ -177,6 +198,20 @@ export const alertQuerySchema = z.object({
 export const alertIdSchema = z.object({ id: z.string().uuid() });
 
 export type AlertQueryInput = z.infer<typeof alertQuerySchema>;
+
+export const cameraIdSchema = z.object({ id: z.string().uuid() });
+export const detectionIdSchema = z.object({ id: z.string().uuid() });
+export const auditLogIdSchema = z.object({ id: z.string().uuid() });
+export const reportIdSchema = z.object({ id: z.string().uuid() });
+
+/** Detector engine keys are short slugs (e.g. "person_detection"). */
+export const engineKeyParamSchema = z.object({
+  key: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "must be a detector key slug"),
+});
+
+export const reportDownloadQuerySchema = z.object({
+  format: z.enum(["pdf", "csv"]).default("pdf"),
+});
 
 export const detectorQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -396,6 +431,14 @@ export const auditLogQuerySchema = z.object({
 });
 
 export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
+
+/** The CSV export ignores paging/sorting but honours the same filters. */
+export const auditLogExportQuerySchema = auditLogQuerySchema
+  .omit({ page: true, limit: true, sortBy: true, sortOrder: true })
+  .extend({
+    dateFrom: dateStringSchema.optional(),
+    dateTo: dateStringSchema.optional(),
+  });
 
 export const settingsCategorySchema = z.enum([
   "general",

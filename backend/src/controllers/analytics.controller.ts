@@ -1,5 +1,5 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
+import type { AnalyticsQueryInput, AuthRequest } from "@/types";
 import { analyticsService } from "@/services/analytics.service";
 import { success } from "@/utils/apiResponse";
 
@@ -15,11 +15,7 @@ export const analyticsController = {
 
   async getDaily(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getDaily({
-        period: req.query.period as "7" | "30" | "90" | undefined,
-        from: req.query.from as string | undefined,
-        to: req.query.to as string | undefined,
-      });
+      const data = await analyticsService.getDaily((req.query as unknown as AnalyticsQueryInput));
       success(res, data);
     } catch (err) {
       next(err);
@@ -28,11 +24,7 @@ export const analyticsController = {
 
   async getCameras(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getCameras({
-        period: req.query.period as "7" | "30" | "90" | undefined,
-        from: req.query.from as string | undefined,
-        to: req.query.to as string | undefined,
-      });
+      const data = await analyticsService.getCameras((req.query as unknown as AnalyticsQueryInput));
       success(res, data);
     } catch (err) {
       next(err);
@@ -41,11 +33,7 @@ export const analyticsController = {
 
   async getDetectors(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getDetectors({
-        period: req.query.period as "7" | "30" | "90" | undefined,
-        from: req.query.from as string | undefined,
-        to: req.query.to as string | undefined,
-      });
+      const data = await analyticsService.getDetectors((req.query as unknown as AnalyticsQueryInput));
       success(res, data);
     } catch (err) {
       next(err);
@@ -54,11 +42,7 @@ export const analyticsController = {
 
   async getTimeline(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getTimeline({
-        period: req.query.period as "7" | "30" | "90" | undefined,
-        from: req.query.from as string | undefined,
-        to: req.query.to as string | undefined,
-      });
+      const data = await analyticsService.getTimeline((req.query as unknown as AnalyticsQueryInput));
       success(res, data);
     } catch (err) {
       next(err);
@@ -67,11 +51,7 @@ export const analyticsController = {
 
   async getConfidenceDistribution(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getConfidenceDistribution({
-        period: req.query.period as "7" | "30" | "90" | undefined,
-        from: req.query.from as string | undefined,
-        to: req.query.to as string | undefined,
-      });
+      const data = await analyticsService.getConfidenceDistribution((req.query as unknown as AnalyticsQueryInput));
       success(res, data);
     } catch (err) {
       next(err);

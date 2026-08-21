@@ -3,6 +3,8 @@ import multer from "multer";
 import { engineController } from "@/controllers/engine.controller";
 import { authenticate } from "@/middleware/auth";
 import { requirePermission } from "@/middleware/permissions";
+import { validate } from "@/middleware/validate";
+import { engineKeyParamSchema } from "@/types";
 
 const router = Router();
 
@@ -18,19 +20,36 @@ const upload = multer({
 router.use(authenticate);
 
 router.get("/", requirePermission("models.read"), engineController.listAll);
-router.get("/:key", requirePermission("models.read"), engineController.getByKey);
-router.get("/:key/metrics", requirePermission("models.read"), engineController.getMetrics);
-router.get("/:key/health", requirePermission("models.read"), engineController.getHealth);
-router.get("/:key/detections", requirePermission("models.read"), engineController.getDetections);
+router.get("/:key", requirePermission("models.read"), validate(engineKeyParamSchema, "params"), engineController.getByKey);
+router.get(
+  "/:key/metrics",
+  requirePermission("models.read"),
+  validate(engineKeyParamSchema, "params"),
+  engineController.getMetrics,
+);
+router.get(
+  "/:key/health",
+  requirePermission("models.read"),
+  validate(engineKeyParamSchema, "params"),
+  engineController.getHealth,
+);
+router.get(
+  "/:key/detections",
+  requirePermission("models.read"),
+  validate(engineKeyParamSchema, "params"),
+  engineController.getDetections,
+);
 router.post(
   "/:key/process",
   requirePermission("models.manage"),
+  validate(engineKeyParamSchema, "params"),
   upload.single("image"),
   engineController.processImage,
 );
 router.post(
   "/:key/process-live",
   requirePermission("models.manage"),
+  validate(engineKeyParamSchema, "params"),
   engineController.processLive,
 );
 

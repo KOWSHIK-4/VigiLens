@@ -86,7 +86,7 @@ export const reportController = {
 
   async download(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const format = (typeof req.query.format === "string" ? req.query.format : "pdf") as "pdf" | "csv";
+      const { format } = req.query as unknown as { format: "pdf" | "csv" };
       const { content, filename, mimeType } = await reportService.getDownloadData(
         req.params.id as string,
         format,

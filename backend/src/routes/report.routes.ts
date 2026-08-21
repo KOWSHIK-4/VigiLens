@@ -3,7 +3,12 @@ import { reportController } from "@/controllers/report.controller";
 import { authenticate } from "@/middleware/auth";
 import { requirePermission } from "@/middleware/permissions";
 import { validate } from "@/middleware/validate";
-import { generateReportSchema, reportQuerySchema } from "@/types";
+import {
+  generateReportSchema,
+  reportDownloadQuerySchema,
+  reportIdSchema,
+  reportQuerySchema,
+} from "@/types";
 
 const router = Router();
 
@@ -17,11 +22,17 @@ router.post(
   reportController.generate,
 );
 router.get("/", validate(reportQuerySchema, "query"), reportController.getAll);
-router.get("/download/:id", reportController.download);
-router.get("/:id", reportController.getById);
+router.get(
+  "/download/:id",
+  validate(reportIdSchema, "params"),
+  validate(reportDownloadQuerySchema, "query"),
+  reportController.download,
+);
+router.get("/:id", validate(reportIdSchema, "params"), reportController.getById);
 router.delete(
   "/:id",
   requirePermission("reports.manage"),
+  validate(reportIdSchema, "params"),
   reportController.remove,
 );
 

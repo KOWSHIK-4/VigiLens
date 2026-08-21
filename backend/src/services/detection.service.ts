@@ -99,8 +99,8 @@ interface FindAllParams {
   cameraId?: string;
   dateFrom?: string;
   dateTo?: string;
-  confidenceMin?: string;
-  confidenceMax?: string;
+  confidenceMin?: number;
+  confidenceMax?: number;
   sortBy?: string;
   sortOrder?: string;
 }
@@ -133,13 +133,13 @@ function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhere
     where.timestamp = timestampFilter;
   }
 
-  if (params.confidenceMin || params.confidenceMax) {
+  if (params.confidenceMin !== undefined || params.confidenceMax !== undefined) {
     const confidenceFilter: Prisma.FloatFilter = {};
-    if (params.confidenceMin) {
-      confidenceFilter.gte = parseFloat(params.confidenceMin);
+    if (params.confidenceMin !== undefined) {
+      confidenceFilter.gte = params.confidenceMin;
     }
-    if (params.confidenceMax) {
-      confidenceFilter.lte = parseFloat(params.confidenceMax);
+    if (params.confidenceMax !== undefined) {
+      confidenceFilter.lte = params.confidenceMax;
     }
     where.confidence = confidenceFilter;
   }
