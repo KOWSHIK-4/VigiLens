@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
-import api from "@/services/api";
 import type {
   Camera,
   EngineDetector,
@@ -128,11 +127,15 @@ export default function LiveCameraPage() {
     if (active) {
       pollRef.current = setInterval(async () => {
         try {
-          const { data } = await api.get<WebcamStats>(
-            AI_STATS_URL,
-            { params: { camera_id: cameraId, detector: detectorKey } },
-          );
-          setStats(data);
+          // The stats endpoint lives on the AI service (/detect/* is proxied
+          // to it by the dev server and nginx) — NOT under the backend /api.
+          const params = new URLSearchParams({
+            camera_id: cameraId,
+            detector: detectorKey,
+          });
+          const res = await fetch(`${AI_STATS_URL}?${params.toString()}`);
+          if (!res.ok) return;
+          setStats((await res.json()) as WebcamStats);
         } catch {
           /* stats poll silently fails */
         }
