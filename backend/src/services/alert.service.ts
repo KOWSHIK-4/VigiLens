@@ -1,4 +1,6 @@
 import { prisma } from "@/config/prisma";
+import { ApiError } from "@/utils/errors";
+import type { AlertQueryInput } from "@/types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
 interface CreateAlertInput {
@@ -6,14 +8,6 @@ interface CreateAlertInput {
   severity: AlertSeverity;
   title: string;
   message: string;
-}
-
-interface FindAllParams {
-  page: number;
-  limit: number;
-  severity?: string;
-  isRead?: string;
-  search?: string;
 }
 
 export const alertService = {
@@ -29,14 +23,14 @@ export const alertService = {
     });
   },
 
-  async findAll(params: FindAllParams) {
+  async findAll(params: AlertQueryInput) {
     const where: Prisma.AlertWhereInput = {};
 
     if (params.severity) {
-      where.severity = params.severity as AlertSeverity;
+      where.severity = params.severity;
     }
 
-    if (params.isRead !== undefined && params.isRead !== "") {
+    if (params.isRead !== undefined) {
       where.isRead = params.isRead === "true";
     }
 
@@ -63,7 +57,7 @@ export const alertService = {
 
   async markAsRead(id: string) {
     const alert = await prisma.alert.findUnique({ where: { id } });
-    if (!alert) throw new Error("Alert not found");
+    if (!alert) throw new ApiError(404, "Alert not found");
 
     return prisma.alert.update({
       where: { id },
@@ -85,7 +79,7 @@ export const alertService = {
 
   async remove(id: string) {
     const alert = await prisma.alert.findUnique({ where: { id } });
-    if (!alert) throw new Error("Alert not found");
+    if (!alert) throw new ApiError(404, "Alert not found");
 
     await prisma.alert.delete({ where: { id } });
     return { id };

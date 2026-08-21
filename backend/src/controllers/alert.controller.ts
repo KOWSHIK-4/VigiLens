@@ -1,26 +1,14 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
+import type { AlertQueryInput, AuthRequest } from "@/types";
 import { alertService } from "@/services/alert.service";
 import { success, paginated } from "@/utils/apiResponse";
 
 export const alertController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const q = req.query;
-      const page = typeof q.page === "string" ? q.page : "1";
-      const limit = typeof q.limit === "string" ? q.limit : "20";
-      const severity = typeof q.severity === "string" ? q.severity : undefined;
-      const isRead = typeof q.isRead === "string" ? q.isRead : undefined;
-      const search = typeof q.search === "string" ? q.search : undefined;
-
-      const result = await alertService.findAll({
-        page: parseInt(page),
-        limit: parseInt(limit),
-        severity,
-        isRead,
-        search,
-      });
-      paginated(res, result.data, result.total, parseInt(page), parseInt(limit));
+      const q = req.query as unknown as AlertQueryInput;
+      const result = await alertService.findAll(q);
+      paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
     }

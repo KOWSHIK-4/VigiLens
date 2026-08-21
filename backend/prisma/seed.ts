@@ -83,6 +83,7 @@ export const rolePermissionMap: Record<string, string[]> = {
     "reports.manage",
     "reports.generate",
     "alerts.read",
+    "alerts.manage",
     "audit.read",
     "audit.export",
     "audit.view",
