@@ -7,6 +7,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "@/utils/auditLog";
+import { toCsv } from "@/utils/csv";
 import { sharedAlertCooldownRegistry } from "@/engine/alerts";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
@@ -288,12 +289,7 @@ export const detectionService = {
       d.imageUrl,
     ]);
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
-    ].join("\n");
-
-    return csvContent;
+    return toCsv(headers, rows);
   },
 
   async getStats() {

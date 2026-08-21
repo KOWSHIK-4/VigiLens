@@ -1,6 +1,7 @@
 import { prisma } from "@/config/prisma";
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
 import type { AuditLogQueryInput } from "@/types";
+import { toCsv } from "@/utils/csv";
 
 interface CreateAuditLogInput {
   userId?: string;
@@ -145,12 +146,7 @@ export const auditLogService = {
       log.status,
     ]);
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
-    ].join("\n");
-
-    return csvContent;
+    return toCsv(headers, rows);
   },
 
   async getStats() {
