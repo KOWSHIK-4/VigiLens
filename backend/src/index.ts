@@ -30,8 +30,12 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    // The dashboard polls several endpoints every few seconds, so the
+    // global bucket must tolerate sustained UI traffic (~5 req/s per IP)
+    // while still capping abuse. Credential endpoints carry their own
+    // stricter limit in auth.routes.
+    windowMs: 60 * 1000,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: "Too many requests, please try again later" },
