@@ -84,6 +84,20 @@ interface FindAllParams {
   sortOrder?: "asc" | "desc";
 }
 
+/**
+ * Strips the stored stream password before a camera row leaves the API.
+ * Credentials are write-only: the backend uses them internally when
+ * building authenticated capture requests, and no client — including
+ * admins — ever needs to read them back.
+ */
+function redactPassword<T extends { password?: string | null }>(
+  camera: T,
+): Omit<T, "password"> {
+  const rest = { ...camera };
+  delete (rest as { password?: string | null }).password;
+  return rest;
+}
+
 export const cameraService = {
   async findAll(params: FindAllParams) {
     const { page, limit, search, status, cameraType, sortBy, sortOrder } = params;
@@ -108,7 +122,7 @@ export const cameraService = {
       orderBy.createdAt = "desc";
     }
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.camera.findMany({
         where,
         orderBy,
@@ -118,11 +132,12 @@ export const cameraService = {
       prisma.camera.count({ where }),
     ]);
 
+    const data = rows.map(redactPassword);
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
   async findById(id: string) {
-    return prisma.camera.findUnique({
+    const camera = await prisma.camera.findUnique({
       where: { id },
       include: {
         detections: {
@@ -135,10 +150,11 @@ export const cameraService = {
         },
       },
     });
+    return camera ? redactPassword(camera) : null;
   },
 
   async create(data: CreateCameraInput) {
-    return prisma.camera.create({
+    const camera = await prisma.camera.create({
       data: {
         name: data.name,
         url: data.url,
@@ -151,13 +167,14 @@ export const cameraService = {
         password: data.password || null,
       },
     });
+    return redactPassword(camera);
   },
 
   async update(id: string, data: UpdateCameraInput) {
     const existing = await prisma.camera.findUnique({ where: { id } });
     if (!existing) return null;
 
-    return prisma.camera.update({
+    const camera = await prisma.camera.update({
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
@@ -171,6 +188,7 @@ export const cameraService = {
         ...(data.password !== undefined && { password: data.password }),
       },
     });
+    return redactPassword(camera);
   },
 
   async remove(id: string) {
@@ -189,13 +207,14 @@ export const cameraService = {
       throw new Error("Camera is already online");
     }
 
-    return prisma.camera.update({
+    const updated = await prisma.camera.update({
       where: { id },
       data: {
         status: "connecting",
         lastSeen: new Date(),
       },
     });
+    return redactPassword(updated);
   },
 
   async stopCamera(id: string) {
@@ -206,12 +225,13 @@ export const cameraService = {
       throw new Error("Camera is already offline");
     }
 
-    return prisma.camera.update({
+    const updated = await prisma.camera.update({
       where: { id },
       data: {
         status: "offline",
       },
     });
+    return redactPassword(updated);
   },
 
   async healthCheck(id: string, client: AiServiceClient = aiServiceClient) {
@@ -266,7 +286,7 @@ export const cameraService = {
       },
     });
 
-    return prisma.camera.update({
+    const updated = await prisma.camera.update({
       where: { id },
       data: {
         status,
@@ -275,6 +295,7 @@ export const cameraService = {
         lastSeen: isHealthy ? now : undefined,
       },
     });
+    return redactPassword(updated);
   },
 
   async getHealthLogs(cameraId: string, limit = 50) {
@@ -331,7 +352,12 @@ export const cameraService = {
         },
       });
 
-      return { camera: updated, snapshotUrl, responseTimeMs, capturedAt };
+      return {
+        camera: redactPassword(updated),
+        snapshotUrl,
+        responseTimeMs,
+        capturedAt,
+      };
     } catch (err) {
       const responseTimeMs = Date.now() - startedAt;
       const message = err instanceof Error ? err.message : String(err);
