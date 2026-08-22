@@ -134,6 +134,15 @@ async function run() {
   const token = (login.body as { data: { token: string } }).data.token;
   ok("admin login returns token");
 
+  // --- Malformed request bodies are client errors ---
+  await expectStatus(
+    "malformed JSON body returns 400 instead of 500",
+    400,
+    "/auth/login",
+    token,
+    { method: "POST", body: '{"email": broken' },
+  );
+
   // --- Analytics query validation ---
   await expectStatus("analytics period=bogus is rejected", 400, "/analytics/daily?period=bogus", token);
   await expectStatus("analytics from=not-a-date is rejected", 400, "/analytics/cameras?from=not-a-date", token);

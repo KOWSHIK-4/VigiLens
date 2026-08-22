@@ -13,13 +13,25 @@ export function errorHandler(
   const method = req.method;
 
   const isApiError = err instanceof ApiError;
+
+  // body-parser surfaces malformed JSON as a SyntaxError with `status`;
+  // that is a client problem (400), not a server fault.
+  const errStatus = (err as { status?: unknown }).status;
+  const isMalformedBody = err instanceof SyntaxError && errStatus === 400;
+
   const statusCode = isApiError
     ? err.statusCode
-    : res.statusCode >= 400
-      ? res.statusCode
-      : 500;
+    : isMalformedBody
+      ? 400
+      : res.statusCode >= 400
+        ? res.statusCode
+        : 500;
 
-  const message = isApiError ? err.message : "Internal server error";
+  const message = isApiError
+    ? err.message
+    : isMalformedBody
+      ? "Request body contains malformed JSON"
+      : "Internal server error";
 
   logger.log(
     statusCode >= 500 ? "error" : "warn",
