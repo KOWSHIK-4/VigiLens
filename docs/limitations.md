@@ -40,7 +40,10 @@ Honest list of what VigiLens does and does not do in its current form.
   `CORS_ORIGIN` env var. In production, if no origins are configured the
   service defaults to same-origin only (no cross-origin requests).
 - Camera credentials (`username`/`password`) are stored in the database in
-  plain text; they are used only to reach private RTSP/HTTP sources.
+  plain text; they are used only to reach private RTSP/HTTP sources. They are
+  never returned by the API — camera responses are redacted at the service
+  layer and a Prisma query extension strips `password` from any Camera-shaped
+  row (including nested includes).
 
 ## Data & metrics
 

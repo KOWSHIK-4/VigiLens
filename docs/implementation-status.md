@@ -13,6 +13,7 @@ Status of every VigiLens capability against the three-tier rubric:
 | Capability | Status | Notes |
 |-----------|--------|-------|
 | Auth + JWT + RBAC permissions | IMPLEMENTED | Users, roles, permission middleware, lockout, audit trail |
+| API validation & abuse protection | IMPLEMENTED | zod schemas on every route, layered rate limits (300/min global, 20/15min auth), camera credential redaction, CSV formula-injection guard |
 | Camera management | IMPLEMENTED | CRUD, health probing, frame capture, snapshots |
 | Detection history | IMPLEMENTED | CRUD, stats, CSV export, per-detector feed |
 | Alerts + cooldown | IMPLEMENTED | Engine `CooldownAlertStage` + ingestion dedup |

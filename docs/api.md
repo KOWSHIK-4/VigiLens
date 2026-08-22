@@ -52,7 +52,7 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 33 permissions across 12 categories and 4 roles: `super_admin`
+seeded with 34 permissions across 12 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
 Custom roles can be created and assigned. Accounts with status `disabled`
@@ -142,6 +142,31 @@ It requires authentication, so the browser must fetch it as an authenticated blo
 The health check (`POST /cameras/:id/health`) probes IP/HTTP cameras with a HEAD
 request and verifies RTSP/USB/video-file feeds by capturing a real frame through
 the AI service.
+
+Camera `username`/`password` fields are **write-only**: they are accepted on
+create/update so the backend can reach protected RTSP/HTTP sources, but they are
+never returned by any endpoint — including responses that embed the camera row
+(detections, alerts, reports, detector details).
+
+## Alerts
+
+Alerts are raised by the detection pipeline (and the internal ingestion path,
+subject to per-detector cooldowns). Every alert is attached to exactly one
+detection.
+
+```bash
+GET    /alerts?page=1&limit=20&severity=critical&isRead=false&search=person
+GET    /alerts/unread-count          # { count } for the navbar badge
+PATCH  /alerts/read-all              # mark every alert as read
+PATCH  /alerts/:id/read              # mark one alert as read   (alerts.manage)
+DELETE /alerts/:id                   # delete one alert         (alerts.manage)
+```
+
+Reading requires `alerts.read`; mutating requires `alerts.manage`. Query filters
+are validated: `severity` must be `info|warning|critical`, `isRead` must be
+`true|false`, `page`/`limit` must be positive integers with `limit <= 100`.
+Marking or deleting an unknown alert id returns `404`; a malformed uuid returns
+`400`.
 
 ## AI Models
 
@@ -620,6 +645,20 @@ listed. `status` is `idle` → `running` → `ok`/`error` per loop; failures are
 isolated per loop, and `videoPosSeconds` advances for `video_file` cameras so
 consecutive captures move forward through the recording instead of re-reading
 frame 0.
+
+## Rate Limits
+
+Two independent `express-rate-limit` buckets protect the API:
+
+| Bucket | Scope | Limit |
+|--------|-------|-------|
+| Global | every request | 300 per minute per IP |
+| Auth | `POST /auth/login`, `POST /auth/register` | 20 per 15 minutes per IP |
+
+The global bucket is sized for the dashboard's own polling (several requests
+every few seconds per signed-in client). Exceeding either bucket returns `429`
+with a JSON body. Targeted brute force is additionally covered by the
+per-account lockout after 5 consecutive failed logins (see Authentication).
 
 ## Request Context & Errors
 
