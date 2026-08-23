@@ -1,5 +1,7 @@
 import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
+import { buildPdfDocument } from "@/utils/pdf";
+import { toCsv } from "@/utils/csv";
 import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
 
 interface GenerateReportInput {
@@ -51,7 +53,11 @@ interface AlertRow {
   detection?: { camera?: { name: string | null } | null } | null;
 }
 
-async function buildReportData(type: string, dateRange: { from: string; to: string }, format: "pdf" | "csv"): Promise<string> {
+async function buildReportData(
+  type: string,
+  dateRange: { from: string; to: string },
+  format: "pdf" | "csv",
+): Promise<string | Buffer> {
   const from = new Date(dateRange.from);
   const to = new Date(dateRange.to);
   const where: Prisma.DetectionWhereInput = { timestamp: { gte: from, lte: to } };
@@ -96,70 +102,101 @@ async function buildReportData(type: string, dateRange: { from: string; to: stri
 }
 
 function buildCsv(detections: DetectionRow[], counts: StatusCountRow[]): string {
-  const header = "ID,Label,Confidence,Status,Camera ID,Timestamp";
-  const rows = detections.map((d) => `${d.id},${d.label},${d.confidence},${d.status},${d.cameraId},${d.timestamp}`);
-  const summary = `\n\nSummary\nStatus,Count\n${counts.map((c) => `${c.status},${c._count.id}`).join("\n")}`;
-  return header + "\n" + rows.join("\n") + summary;
+  const rows = toCsv(
+    ["ID", "Label", "Confidence", "Status", "Camera ID", "Timestamp"],
+    detections.map((d) => [d.id, d.label, d.confidence, d.status, d.cameraId, d.timestamp.toISOString()]),
+  );
+  const summary = "\n\nSummary\n" + toCsv(
+    ["Status", "Count"],
+    counts.map((c) => [c.status, c._count.id]),
+  );
+  return rows + summary;
 }
 
-function buildPdf(type: string, dateRange: { from: string; to: string }, detections: DetectionRow[], counts: StatusCountRow[]): string {
-  const summary = counts.map((c) => `  ${c.status}: ${c._count.id}`).join("\n");
-  return [
-    `${type.charAt(0).toUpperCase() + type.slice(1)} Report`,
+function buildPdf(type: string, dateRange: { from: string; to: string }, detections: DetectionRow[], counts: StatusCountRow[]): Buffer {
+  return buildPdfDocument(`${type.charAt(0).toUpperCase() + type.slice(1)} Report`, [
     `Period: ${dateRange.from} to ${dateRange.to}`,
     `Total Detections: ${detections.length}`,
     "",
     "Summary by Status:",
-    summary,
+    ...counts.map((c) => `  ${c.status}: ${c._count.id}`),
     "",
-    ...detections.map((d) => `  [${d.timestamp}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status}`),
-  ].join("\n");
+    ...detections.map((d) => `  [${d.timestamp.toISOString()}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status}`),
+  ]);
 }
 
 function buildCameraCsv(cameras: CameraRow[]): string {
-  const header = "Camera Name,Location,Status,Detection Count";
-  const rows = cameras.map((c) => `${c.name},${c.location || "N/A"},${c.status},${c._count.detections}`);
-  return header + "\n" + rows.join("\n");
+  return toCsv(
+    ["Camera Name", "Location", "Status", "Detection Count"],
+    cameras.map((c) => [c.name, c.location || "N/A", c.status, c._count.detections]),
+  );
 }
 
-function buildCameraPdf(cameras: CameraRow[]): string {
-  return [
-    "Camera Report",
+function buildCameraPdf(cameras: CameraRow[]): Buffer {
+  return buildPdfDocument("Camera Report", [
     "",
     ...cameras.map((c) => `  ${c.name} (${c.location || "N/A"}) - ${c.status} - ${c._count.detections} detections`),
-  ].join("\n");
+  ]);
 }
 
-function buildDetectionCsv(detections: DetectionRow[]): string {
-  const header = "ID,Label,Confidence,Status,Camera,Timestamp";
-  const rows = detections.map((d) => `${d.id},${d.label},${d.confidence},${d.status},${d.camera?.name || d.cameraId},${d.timestamp}`);
-  return header + "\n" + rows.join("\n");
+function buildDetectionCsv(detections: Array<DetectionRow & { camera?: { name: string | null } | null }>): string {
+  return toCsv(
+    ["ID", "Label", "Confidence", "Status", "Camera", "Timestamp"],
+    detections.map((d) => [
+      d.id,
+      d.label,
+      d.confidence,
+      d.status,
+      d.camera?.name || d.cameraId,
+      d.timestamp.toISOString(),
+    ]),
+  );
 }
 
-function buildDetectionPdf(detections: DetectionRow[]): string {
-  return [
-    "Detection Report",
+function buildDetectionPdf(detections: DetectionRow[]): Buffer {
+  return buildPdfDocument("Detection Report", [
     "",
-    ...detections.map((d) => `  [${d.timestamp}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status} on ${d.camera?.name || "Unknown"}`),
-  ].join("\n");
+    ...detections.map((d) => `  [${d.timestamp.toISOString()}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status} on ${d.camera?.name || "Unknown"}`),
+  ]);
 }
 
 function buildAlertCsv(alerts: AlertRow[]): string {
-  const header = "ID,Severity,Title,Message,Camera,Created At";
-  const rows = alerts.map((a) => `${a.id},${a.severity},${a.title},${a.message},${a.detection?.camera?.name || "N/A"},${a.createdAt}`);
-  return header + "\n" + rows.join("\n");
+  return toCsv(
+    ["ID", "Severity", "Title", "Message", "Camera", "Created At"],
+    alerts.map((a) => [
+      a.id,
+      a.severity,
+      a.title,
+      a.message,
+      a.detection?.camera?.name || "N/A",
+      a.createdAt.toISOString(),
+    ]),
+  );
 }
 
-function buildAlertPdf(alerts: AlertRow[]): string {
-  return [
-    "Alert Report",
+function buildAlertPdf(alerts: AlertRow[]): Buffer {
+  return buildPdfDocument("Alert Report", [
     "",
-    ...alerts.map((a) => `  [${a.createdAt}] ${a.severity.toUpperCase()}: ${a.title} - ${a.message} (${a.detection?.camera?.name || "Unknown"})`),
-  ].join("\n");
+    ...alerts.map((a) => `  [${a.createdAt.toISOString()}] ${a.severity.toUpperCase()}: ${a.title} - ${a.message} (${a.detection?.camera?.name || "Unknown"})`),
+  ]);
 }
 
 function generateReportUrl(type: string, id: string, format: "pdf" | "csv"): string {
   return `/api/reports/download/${id}?format=${format}`;
+}
+
+/**
+ * Reduces a report title to a safe download filename component: no path
+ * separators, control characters, quotes or CR/LF (which could otherwise
+ * smuggle extra headers into Content-Disposition).
+ */
+export function sanitizeReportFilename(title: string): string {
+  const cleaned = title
+    .replace(/[^A-Za-z0-9-_ ]+/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .toLowerCase();
+  return cleaned.length > 0 ? cleaned.slice(0, 80) : "report";
 }
 
 export const reportService = {
@@ -254,7 +291,7 @@ export const reportService = {
 
     const dateRange = report.dateRange as { from: string; to: string };
     const content = await buildReportData(report.type, dateRange, format);
-    const filename = `${report.title.replace(/\s+/g, "_").toLowerCase()}.${format}`;
+    const filename = `${sanitizeReportFilename(report.title)}.${format}`;
     const mimeType = format === "pdf" ? "application/pdf" : "text/csv";
 
     return { content, filename, mimeType };

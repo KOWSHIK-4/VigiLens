@@ -92,7 +92,7 @@ export const reportController = {
         format,
       );
       res.setHeader("Content-Type", mimeType);
-      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(content);
     } catch (err) {
       next(err);
