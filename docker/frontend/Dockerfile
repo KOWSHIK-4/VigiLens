@@ -18,7 +18,13 @@ FROM nginx:1.26-alpine
 RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# The stock nginx entrypoint renders /etc/nginx/templates/*.template into
+# conf.d via envsubst; 15-internal-key-header.sh (runs before it, scripts
+# execute in name order) exports the header directive from the runtime
+# INTERNAL_API_KEY secret.
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY docker-entrypoint.d/15-internal-key-header.sh /docker-entrypoint.d/15-internal-key-header.sh
+RUN chmod +x /docker-entrypoint.d/15-internal-key-header.sh
 
 EXPOSE 80
 

@@ -17,8 +17,15 @@ The compose stack hardens production behavior:
 - **Storage** — the backend data volume is mounted at `/data/vigilens` and
   created with the correct ownership (`mkdir -p /data/vigilens` in the image)
   so the service runs as a non-root user.
-- **nginx** — the frontend ships a production `nginx.conf` (gzip, caching,
-  SPA fallback) instead of relying on the dev server.
+- **nginx** — the frontend ships a production nginx config template
+  (`frontend/nginx.conf.template`; gzip, caching, SPA fallback) rendered at
+  container start. When `INTERNAL_API_KEY` is set, the `/detect/` proxy
+  injects it as `X-Internal-Key`, so the AI service's guarded webcam stream
+  and stats endpoints accept browser requests without the secret ever
+  reaching the client.
+- **AI service** — runs with `NODE_ENV=production`, which enforces the
+  internal-key check on the live webcam stream and stats endpoints and
+  refuses insecure default secrets at startup.
 
 ### Production Environment
 

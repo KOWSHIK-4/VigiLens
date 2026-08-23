@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import hmac
 import logging
 import os
 import threading
@@ -270,7 +271,7 @@ def _verify_internal_key(request: Request) -> None:
         if os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() not in ("1", "true"):
             return
     provided = request.headers.get("x-internal-key", "")
-    if provided != required:
+    if not hmac.compare_digest(provided.encode(), required.encode()):
         raise HTTPException(status_code=401, detail="Invalid or missing internal key")
 
 
@@ -283,6 +284,10 @@ async def detect_webcam(
     snapshot_enabled: bool = True,
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
 ):
+    # The webcam stream posts detections to the backend's internal API and
+    # exposes live stats; it must be guarded like the stats endpoint so a
+    # production deployment cannot be streamed or triggered anonymously.
+    _verify_internal_key(request)
     ai_detector_name = resolve_ai_detector_name(detector)
     try:
         detector_obj = detector_service.get(ai_detector_name)
