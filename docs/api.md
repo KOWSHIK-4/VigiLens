@@ -52,7 +52,7 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 34 permissions across 12 categories and 4 roles: `super_admin`
+seeded with 35 permissions across 12 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
 Custom roles can be created and assigned. Accounts with status `disabled`
@@ -389,7 +389,7 @@ per-class NMS) → object tracking (IoU) → normalization → persistence → a
 evaluation (with per-detector/camera/class cooldown). Every stage runs against
 real data; metrics are measured with `process.hrtime`, never fabricated.
 
-Engine endpoints require `models.read` (reads) and `models.manage` (process):
+Engine endpoints require `models.read` (reads) and `models.run` (process):
 
 ```bash
 GET    /engines                         # runtime descriptors for all detectors

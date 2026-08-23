@@ -109,7 +109,7 @@ uvicorn app.main:app --reload
   (CPU/memory/disk) and request/detection metrics view, and auto-refresh
 - **Production-Ready Ops** — Graceful shutdown on SIGTERM/SIGINT, request IDs
   for log correlation, centralized error handling, and hardened Docker images
-- **User & Role Management** — 4 built-in roles with 34 granular permissions, a
+- **User & Role Management** — 4 built-in roles with 35 granular permissions, a
   full users page (search, filters, sorting, pagination, status toggles,
   role assignment) and a role page with a permission editor; disabled accounts
   are blocked at login and on every request

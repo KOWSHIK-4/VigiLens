@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 import type {
   Camera,
   EngineDetector,
@@ -50,6 +52,8 @@ function statusBadgeClass(status: string) {
 
 export default function LiveCameraPage() {
   const imgRef = useRef<HTMLImageElement>(null);
+  const { user } = useAuth();
+  const canRunInference = hasPermission(user, "models.run");
   const [active, setActive] = useState(false);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [stats, setStats] = useState<WebcamStats | null>(null);
@@ -360,14 +364,16 @@ export default function LiveCameraPage() {
           <div className="card">
             <button
               onClick={() => void handleProcessLive()}
-              disabled={processingLive || !selectedCamera}
-              className="btn-primary w-full"
+              disabled={processingLive || !selectedCamera || !canRunInference}
+              title={canRunInference ? undefined : "Requires the Run AI Models permission"}
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {processingLive ? "Processing..." : "Process Live Frame"}
             </button>
             <p className="text-sm text-gray-500 mt-3">
-              Capture one fresh frame from the selected camera and run
-              inference now.
+              {canRunInference
+                ? "Capture one fresh frame from the selected camera and run inference now."
+                : "You need the Run AI Models permission to trigger on-demand inference."}
             </p>
             {liveResult && (
               <dl className="mt-3 space-y-1 text-sm">

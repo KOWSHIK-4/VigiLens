@@ -41,14 +41,14 @@ router.get(
 );
 router.post(
   "/:key/process",
-  requirePermission("models.manage"),
+  requirePermission("models.run"),
   validate(engineKeyParamSchema, "params"),
   upload.single("image"),
   engineController.processImage,
 );
 router.post(
   "/:key/process-live",
-  requirePermission("models.manage"),
+  requirePermission("models.run"),
   validate(engineKeyParamSchema, "params"),
   engineController.processLive,
 );
