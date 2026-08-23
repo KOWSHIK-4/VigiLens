@@ -181,6 +181,9 @@ export const engineController = {
           url: camera.url,
           cameraType: camera.cameraType,
           videoPosSeconds,
+          ...(camera.username && camera.password
+            ? { username: camera.username, password: camera.password }
+            : {}),
         },
       });
       const latencyMs = Number(process.hrtime.bigint() - startedAt) / 1e6;

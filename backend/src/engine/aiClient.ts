@@ -49,8 +49,40 @@ export interface AiServiceClient {
     cameraType: string,
     videoPosSeconds?: number,
     timeoutMs?: number,
+    credentials?: CaptureCredentials,
   ): Promise<Buffer>;
   isReachable(): Promise<boolean>;
+}
+
+/** Stream credentials stored on a camera row (write-only via the API). */
+export interface CaptureCredentials {
+  username: string;
+  password: string;
+}
+
+/**
+ * Embeds credentials into a stream URL so the AI service can open
+ * authenticated feeds. Only network URLs carry userinfo — device paths
+ * (`usb`, indexes) and video files are returned untouched. Malformed URLs
+ * are returned unchanged; capture will fail downstream with its own error.
+ */
+export function buildAuthenticatedSourceUrl(
+  source: string,
+  _cameraType: string,
+  credentials?: CaptureCredentials,
+): string {
+  if (!credentials || !credentials.username || !credentials.password) return source;
+  try {
+    const url = new URL(source);
+    if (url.protocol !== "rtsp:" && url.protocol !== "rtmp:" && url.protocol !== "http:" && url.protocol !== "https:") {
+      return source;
+    }
+    url.username = credentials.username;
+    url.password = credentials.password;
+    return url.toString();
+  } catch {
+    return source;
+  }
 }
 
 function toBoundingBox(bbox: { x1: number; y1: number; x2: number; y2: number }): BoundingBox {
@@ -160,13 +192,15 @@ export class HttpAiServiceClient implements AiServiceClient {
     cameraType: string,
     videoPosSeconds = 0,
     timeoutMs = 8000,
+    credentials?: CaptureCredentials,
   ): Promise<Buffer> {
     if (!source) {
       throw new AiServiceError("invalid_frame", "Camera source is required for frame capture");
     }
 
+    const authenticatedSource = buildAuthenticatedSourceUrl(source, cameraType, credentials);
     const url = new URL("/capture", this.baseUrl);
-    url.searchParams.set("source", source);
+    url.searchParams.set("source", authenticatedSource);
     url.searchParams.set("type", cameraType);
     if (videoPosSeconds > 0) url.searchParams.set("video_pos_seconds", String(videoPosSeconds));
 

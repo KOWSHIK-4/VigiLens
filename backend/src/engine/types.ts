@@ -119,6 +119,9 @@ export interface FrameSource {
   cameraType: string;
   /** Seek position for video_file cameras. */
   videoPosSeconds?: number;
+  /** Stored stream credentials, applied only to network URLs. */
+  username?: string;
+  password?: string;
 }
 
 /** A single frame entering the pipeline. */

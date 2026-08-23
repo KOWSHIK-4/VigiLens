@@ -38,6 +38,10 @@ export class AiServiceFrameCaptureStage implements FrameCaptureStage {
       frame.source.url,
       frame.source.cameraType,
       frame.source.videoPosSeconds,
+      undefined,
+      frame.source.username && frame.source.password
+        ? { username: frame.source.username, password: frame.source.password }
+        : undefined,
     );
     frame.image = buffer;
     logger.info("Frame captured from camera source", {

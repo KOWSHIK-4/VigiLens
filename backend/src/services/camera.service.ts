@@ -4,7 +4,7 @@ import { prisma } from "@/config/prisma";
 import { logger } from "@/config/logger";
 import { ApiError } from "@/utils/errors";
 import { settingsService } from "@/services/settings.service";
-import { aiServiceClient, AiServiceError, type AiServiceClient } from "@/engine/aiClient";
+import { aiServiceClient, AiServiceError, type AiServiceClient, type CaptureCredentials } from "@/engine/aiClient";
 import type { CameraStatus, CameraType, Prisma } from "@prisma/client";
 import type { CreateCameraInput, UpdateCameraInput } from "@/types";
 
@@ -96,6 +96,32 @@ function redactPassword<T extends { password?: string | null }>(
   const rest = { ...camera };
   delete (rest as { password?: string | null }).password;
   return rest;
+}
+
+function credentialsOf(camera: {
+  username?: string | null;
+  password?: string | null;
+}): CaptureCredentials | undefined {
+  return camera.username && camera.password
+    ? { username: camera.username, password: camera.password }
+    : undefined;
+}
+
+/**
+ * Loads the stream credentials for a camera by id. Used by capture paths
+ * (e.g. the monitor frame source) that only carry the camera id, so
+ * credentials never have to ride on shared runtime objects that could
+ * leak through API responses.
+ */
+export async function loadCameraCredentials(
+  id: string,
+): Promise<CaptureCredentials | null> {
+  const row = await prisma.camera.findUnique({
+    where: { id },
+    select: { username: true, password: true },
+  });
+  if (!row) return null;
+  return credentialsOf(row) ?? null;
 }
 
 export const cameraService = {
@@ -248,7 +274,16 @@ export const cameraService = {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
 
-        const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD" });
+        const headers: Record<string, string> = {};
+        const credentials = credentialsOf(camera);
+        if (credentials) {
+          // Cameras behind HTTP basic auth must be probed with the stored
+          // credentials, otherwise health checks fail with 401 even though
+          // the stream itself is reachable.
+          headers.Authorization = `Basic ${Buffer.from(`${camera.username}:${camera.password}`).toString("base64")}`;
+        }
+
+        const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD", headers });
         clearTimeout(timeout);
 
         responseTime = Date.now() - start;
@@ -263,7 +298,13 @@ export const cameraService = {
       // rtsp / usb / video_file feeds cannot be probed over plain HTTP — the
       // AI service captures an actual frame to verify the feed is reachable.
       try {
-        await client.captureFrame(camera.url, camera.cameraType, 0, SNAPSHOT_TIMEOUT_MS);
+        await client.captureFrame(
+          camera.url,
+          camera.cameraType,
+          0,
+          SNAPSHOT_TIMEOUT_MS,
+          credentialsOf(camera),
+        );
         responseTime = Date.now() - start;
         isHealthy = true;
         message = "Frame captured successfully";
@@ -323,6 +364,7 @@ export const cameraService = {
         camera.cameraType,
         0,
         SNAPSHOT_TIMEOUT_MS,
+        credentialsOf(camera),
       );
       const responseTimeMs = Date.now() - startedAt;
 

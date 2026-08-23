@@ -21,7 +21,8 @@ import { config } from "@/config";
 import { logger } from "@/config/logger";
 import { prisma } from "@/config/prisma";
 import { engineService } from "./engineService";
-import { aiServiceClient, type AiServiceClient } from "./aiClient";
+import { aiServiceClient, type AiServiceClient, type CaptureCredentials } from "./aiClient";
+import { loadCameraCredentials } from "@/services/camera.service";
 import type { CameraType } from "@prisma/client";
 import type { PipelineResult } from "./pipeline";
 
@@ -105,10 +106,25 @@ interface LoopRuntimeState {
 
 /** Frame source backed by the AI service `/capture` endpoint. */
 export class AiServiceFrameSource implements FrameSource {
-  constructor(private readonly client: AiServiceClient) {}
+  /**
+   * Credentials are resolved by camera id at capture time instead of being
+   * carried on the loop objects: monitor loops are serialized verbatim by
+   * the monitor status API, so storing secrets on them would leak.
+   */
+  constructor(
+    private readonly client: AiServiceClient,
+    private readonly loadCredentials: (cameraId: string) => Promise<CaptureCredentials | null> = loadCameraCredentials,
+  ) {}
 
   async capture(camera: MonitorCameraRef, videoPosSeconds: number): Promise<{ buffer: Buffer }> {
-    const buffer = await this.client.captureFrame(camera.url, camera.cameraType, videoPosSeconds);
+    const credentials = await this.loadCredentials(camera.id).catch(() => null);
+    const buffer = await this.client.captureFrame(
+      camera.url,
+      camera.cameraType,
+      videoPosSeconds,
+      undefined,
+      credentials ?? undefined,
+    );
     return { buffer };
   }
 }
