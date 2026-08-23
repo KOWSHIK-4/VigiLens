@@ -1,3 +1,4 @@
+from threading import Lock
 from typing import List, Optional
 
 import cv2
@@ -37,6 +38,10 @@ class YoloDetector(BaseDetector):
         self._class_filter = class_filter
         self._class_names = class_names or COCO_NAMES
         self._conf_threshold = confidence_threshold
+        # Detector instances are shared across request threads (image
+        # uploads, video jobs and live streams); ultralytics models are not
+        # thread-safe, so inference is serialized.
+        self._infer_lock = Lock()
 
     @property
     def name(self) -> str:
@@ -48,7 +53,8 @@ class YoloDetector(BaseDetector):
         confidence_threshold: float | None = None,
     ) -> List[Detection]:
         conf = confidence_threshold if confidence_threshold is not None else self._conf_threshold
-        results = self._model(image, verbose=False, conf=conf)[0]
+        with self._infer_lock:
+            results = self._model(image, verbose=False, conf=conf)[0]
         detections: list[Detection] = []
         for box in results.boxes:
             cls_id = int(box.cls[0])

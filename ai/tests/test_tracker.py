@@ -88,3 +88,48 @@ def test_tracker_reset_clears_tracks():
     assert tracker.active_count == 1
     tracker.reset()
     assert tracker.active_count == 0
+
+
+def test_tracker_duplicate_detections_cannot_share_a_track():
+    tracker = IouTracker()
+    tracker.update(
+        [
+            {
+                "class_name": "person",
+                "confidence": 0.9,
+                "bbox": {"x1": 0, "y1": 0, "x2": 10, "y2": 10},
+            }
+        ]
+    )
+    # Two heavily overlapping detections on one frame: only the first may
+    # claim the existing identity, the second must spawn its own.
+    frame = tracker.update(
+        [
+            {
+                "class_name": "person",
+                "confidence": 0.9,
+                "bbox": {"x1": 0, "y1": 0, "x2": 10, "y2": 10},
+            },
+            {
+                "class_name": "person",
+                "confidence": 0.9,
+                "bbox": {"x1": 1, "y1": 1, "x2": 11, "y2": 11},
+            },
+        ]
+    )
+    assert frame[0]["track_id"] != frame[1]["track_id"]
+
+
+def test_tracker_rematching_resets_misses():
+    tracker = IouTracker(max_misses=2)
+    det = {
+        "class_name": "person",
+        "confidence": 0.9,
+        "bbox": (0, 0, 10, 10),
+    }
+    tracker.update([det])
+    tracker.update([])  # misses = 1
+    tracker.update([det])  # re-matched: miss counter resets
+    tracker.update([])  # misses = 1
+    tracker.update([])  # misses = 2, still within max_misses
+    assert tracker.active_count == 1

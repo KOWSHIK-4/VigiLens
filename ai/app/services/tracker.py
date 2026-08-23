@@ -57,6 +57,11 @@ class IouTracker:
             best_id: Optional[int] = None
             best_iou = self._match_iou
             for track_id, track in self._tracks.items():
+                # A track already claimed by an earlier detection on this
+                # frame cannot serve a second one - duplicate boxes would
+                # otherwise merge into one identity.
+                if track_id in matched:
+                    continue
                 if track.cls != cls:
                     continue
                 overlap = iou(track.bbox, bbox)
@@ -72,8 +77,10 @@ class IouTracker:
             else:
                 track_id = best_id
                 matched.add(track_id)
-                self._tracks[track_id].bbox = bbox
-                self._tracks[track_id].hits += 1
+                track = self._tracks[track_id]
+                track.bbox = bbox
+                track.hits += 1
+                track.misses = 0
 
             result.append({**det, "track_id": str(track_id)})
 
