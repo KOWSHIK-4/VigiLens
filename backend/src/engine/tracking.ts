@@ -45,9 +45,11 @@ const DEFAULT_OPTIONS: IouTrackerOptions = {
 
 /**
  * Greedy IoU tracker: each detection is matched to the active track with
- * the highest overlap above `matchIoU`. Matched tracks are updated and
- * kept alive; unmatched detections spawn new tracks; tracks that miss too
- * many frames are retired and their ids eventually reused.
+ * the highest overlap above `matchIoU`. A track can be consumed by at most
+ * one detection per frame — two heavily-overlapping detections can never
+ * both claim the same identity. Matched tracks are updated and kept alive;
+ * unmatched detections spawn new tracks; tracks that miss too many frames
+ * are retired. Ids are monotonically increasing and never reused.
  */
 export class IouTracker implements ObjectTracker {
   private readonly tracks = new Map<number, TrackEntry>();
@@ -59,13 +61,20 @@ export class IouTracker implements ObjectTracker {
   }
 
   update(detections: RawDetection[], timestamp: number): TrackedDetection[] {
-    const matches = new Set<number>();
+    // Ids of tracks seen on this frame — either matched to a detection or
+    // freshly created. Retirement only ages tracks absent from this set,
+    // so a brand-new track never starts its life with a miss.
+    const seen = new Set<number>();
+    // Tracks already claimed by an earlier detection this frame; excluded
+    // from later matches so one identity cannot serve two detections.
+    const consumed = new Set<number>();
 
     const result: TrackedDetection[] = detections.map((detection) => {
       let bestId: number | null = null;
       let bestIoU = this.options.matchIoU;
 
       for (const [id, track] of this.tracks) {
+        if (consumed.has(id)) continue;
         if (track.className !== detection.className) continue;
         const overlap = iou(track.bbox, detection.bbox);
         if (overlap >= bestIoU) {
@@ -76,7 +85,8 @@ export class IouTracker implements ObjectTracker {
 
       const tracked = bestId !== null;
       const id = bestId ?? this.nextId++;
-      if (tracked) matches.add(id);
+      seen.add(id);
+      if (tracked) consumed.add(id);
 
       let entry = this.tracks.get(id);
       if (!entry) {
@@ -101,9 +111,9 @@ export class IouTracker implements ObjectTracker {
       };
     });
 
-    // Retirement: unmatched tracks age out after maxMisses frames.
+    // Retirement: tracks not seen this frame age out after maxMisses.
     for (const [id, track] of this.tracks) {
-      if (!matches.has(id)) {
+      if (!seen.has(id)) {
         track.misses += 1;
         if (track.misses > this.options.maxMisses) {
           this.tracks.delete(id);

@@ -132,6 +132,13 @@ export class EngineServiceImpl {
    * `${key}:` prefix to scope cleanup per detector.
    */
   private readonly trackersByKey = new Map<string, ObjectTracker>();
+  /**
+   * Exponentially-weighted moving average of measured frames-per-second,
+   * computed from the full per-frame wall time observed in processFrame.
+   * Reported by getHealth so throughput reflects actual processing speed
+   * instead of an artifact of cumulative counters.
+   */
+  private readonly throughputEmaFpsByKey = new Map<string, number>();
 
   constructor(client: AiServiceClient) {
     this.client = client;
@@ -149,6 +156,7 @@ export class EngineServiceImpl {
         }
       }
       this.metricsByKey.delete(key);
+      this.throughputEmaFpsByKey.delete(key);
     });
   }
 
@@ -250,6 +258,7 @@ export class EngineServiceImpl {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
       metricsService.recordDetection(durationMs);
       this.recordMetrics(key, result.metrics);
+      this.recordThroughput(key, durationMs);
       lifecycleManager.markInferenceSucceeded(key);
       logger.info("Engine frame processed", {
         key,
@@ -274,6 +283,15 @@ export class EngineServiceImpl {
         { code: "DETECTOR_INFERENCE_FAILED" },
       );
     }
+  }
+
+  private recordThroughput(key: string, durationMs: number): void {
+    if (!(durationMs > 0)) return;
+    const instantFps = 1000 / durationMs;
+    const prev = this.throughputEmaFpsByKey.get(key);
+    // 20% weight to the newest frame smooths single-frame spikes while
+    // still tracking sustained speed changes quickly.
+    this.throughputEmaFpsByKey.set(key, prev === undefined ? instantFps : prev * 0.8 + instantFps * 0.2);
   }
 
   private recordMetrics(key: string, incoming: PipelineMetrics): void {
@@ -345,12 +363,10 @@ export class EngineServiceImpl {
     const lifecycle = lifecycleManager.get(key);
 
     const latencyMs = metrics && metrics.framesProcessed > 0 ? metrics.inferenceTimeMs : null;
-    const elapsedSinceLastFrame =
-      metrics?.lastFrameAt != null ? Date.now() - metrics.lastFrameAt.getTime() : null;
-    const throughputFps =
-      metrics && metrics.framesProcessed > 0 && elapsedSinceLastFrame !== null && elapsedSinceLastFrame > 0
-        ? Math.round((metrics.framesProcessed / elapsedSinceLastFrame) * 1000 * 10) / 10
-        : null;
+    // Measured EMA of per-frame wall time; null until the detector has
+    // processed at least one frame.
+    const emaFps = this.throughputEmaFpsByKey.get(key);
+    const throughputFps = emaFps !== undefined ? Math.round(emaFps * 10) / 10 : null;
 
     return {
       key: descriptor.key,

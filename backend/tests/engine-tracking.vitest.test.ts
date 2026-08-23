@@ -72,6 +72,37 @@ describe("Engine Tracking", () => {
     expect(reused[0].trackId !== aId).toBe(true);
   });
 
+  it("two overlapping detections cannot claim the same track", () => {
+    const tracker = new IouTracker({ matchIoU: 0.35, maxMisses: 5 });
+    tracker.update([person(0, 0, 10, 10)], 1);
+    // Both detections heavily overlap the existing track; only the first
+    // may consume it, the second must spawn its own identity.
+    const t = tracker.update([person(0, 0, 10, 10), person(1, 1, 11, 11)], 2);
+    expect(t[0].trackId).not.toBe(t[1].trackId);
+  });
+
+  it("a freshly created track does not start with a miss", () => {
+    const tracker = new IouTracker({ matchIoU: 0.35, maxMisses: 2 });
+    tracker.update([person(0, 0, 10, 10)], 1);
+    // Three absent frames: misses go 1, 2 — still within maxMisses.
+    tracker.update([], 2);
+    tracker.update([], 3);
+    expect(tracker.activeTrackCount).toBe(1);
+    // Fourth absent frame pushes misses to 3 and retires the track.
+    tracker.update([], 4);
+    expect(tracker.activeTrackCount).toBe(0);
+  });
+
+  it("re-matching a track resets its miss counter", () => {
+    const tracker = new IouTracker({ matchIoU: 0.35, maxMisses: 2 });
+    tracker.update([person(0, 0, 10, 10)], 1);
+    tracker.update([], 2); // misses = 1
+    tracker.update([person(0, 0, 10, 10)], 3); // re-matched, misses reset
+    tracker.update([], 4); // misses = 1
+    tracker.update([], 5); // misses = 2, still alive
+    expect(tracker.activeTrackCount).toBe(1);
+  });
+
   it("activeTrackCount reports live tracks", () => {
     const tracker3 = new IouTracker({ matchIoU: 0.35, maxMisses: 10 });
     tracker3.update([person(0, 0, 10, 10)], 1);

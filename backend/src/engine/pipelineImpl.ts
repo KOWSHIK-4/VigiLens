@@ -199,10 +199,11 @@ class ConcretePipeline implements InferencePipeline {
         tracked = raw.map((d, index) => ({ ...d, trackId: null, objectId: `${d.className}:${index}` }));
       }
 
-      // Set total processing time before normalization so detections can
-      // carry their own measured end-to-end latency.
-      const total = elapsedMs(startedAt);
-      ctx.stageTimes.totalProcessingTimeMs = total;
+      // Per-detection latency covers capture through tracking/normalization;
+      // persistence and alerting happen afterwards and are not part of the
+      // value stamped onto individual detection rows.
+      const pipelineLatencyMs = elapsedMs(startedAt);
+      ctx.stageTimes.totalProcessingTimeMs = pipelineLatencyMs;
 
       const normalize = this.runner.get<NormalizationStage | undefined>("normalize");
       if (normalize) {
@@ -229,7 +230,9 @@ class ConcretePipeline implements InferencePipeline {
       this.state.preprocessingTimeMs = ctx.stageTimes.preprocess ?? this.state.preprocessingTimeMs;
       this.state.postprocessingTimeMs = ctx.stageTimes.postprocess ?? this.state.postprocessingTimeMs;
       this.state.trackingTimeMs = ctx.stageTimes.tracking ?? this.state.trackingTimeMs;
-      this.state.totalProcessingTimeMs = total;
+      // Metrics-level total is the true end-to-end frame wall time,
+      // measured after every stage (including persistence and alerting).
+      this.state.totalProcessingTimeMs = elapsedMs(startedAt);
       this.state.detectionsPerFrame = detections.length;
       if (detections.length > 0) {
         this.state.lastDetectionAt = new Date();
