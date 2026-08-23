@@ -66,6 +66,9 @@ type CacheData =
   | ConfidenceBucket[];
 
 const cache = new Map<string, { data: CacheData; expiresAt: number }>();
+// Distinct from/to combinations are unbounded; cap the cache and sweep
+// expired/oldest entries so long-running processes cannot leak memory.
+const CACHE_MAX_ENTRIES = 200;
 
 function cacheGet<T extends CacheData>(key: string): T | null {
   const entry = cache.get(key);
@@ -78,7 +81,30 @@ function cacheGet<T extends CacheData>(key: string): T | null {
 }
 
 function cacheSet(key: string, data: CacheData, ttl = 60_000): void {
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    for (const [existingKey, entry] of cache) {
+      if (Date.now() > entry.expiresAt) cache.delete(existingKey);
+    }
+    while (cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
+    }
+  }
   cache.set(key, { data, expiresAt: Date.now() + ttl });
+}
+
+/**
+ * Stable cache-range component for a params object. `period` wins;
+ * otherwise the explicit from/to timestamps form the key. Without this,
+ * two requests with different `from` values would share one cached
+ * result computed for whichever arrived first.
+ */
+export function rangeKeyFor(params: PeriodParams): string {
+  if (params.period) return `p${params.period}`;
+  const from = params.from ? new Date(params.from).toISOString() : "all";
+  const to = params.to ? new Date(params.to).toISOString() : "all";
+  return `${from}..${to}`;
 }
 
 function getDateRange(days: number): { from: Date; to: Date } {
@@ -199,7 +225,7 @@ export const analyticsService = {
   },
 
   async getCameras(params: PeriodParams): Promise<CameraAnalyticsResult[]> {
-    const cacheKey = `analytics:cameras:${params.period || "30"}`;
+    const cacheKey = `analytics:cameras:${rangeKeyFor(params)}`;
     const cached = cacheGet<CameraAnalyticsResult[]>(cacheKey);
     if (cached) return cached;
 
@@ -240,7 +266,7 @@ export const analyticsService = {
   },
 
   async getDetectors(params: PeriodParams): Promise<DetectorResult[]> {
-    const cacheKey = `analytics:detectors:${params.period || "30"}`;
+    const cacheKey = `analytics:detectors:${rangeKeyFor(params)}`;
     const cached = cacheGet<DetectorResult[]>(cacheKey);
     if (cached) return cached;
 
@@ -306,8 +332,7 @@ export const analyticsService = {
   },
 
   async getConfidenceDistribution(params: PeriodParams): Promise<ConfidenceBucket[]> {
-    const rangeKey = params.period || `${params.from ?? "all"}..${params.to ?? "all"}`;
-    const cacheKey = `analytics:confidence:${rangeKey}`;
+    const cacheKey = `analytics:confidence:${rangeKeyFor(params)}`;
     const cached = cacheGet<ConfidenceBucket[]>(cacheKey);
     if (cached) return cached;
 

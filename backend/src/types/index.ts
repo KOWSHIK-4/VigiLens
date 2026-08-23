@@ -81,7 +81,11 @@ export const createCameraSchema = cameraBaseSchema.refine(
   (data) => ({ message: urlByType[data.cameraType]?.message || "Invalid URL for selected camera type", path: ["url"] }),
 );
 
-export const updateCameraSchema = cameraBaseSchema.partial();
+export const updateCameraSchema = cameraBaseSchema
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided to update",
+  });
 
 export const cameraQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),

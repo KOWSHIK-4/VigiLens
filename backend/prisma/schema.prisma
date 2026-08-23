@@ -177,6 +177,10 @@ model Detection {
   @@index([timestamp])
   @@index([detectorKey])
   @@index([trackId])
+  // Per-camera and per-detector history queries filter by the leading
+  // column and order by timestamp DESC; composites avoid a sort step.
+  @@index([cameraId, timestamp(sort: Desc)])
+  @@index([detectorKey, timestamp(sort: Desc)])
   @@map("detections")
 }
 
