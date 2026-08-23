@@ -1,4 +1,5 @@
 import logging
+import uuid
 from pathlib import Path
 from typing import List
 
@@ -59,32 +60,51 @@ class DetectorService:
         detector = self.get(detector_name)
 
         cap = cv2.VideoCapture(video_path)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        try:
+            if not cap.isOpened():
+                raise ValueError(f"Could not open video '{video_path}'")
 
-        out_dir = Path(__file__).resolve().parent.parent / "output"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = str(out_dir / f"processed_{Path(video_path).stem}.mp4")
-        writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            # Streams and some containers report zero metadata; fall back to
+            # sane defaults instead of handing VideoWriter a 0x0 frame size
+            # (which silently produces an empty output file).
+            fps = int(fps) if fps and fps > 0 else 25
+            if w <= 0 or h <= 0:
+                w, h = 640, 480
 
-        all_detections: list[list[dict]] = []
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            detections = detector.detect(frame, confidence_threshold=confidence_threshold)
-            annotated = detector.draw(frame, detections)
-            writer.write(annotated)
-            all_detections.append(
-                [{"class_name": d.class_name, "confidence": d.confidence, "bbox": list(d.bbox)} for d in detections]
-            )
+            out_dir = Path(__file__).resolve().parent.parent / "output"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            # Unique name per run: two uploads of same-named videos must not
+            # overwrite each other's annotated output.
+            out_path = str(out_dir / f"processed_{Path(video_path).stem}_{uuid.uuid4().hex[:8]}.mp4")
+            writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+            if not writer.isOpened():
+                raise ValueError(f"Could not open output writer at '{out_path}'")
 
-        cap.release()
-        writer.release()
-        return all_detections, out_path
+            all_detections: list[list[dict]] = []
+            try:
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    detections = detector.detect(frame, confidence_threshold=confidence_threshold)
+                    annotated = detector.draw(frame, detections)
+                    writer.write(annotated)
+                    all_detections.append(
+                        [
+                            {"class_name": d.class_name, "confidence": d.confidence, "bbox": list(d.bbox)}
+                            for d in detections
+                        ]
+                    )
+            finally:
+                writer.release()
+            return all_detections, out_path
+        finally:
+            cap.release()
 
 
 detector_service = DetectorService()

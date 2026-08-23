@@ -56,7 +56,30 @@ def usb_device_index(source: str) -> int | None:
 
 
 def open_capture(source: str, camera_type: str, open_timeout_ms: int) -> cv2.VideoCapture:
-    """Open an OpenCV capture for the source, applying read/open timeouts."""
+    """Open an OpenCV capture, bounding network opens by the configured timeout.
+
+    The open/read timeouts must be supplied at construction time: setting
+    them after ``VideoCapture()`` returns is too late, because the
+    constructor has already blocked on the network handshake (a dead rtsp
+    endpoint would stall the caller for the OS-level TCP timeout).
+    """
+    source_is_str = isinstance(source, str)
+    is_network = (
+        camera_type in ("rtsp", "ip")
+        or (source_is_str and str(source).startswith(("rtsp://", "rtmp://", "http://", "https://")))
+    )
+    if is_network and open_timeout_ms > 0:
+        return cv2.VideoCapture(
+            str(source),
+            cv2.CAP_FFMPEG,
+            [
+                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+                int(open_timeout_ms),
+                cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+                int(open_timeout_ms),
+            ],
+        )
+
     cap = cv2.VideoCapture(source)
     if open_timeout_ms > 0:
         cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, open_timeout_ms)

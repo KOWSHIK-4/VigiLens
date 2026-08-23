@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import os
 import threading
@@ -140,33 +141,16 @@ async def detect_image(
 
     try:
         image_data = await file.read()
-        detections, image = detector_service.detect_image(image_data, detector, confidence)
-
-        dets_json = [
-            {
-                "class_name": d.class_name,
-                "confidence": d.confidence,
-                "bbox": {"x1": d.bbox[0], "y1": d.bbox[1], "x2": d.bbox[2], "y2": d.bbox[3]},
-            }
-            for d in detections
-        ]
-
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        out_path = str(OUTPUT_DIR / f"{uuid.uuid4().hex}.jpg")
-        detector_obj = detector_service.get(detector)
-        annotated = detector_obj.draw(image, detections)
-        cv2.imwrite(out_path, annotated)
-        _prune_output_dir()
-
-        h, w = image.shape[:2]
-        return {
-            "success": True,
-            "detections": dets_json,
-            "count": len(detections),
-            "output_path": out_path,
-            "image_width": int(w),
-            "image_height": int(h),
-        }
+        # Decode + model inference are CPU-bound; keep them off the event
+        # loop so a slow frame never stalls concurrent requests.
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                _detect_image_sync, image_data, detector, confidence
+            ),
+        )
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KeyError as e:
@@ -174,6 +158,40 @@ async def detect_image(
     except Exception as e:
         logger.exception("Image detection failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+def _detect_image_sync(
+    image_data: bytes,
+    detector: str | None,
+    confidence: float,
+) -> dict:
+    detections, image = detector_service.detect_image(image_data, detector, confidence)
+
+    dets_json = [
+        {
+            "class_name": d.class_name,
+            "confidence": d.confidence,
+            "bbox": {"x1": d.bbox[0], "y1": d.bbox[1], "x2": d.bbox[2], "y2": d.bbox[3]},
+        }
+        for d in detections
+    ]
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = str(OUTPUT_DIR / f"{uuid.uuid4().hex}.jpg")
+    detector_obj = detector_service.get(detector)
+    annotated = detector_obj.draw(image, detections)
+    cv2.imwrite(out_path, annotated)
+    _prune_output_dir()
+
+    h, w = image.shape[:2]
+    return {
+        "success": True,
+        "detections": dets_json,
+        "count": len(detections),
+        "output_path": out_path,
+        "image_width": int(w),
+        "image_height": int(h),
+    }
 
 
 @router.post("/video")
