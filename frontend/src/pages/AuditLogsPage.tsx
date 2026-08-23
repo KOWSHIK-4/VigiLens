@@ -22,18 +22,25 @@ import { AUDIT_ACTIONS } from "@/types";
 import type { AuditLog, AuditLogAction, AuditLogStatus } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
+import { showToast } from "@/utils/toast";
+import { useEffect } from "react";
 
 const PAGE_SIZE = 15;
 
+// Modules the backend actually writes audit logs under; every value must
+// be selectable here or those logs become unfilterable in the UI.
 const modules = [
   "auth",
   "users",
+  "roles",
   "cameras",
   "detections",
+  "detectors",
   "alerts",
   "models",
+  "monitoring",
   "reports",
-  "roles",
+  "settings",
 ];
 
 const sortableColumns = [
@@ -138,6 +145,10 @@ export default function AuditLogsPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, data?.totalPages ?? 1);
 
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const handleSort = (key: string) => {
     if (sortBy === key) {
       setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -160,6 +171,13 @@ export default function AuditLogsPage() {
         dateTo: dateTo || undefined,
       });
       downloadCSV(blob);
+    } catch (err) {
+      console.error("Failed to export audit logs:", err);
+      showToast({
+        severity: "critical",
+        title: "Export failed",
+        message: "Could not generate the CSV export. Please try again.",
+      });
     } finally {
       setExporting(false);
     }

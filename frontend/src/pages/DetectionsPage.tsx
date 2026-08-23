@@ -1,8 +1,10 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { detectionService } from "@/services/detections";
 import { cameraService } from "@/services/cameras";
 import DetectionImagePreview from "@/components/DetectionImagePreview";
+import DetectionSnapshot from "@/components/DetectionSnapshot";
+import { downloadDetectionImage } from "@/utils/detectionImage";
 import DetectionDetailsDrawer from "@/components/DetectionDetailsDrawer";
 import { DeleteDetectionDialog } from "@/components/DeleteDetectionDialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -111,15 +113,31 @@ export default function DetectionsPage() {
     }
   };
 
-  const handleDownloadSnapshot = (detection: Detection) => {
-    const a = document.createElement("a");
-    a.href = detection.imageUrl;
-    a.download = `detection-${detection.label.replace(/\s+/g, "-").toLowerCase()}.jpg`;
-    a.target = "_blank";
-    a.click();
+  const handleDownloadSnapshot = async (detection: Detection) => {
+    try {
+      const ok = await downloadDetectionImage(detection.imageUrl, detection.label);
+      if (!ok) {
+        showToast({
+          severity: "info",
+          title: "No snapshot",
+          message: "No snapshot was captured for this detection.",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to download snapshot:", err);
+      showToast({
+        severity: "critical",
+        title: "Download failed",
+        message: "Could not download the snapshot. Please try again.",
+      });
+    }
   };
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <div className="space-y-6">
@@ -342,14 +360,12 @@ export default function DetectionsPage() {
                       >
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => setPreviewImage(detection.imageUrl)}
-                            className="w-12 h-9 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 hover:ring-2 hover:ring-brand-500 transition-all"
+                            onClick={() => detection.imageUrl && setPreviewImage(detection.imageUrl)}
+                            disabled={!detection.imageUrl}
+                            className="w-12 h-9 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 hover:ring-2 hover:ring-brand-500 transition-all disabled:cursor-not-allowed disabled:hover:ring-0"
+                            title={detection.imageUrl ? "Preview image" : "No snapshot captured"}
                           >
-                            <img
-                              src={detection.imageUrl}
-                              alt={detection.label}
-                              className="w-full h-full object-cover"
-                            />
+                            <DetectionSnapshot imageUrl={detection.imageUrl} alt={detection.label} />
                           </button>
                         </td>
                         <td className="px-4 py-3">
@@ -403,9 +419,10 @@ export default function DetectionsPage() {
                               <Eye className="w-4 h-4 text-gray-500" />
                             </button>
                             <button
-                              onClick={() => setPreviewImage(detection.imageUrl)}
-                              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Preview image"
+                              onClick={() => detection.imageUrl && setPreviewImage(detection.imageUrl)}
+                              disabled={!detection.imageUrl}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={detection.imageUrl ? "Preview image" : "No snapshot captured"}
                             >
                               <Maximize2 className="w-4 h-4 text-gray-500" />
                             </button>

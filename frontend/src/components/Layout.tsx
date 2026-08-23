@@ -86,8 +86,18 @@ export default function Layout() {
     enabled: canSeeAlerts,
   });
 
+  // The first response seeds known alert ids so pre-existing alerts do not
+  // fire a toast storm on page load; afterwards only genuinely new alerts
+  // toast. The id set is bounded so long sessions cannot grow it forever.
+  const seededAlertIdsRef = useRef(false);
+
   useEffect(() => {
     if (!latestAlerts?.data) return;
+    if (!seededAlertIdsRef.current) {
+      latestAlerts.data.forEach((a: Alert) => prevAlertIds.current.add(a.id));
+      seededAlertIdsRef.current = true;
+      return;
+    }
     const newAlerts = latestAlerts.data.filter(
       (a: Alert) => !prevAlertIds.current.has(a.id),
     );
@@ -99,6 +109,11 @@ export default function Layout() {
       });
     });
     latestAlerts.data.forEach((a: Alert) => prevAlertIds.current.add(a.id));
+    while (prevAlertIds.current.size > 500) {
+      const oldest = prevAlertIds.current.values().next().value;
+      if (oldest === undefined) break;
+      prevAlertIds.current.delete(oldest);
+    }
   }, [latestAlerts]);
 
   const unreadCount = unreadData ?? 0;

@@ -1,5 +1,8 @@
 import type { Detection } from "@/types";
 import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle, Box, Cpu, Hash } from "lucide-react";
+import DetectionSnapshot from "./DetectionSnapshot";
+import { downloadDetectionImage } from "@/utils/detectionImage";
+import { showToast } from "@/utils/toast";
 
 interface DetectionDetailsDrawerProps {
   detection: Detection | null;
@@ -22,12 +25,26 @@ const statusIcons = {
 export default function DetectionDetailsDrawer({ detection, onClose, onPreview }: DetectionDetailsDrawerProps) {
   if (!detection) return null;
 
-  const handleDownload = () => {
-    const a = document.createElement("a");
-    a.href = detection.imageUrl;
-    a.download = `detection-${detection.label.replace(/\s+/g, "-").toLowerCase()}.jpg`;
-    a.target = "_blank";
-    a.click();
+  const hasSnapshot = Boolean(detection.imageUrl);
+
+  const handleDownload = async () => {
+    try {
+      const ok = await downloadDetectionImage(detection.imageUrl, detection.label);
+      if (!ok) {
+        showToast({
+          severity: "info",
+          title: "No snapshot",
+          message: "No snapshot was captured for this detection.",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to download snapshot:", err);
+      showToast({
+        severity: "critical",
+        title: "Download failed",
+        message: "Could not download the snapshot. Please try again.",
+      });
+    }
   };
 
   return (
@@ -52,19 +69,19 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
 
         <div className="p-6 space-y-6">
           <div
-            className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 cursor-pointer group"
-            onClick={() => onPreview(detection.imageUrl)}
+            className={`relative aspect-video rounded-xl overflow-hidden bg-gray-100 ${
+              hasSnapshot ? "cursor-pointer group" : ""
+            }`}
+            onClick={() => hasSnapshot && onPreview(detection.imageUrl)}
           >
-            <img
-              src={detection.imageUrl}
-              alt={detection.label}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-              <span className="text-white/0 group-hover:text-white/80 text-sm font-medium transition-all">
-                Click to preview
-              </span>
-            </div>
+            <DetectionSnapshot imageUrl={detection.imageUrl} alt={detection.label} />
+            {hasSnapshot && (
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <span className="text-white/0 group-hover:text-white/80 text-sm font-medium transition-all">
+                  Click to preview
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -131,19 +148,26 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
             <div className="flex gap-3">
               <button
                 onClick={handleDownload}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
+                disabled={!hasSnapshot}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Download className="w-4 h-4" />
                 Download Snapshot
               </button>
               <button
                 onClick={() => onPreview(detection.imageUrl)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                disabled={!hasSnapshot}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <AlertTriangle className="w-4 h-4" />
                 View Full Image
               </button>
             </div>
+            {!hasSnapshot && (
+              <p className="text-xs text-gray-400 mt-2">
+                No snapshot was captured for this detection.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -363,38 +363,30 @@ export default function DetectorDetailsDrawer({
                 Monitored Cameras
               </p>
               <div className="space-y-1.5">
-                {cameras.length === 0
-                  ? Array.from({ length: Math.min(detector.cameraCount, 4) }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
-                      >
-                        <Camera className="w-4 h-4 text-gray-400" />
-                        Camera assignment {i + 1}
-                      </div>
-                    ))
-                  : cameras.map((cam) => (
-                      <div
-                        key={cam.id}
-                        className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
-                      >
-                        <Camera className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{cam.name}</span>
-                        <span
-                          className={`ml-auto flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                            cam.enabled
-                              ? "bg-green-50 text-green-700"
-                              : "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {cam.enabled ? "Active" : "Paused"}
-                        </span>
-                      </div>
-                    ))}
-                {detector.cameraCount > 4 && cameras.length === 0 && (
-                  <p className="text-xs text-gray-400">
-                    +{detector.cameraCount - 4} more
+                {cameras.length === 0 ? (
+                  <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                    No camera assignments found for this detector yet. Use the
+                    Cameras action to assign it.
                   </p>
+                ) : (
+                  cameras.map((cam) => (
+                    <div
+                      key={cam.id}
+                      className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
+                    >
+                      <Camera className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{cam.name}</span>
+                      <span
+                        className={`ml-auto flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                          cam.enabled
+                            ? "bg-green-50 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {cam.enabled ? "Active" : "Paused"}
+                      </span>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

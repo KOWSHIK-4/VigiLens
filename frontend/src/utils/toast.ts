@@ -20,7 +20,9 @@ export function useToast() {
 
   useEffect(() => {
     const listener = (toast: ToastData) => {
-      setToasts((prev) => [...prev, toast]);
+      // Keep the newest toasts only so an alert burst cannot stack
+      // unbounded overlays on screen.
+      setToasts((prev) => [...prev.slice(-4), toast]);
     };
     toastListeners.push(listener);
     return () => {

@@ -1,4 +1,5 @@
 import type { Detection } from "@/types";
+import DetectionSnapshot from "./DetectionSnapshot";
 
 const statusColors = {
   critical: "bg-red-100 text-red-800 border-red-200",
@@ -9,12 +10,8 @@ const statusColors = {
 export default function DetectionCard({ detection }: { detection: Detection }) {
   return (
     <div className="card flex items-start gap-4">
-      <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
-        <img
-          src={detection.imageUrl}
-          alt={detection.label}
-          className="w-full h-full object-cover"
-        />
+      <div className="w-20 h-20 rounded-lg flex-shrink-0 overflow-hidden">
+        <DetectionSnapshot imageUrl={detection.imageUrl} alt={detection.label} />
       </div>
 
       <div className="flex-1 min-w-0">
