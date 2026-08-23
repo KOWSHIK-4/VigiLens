@@ -121,6 +121,36 @@ async function run() {
       "detector restart resets the tracker (next frame starts at id 0)",
       `trackId=${f5.detections[0]?.trackId}`,
     );
+
+    // Cross-camera isolation: the same detector key running against a
+    // different camera must get its own tracker. Camera-2 has never been
+    // seen by this engine, so its first detection is track "0" even though
+    // camera-1 already minted several identities.
+    const c2f1 = await engine.processFrame("person", "demo-camera-2", image, { force: true });
+    assert(
+      c2f1.detections[0]?.trackId === "0",
+      "a second camera gets its own tracker (starts at id 0)",
+      `trackId=${c2f1.detections[0]?.trackId}`,
+    );
+
+    // Scoped restart: notifying a restart for "vehicle" must reset vehicle
+    // trackers only — the person tracker on demo-camera-2 keeps its state.
+    const vBefore = await engine.processFrame("vehicle", "demo-camera-2", image, { force: true });
+    notifyDetectorRestart("vehicle");
+    const vAfter = await engine.processFrame("vehicle", "demo-camera-2", image, { force: true });
+    assert(
+      vAfter.detections[0]?.trackId === "0",
+      "scoped restart resets only the named detector's tracker",
+      `trackId=${vAfter.detections[0]?.trackId}`,
+    );
+    const c2f2 = await engine.processFrame("person", "demo-camera-2", image, { force: true });
+    assert(
+      c2f2.detections[0]?.trackId !== null &&
+        c2f2.detections[0]?.trackId === c2f1.detections[0]?.trackId,
+      "scoped restart leaves other detectors' trackers intact",
+      `before=${c2f1.detections[0]?.trackId} after=${c2f2.detections[0]?.trackId}`,
+    );
+    void vBefore;
   } finally {
     alertService.create = originalCreate;
   }

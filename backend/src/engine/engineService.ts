@@ -126,13 +126,30 @@ export class EngineServiceImpl {
   private readonly client: AiServiceClient;
   private readonly metricsByKey = new Map<string, PipelineMetrics>();
   private readonly alertCooldownRegistry = new AlertCooldownRegistry();
+  /**
+   * Trackers are keyed by `detectorKey:cameraId`. A detector running on two
+   * cameras must not share object tracks between them — identities on one
+   * feed have no relation to the other. Restart resets below rely on the
+   * `${key}:` prefix to scope cleanup per detector.
+   */
   private readonly trackersByKey = new Map<string, ObjectTracker>();
 
   constructor(client: AiServiceClient) {
     this.client = client;
-    onDetectorRestart(() => {
-      this.trackersByKey.clear();
-      this.metricsByKey.clear();
+    onDetectorRestart((key) => {
+      if (key === undefined) {
+        // Process-wide reset (e.g. test harness teardown).
+        this.trackersByKey.clear();
+        this.metricsByKey.clear();
+        return;
+      }
+      const prefix = `${key}:`;
+      for (const trackerKey of [...this.trackersByKey.keys()]) {
+        if (trackerKey.startsWith(prefix)) {
+          this.trackersByKey.delete(trackerKey);
+        }
+      }
+      this.metricsByKey.delete(key);
     });
   }
 
@@ -140,11 +157,12 @@ export class EngineServiceImpl {
     return isDetectorRunnable(key);
   }
 
-  buildPipeline(key: string): InferencePipeline {
-    let tracker = this.trackersByKey.get(key);
+  buildPipeline(key: string, cameraId: string): InferencePipeline {
+    const trackerCacheKey = `${key}:${cameraId}`;
+    let tracker = this.trackersByKey.get(trackerCacheKey);
     if (!tracker) {
       tracker = new IouTracker();
-      this.trackersByKey.set(key, tracker);
+      this.trackersByKey.set(trackerCacheKey, tracker);
     }
 
     const pipeline = new ConcretePipelineBuilder()
@@ -217,7 +235,7 @@ export class EngineServiceImpl {
       );
     }
 
-    const pipeline = this.buildPipeline(key);
+    const pipeline = this.buildPipeline(key, cameraId);
     const input: FrameInput = {
       cameraId,
       detectorId: descriptor.id,

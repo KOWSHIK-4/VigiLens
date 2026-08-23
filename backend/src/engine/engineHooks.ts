@@ -8,7 +8,12 @@
 
 import { logger } from "@/config/logger";
 
-type EngineRestartListener = () => void;
+/**
+ * Listener invoked when a detector restarts. Receives the detector key that
+ * restarted, or `undefined` when every detector's runtime state should be
+ * dropped (process-wide resets).
+ */
+type EngineRestartListener = (key?: string) => void;
 
 const restartListeners = new Set<EngineRestartListener>();
 
@@ -17,13 +22,18 @@ export function onDetectorRestart(listener: EngineRestartListener): void {
   restartListeners.add(listener);
 }
 
-/** Notify listeners that a detector has restarted. */
-export function notifyDetectorRestart(): void {
+/**
+ * Notify listeners that a detector has restarted. Pass the detector key so
+ * listeners can scope their cleanup to that detector; omit it to request a
+ * process-wide reset.
+ */
+export function notifyDetectorRestart(key?: string): void {
   for (const listener of restartListeners) {
     try {
-      listener();
+      listener(key);
     } catch (err) {
       logger.warn("Detector restart listener failed", { err });
     }
   }
 }
+

@@ -547,7 +547,9 @@ export const detectorService = {
       throw new ApiError(409, "Detector is already restarting");
     }
 
-    notifyDetectorRestart();
+    // Scope the reset to this detector so restarting one model does not
+    // wipe trackers/metrics of every other detector in the process.
+    notifyDetectorRestart(model.detectorKey);
     clearRestartTimer(id);
 
     const restarting = await prisma.aIModel.update({
