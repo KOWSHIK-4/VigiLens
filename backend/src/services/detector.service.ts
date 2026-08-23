@@ -88,16 +88,22 @@ function runtimeLifecycleOf(
   availability: string | undefined,
 ): LifecycleFields {
   const key = model.detectorKey;
+  // Snapshot measured facts before mirroring the enabled flag — setEnabled
+  // resets the failure streak on a disabled→enabled transition, and reading
+  // afterwards would hide an in-progress failure streak from the UI.
   const state = lifecycleManager.get(key);
+  const aiReachable = state.aiReachable;
+  const consecutiveFailures = state.consecutiveFailures;
+  const lastSuccessfulInferenceAt = state.lastSuccessfulInferenceAt;
   lifecycleManager.setEnabled(key, model.enabled);
   const status = deriveLifecycleStatus({
     installed: true,
     enabled: model.enabled,
     availability: availability === "available" ? "available" : "unconfigured",
     modelStatus: model.status,
-    aiReachable: state.aiReachable,
-    consecutiveFailures: state.consecutiveFailures,
-    lastSuccessfulInferenceAt: state.lastSuccessfulInferenceAt,
+    aiReachable,
+    consecutiveFailures,
+    lastSuccessfulInferenceAt,
   });
   return {
     status,

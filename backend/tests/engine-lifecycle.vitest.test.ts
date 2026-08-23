@@ -63,6 +63,15 @@ describe("deriveLifecycleStatus", () => {
     ).toBe("error");
   });
 
+  it("3+ failures after a past success → error (not ready)", () => {
+    expect(
+      deriveLifecycleStatus({
+        ...loadedInput(),
+        consecutiveFailures: MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR,
+      }),
+    ).toBe("error");
+  });
+
   it("loaded but never ran → configured", () => {
     expect(
       deriveLifecycleStatus({ ...loadedInput(), lastSuccessfulInferenceAt: null, consecutiveFailures: 1 }),
@@ -272,6 +281,31 @@ describe("LifecycleManager", () => {
     manager.setEnabled(key, true);
     const state = manager.get(key);
     expect(state.consecutiveFailures).toBe(0);
+  });
+
+  it("repeated enable while enabled keeps the failure streak", () => {
+    const manager = new LifecycleManager();
+    const key = "person";
+    manager.markInferenceFailed(key, "boom");
+    manager.markInferenceFailed(key, "again");
+    manager.markInferenceFailed(key, "thrice");
+    // Status reads mirror the DB flag on every call; they must not wipe
+    // the in-progress failure streak.
+    manager.setEnabled(key, true);
+    manager.setEnabled(key, true);
+    expect(manager.get(key).consecutiveFailures).toBe(MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR);
+    expect(manager.isInErrorState(key)).toBe(true);
+  });
+
+  it("disable then re-enable clears the failure streak", () => {
+    const manager = new LifecycleManager();
+    const key = "person";
+    manager.markInferenceFailed(key, "boom");
+    manager.markInferenceFailed(key, "again");
+    manager.markInferenceFailed(key, "thrice");
+    manager.setEnabled(key, false);
+    manager.setEnabled(key, true);
+    expect(manager.get(key).consecutiveFailures).toBe(0);
   });
 
   it("snapshot includes tracked detectors", () => {

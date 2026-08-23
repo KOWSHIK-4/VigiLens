@@ -65,7 +65,7 @@ export function deriveLifecycleStatus(input: LifecycleDerivationInput): Detector
   if (input.aiReachable === false) {
     return "unavailable";
   }
-  if (input.consecutiveFailures >= 3 && !input.lastSuccessfulInferenceAt) {
+  if (input.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES_BEFORE_ERROR) {
     return "error";
   }
   if (!input.lastSuccessfulInferenceAt) {
@@ -105,9 +105,13 @@ export class LifecycleManager {
 
   setEnabled(key: string, enabled: boolean): void {
     const state = this.get(key);
+    const wasEnabled = state.enabled;
     state.enabled = enabled;
-    if (enabled) {
+    if (enabled && !wasEnabled) {
       // Re-enabling clears the failure streak so a healthy run can recover.
+      // Only the disabled→enabled transition may do this: setEnabled is also
+      // called on every status read to mirror the DB flag, and resetting the
+      // streak there would erase in-progress failure evidence.
       state.consecutiveFailures = 0;
     }
     this.states.set(key, state);

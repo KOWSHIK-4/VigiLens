@@ -19,7 +19,7 @@ import { ConcretePipelineBuilder } from "./pipelineImpl";
 import { PostprocessStageImpl } from "./postprocess";
 import { IouTracker, type ObjectTracker } from "./tracking";
 import { NormalizationStageImpl } from "./normalize";
-import { CooldownAlertStage, AlertCooldownRegistry } from "./alerts";
+import { CooldownAlertStage, sharedAlertCooldownRegistry } from "./alerts";
 import { onDetectorRestart } from "./engineHooks";
 import { aiDetectorModel, isDetectorRunnable } from "./modelCatalog";
 import { AiServiceFrameCaptureStage } from "./capture";
@@ -125,7 +125,6 @@ export class DetectionPersistenceStage implements PersistenceStage {
 export class EngineServiceImpl {
   private readonly client: AiServiceClient;
   private readonly metricsByKey = new Map<string, PipelineMetrics>();
-  private readonly alertCooldownRegistry = new AlertCooldownRegistry();
   /**
    * Trackers are keyed by `detectorKey:cameraId`. A detector running on two
    * cameras must not share object tracks between them — identities on one
@@ -180,7 +179,7 @@ export class EngineServiceImpl {
       )
       .normalize(new NormalizationStageImpl())
       .persist(new DetectionPersistenceStage())
-      .alerts(new CooldownAlertStage(this.alertCooldownRegistry))
+      .alerts(new CooldownAlertStage(sharedAlertCooldownRegistry))
       .build();
 
     return pipeline;

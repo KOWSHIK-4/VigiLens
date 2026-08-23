@@ -38,16 +38,23 @@ function runtimeStatusFor(
   modelStatus: string | null,
   key: string,
 ): DetectorRuntimeStatus {
+  // Snapshot the measured facts BEFORE mirroring the DB enabled flag:
+  // setEnabled resets the failure streak on a disabled→enabled transition,
+  // and reading state afterwards would report a stale zero streak instead
+  // of the in-progress failures that should surface as `error`.
   const state = lifecycleManager.get(key);
+  const aiReachable = state.aiReachable;
+  const consecutiveFailures = state.consecutiveFailures;
+  const lastSuccessfulInferenceAt = state.lastSuccessfulInferenceAt;
   lifecycleManager.setEnabled(key, enabled);
   return deriveLifecycleStatus({
     installed,
     enabled,
     availability,
     modelStatus,
-    aiReachable: state.aiReachable,
-    consecutiveFailures: state.consecutiveFailures,
-    lastSuccessfulInferenceAt: state.lastSuccessfulInferenceAt,
+    aiReachable,
+    consecutiveFailures,
+    lastSuccessfulInferenceAt,
   });
 }
 
