@@ -1,5 +1,6 @@
 import type { Detection } from "@/types";
 import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle, Box, Cpu, Hash } from "lucide-react";
+import { useEffect, useRef } from "react";
 import DetectionSnapshot from "./DetectionSnapshot";
 import { downloadDetectionImage } from "@/utils/detectionImage";
 import { showToast } from "@/utils/toast";
@@ -23,6 +24,22 @@ const statusIcons = {
 };
 
 export default function DetectionDetailsDrawer({ detection, onClose, onPreview }: DetectionDetailsDrawerProps) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!detection) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [detection, onClose]);
+
   if (!detection) return null;
 
   const hasSnapshot = Boolean(detection.imageUrl);
@@ -50,18 +67,26 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
   return (
     <>
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm backdrop-enter"
         onClick={onClose}
+        aria-hidden="true"
       />
-      <div className="fixed top-0 right-0 z-50 h-full w-full max-w-lg bg-white shadow-2xl overflow-y-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detection details"
+        className="fixed top-0 right-0 z-50 h-full w-full max-w-lg bg-white shadow-2xl overflow-y-auto drawer-enter"
+      >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <span>{statusIcons[detection.status]}</span>
             <h2 className="text-lg font-semibold text-gray-900">Detection Details</h2>
           </div>
           <button
+            ref={closeRef}
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close detection details"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>

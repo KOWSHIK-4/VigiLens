@@ -4,8 +4,6 @@ import {
   Bell,
   CheckCheck,
   Trash2,
-  AlertTriangle,
-  Info,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -15,35 +13,11 @@ import {
 } from "lucide-react";
 import { alertService } from "@/services/alerts";
 import { showToast } from "@/utils/toast";
-import type { Alert } from "@/types";
+import { getSeverityStyle } from "@/utils/statusConfig";
+import { formatRelativeTime } from "@/utils/format";
 import ConfirmDialog from "@/components/ConfirmDialog";
-
-const severityConfig = {
-  critical: {
-    label: "Critical",
-    bg: "bg-red-50 border-red-200",
-    badge: "bg-red-100 text-red-700",
-    icon: AlertTriangle,
-    iconColor: "text-red-500",
-    dot: "bg-red-500",
-  },
-  warning: {
-    label: "Warning",
-    bg: "bg-yellow-50 border-yellow-200",
-    badge: "bg-yellow-100 text-yellow-700",
-    icon: AlertTriangle,
-    iconColor: "text-yellow-500",
-    dot: "bg-yellow-500",
-  },
-  info: {
-    label: "Info",
-    bg: "bg-blue-50 border-blue-200",
-    badge: "bg-blue-100 text-blue-700",
-    icon: Info,
-    iconColor: "text-blue-500",
-    dot: "bg-blue-500",
-  },
-};
+import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
+import type { Alert } from "@/types";
 
 const severityFilters = [
   { value: "", label: "All" },
@@ -66,6 +40,7 @@ export default function AlertsPage() {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -208,14 +183,15 @@ export default function AlertsPage() {
       ) : (
         <div className="space-y-3">
           {alerts.map((alert: Alert) => {
-            const cfg = severityConfig[alert.severity];
+            const cfg = getSeverityStyle(alert.severity);
             const Icon = cfg.icon;
             return (
               <div
                 key={alert.id}
-                className={`${cfg.bg} border rounded-xl p-4 transition-colors ${
+                className={`${cfg.bg} border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md ${
                   !alert.isRead ? "ring-1 ring-brand-200" : ""
                 }`}
+                onClick={() => setSelectedAlert(alert)}
               >
                 <div className="flex items-start gap-3">
                   <Icon className={`w-5 h-5 mt-0.5 ${cfg.iconColor} flex-shrink-0`} />
@@ -224,25 +200,50 @@ export default function AlertsPage() {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>
                         {cfg.label}
                       </span>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                          alert.isRead
+                            ? "bg-gray-100 text-gray-500 border-gray-200"
+                            : "bg-white text-brand-700 border-brand-200"
+                        }`}
+                      >
+                        {alert.isRead ? "Read" : "New"}
+                      </span>
                       {!alert.isRead && (
                         <span className="w-2 h-2 rounded-full bg-brand-500" />
                       )}
-                      <span className="text-xs text-gray-400">
-                        {new Date(alert.createdAt).toLocaleString()}
+                      <span
+                        className="text-xs text-gray-400"
+                        title={new Date(alert.createdAt).toLocaleString()}
+                      >
+                        {formatRelativeTime(alert.createdAt)}
                       </span>
                     </div>
                     <h3 className="text-sm font-semibold text-gray-900 mt-1">
                       {alert.title}
                     </h3>
-                    <p className="text-sm text-gray-600 mt-0.5">{alert.message}</p>
+                    <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">
+                      {alert.message}
+                    </p>
                     {alert.detection?.camera && (
                       <p className="text-xs text-gray-400 mt-1">
-                        Camera: {alert.detection.camera.name}
+                        Source: {alert.detection.camera.name}
                         {alert.detection.camera.location && ` - ${alert.detection.camera.location}`}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div
+                    className="flex items-center gap-1 flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => setSelectedAlert(alert)}
+                      className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                      title="View alert details"
+                      aria-label={`View details for ${alert.title}`}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
                     {!alert.isRead && (
                       <button
                         onClick={() => markReadMutation.mutate(alert.id)}
@@ -314,6 +315,11 @@ export default function AlertsPage() {
           </div>
         </div>
       )}
+
+      <AlertDetailsDrawer
+        alert={selectedAlert}
+        onClose={() => setSelectedAlert(null)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
