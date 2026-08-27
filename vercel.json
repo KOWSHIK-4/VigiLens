@@ -22,5 +22,11 @@
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
     { "source": "/health(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "x-probe", "value": "top-level-headers-active" }]
+    }
   ]
 }
