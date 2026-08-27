@@ -1,0 +1,15 @@
+ai/
+yolo11n.pt
+node_modules/
+dist/
+*.log
+*.log.*
+*.tsbuildinfo
+.git/
+.github/
+docs/
+e2e.log
+preview.log
+frontend/.env
+backend/.env
+ai/.env
