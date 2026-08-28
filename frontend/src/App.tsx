@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthProvider from "@/components/AuthProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import LoginPage from "@/pages/LoginPage";
 import ChangePasswordPage from "@/pages/ChangePasswordPage";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -55,7 +56,11 @@ function LazyRoute({ children }: { children: React.ReactNode }) {
 // useBlocker actually function; plain <BrowserRouter> does not support
 // data-router-only hooks.
 const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+  {
+    path: "/login",
+    element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
   {
     path: "/change-password",
     element: (
@@ -65,6 +70,7 @@ const router = createBrowserRouter([
         </AuthProvider>
       </ProtectedRoute>
     ),
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/",
@@ -75,6 +81,7 @@ const router = createBrowserRouter([
         </AuthProvider>
       </ProtectedRoute>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,

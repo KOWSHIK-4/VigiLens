@@ -29,7 +29,7 @@ const statusConfig: Record<
 };
 
 export default function ModelStatusBadge({ status }: { status: ModelStatus }) {
-  const cfg = statusConfig[status];
+  const cfg = statusConfig[status] ?? statusConfig.error;
   const Icon = cfg.icon;
   return (
     <span

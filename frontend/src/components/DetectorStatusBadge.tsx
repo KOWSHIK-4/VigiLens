@@ -29,7 +29,7 @@ export default function DetectorStatusBadge({
   status: DetectorStatus;
   size?: "sm" | "md";
 }) {
-  const cfg = statusConfig[status];
+  const cfg = statusConfig[status] ?? statusConfig.error;
   const Icon = cfg.icon;
   const padding = size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs";
   return (

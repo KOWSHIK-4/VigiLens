@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { authService } from "@/services/auth";
+import { getApiErrorMessage } from "@/utils/apiError";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ChangePasswordPage() {
@@ -30,10 +30,7 @@ export default function ChangePasswordPage() {
       setSuccess("Password updated successfully.");
       setTimeout(() => navigate("/"), 1000);
     } catch (err) {
-      const message = axios.isAxiosError(err)
-        ? (err.response?.data as { error?: string } | undefined)?.error
-        : undefined;
-      setError(message || "Failed to update password. Please try again.");
+      setError(getApiErrorMessage(err, "Failed to update password. Please try again."));
     } finally {
       setLoading(false);
     }

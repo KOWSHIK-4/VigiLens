@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { authService } from "@/services/auth";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -23,10 +23,7 @@ export default function LoginPage() {
         : await authService.login(email, password);
       navigate(res.user.mustChangePassword ? "/change-password" : "/");
     } catch (err) {
-      const message = axios.isAxiosError(err)
-        ? (err.response?.data as { error?: string } | undefined)?.error
-        : undefined;
-      setError(message || "Invalid credentials. Please try again.");
+      setError(getApiErrorMessage(err, "Invalid credentials. Please try again."));
     } finally {
       setLoading(false);
     }

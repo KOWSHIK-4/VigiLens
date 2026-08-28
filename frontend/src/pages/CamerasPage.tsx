@@ -191,7 +191,7 @@ export default function CamerasPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cameras.map((camera) => {
-              const status = statusConfig[camera.status];
+              const status = statusConfig[camera.status] ?? statusConfig.offline;
               return (
                 <CameraCard
                   key={camera.id}

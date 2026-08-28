@@ -399,7 +399,7 @@ export default function DetectionsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${statusColors[detection.status]}`}
+                            className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${statusColors[detection.status] ?? statusColors.info}`}
                           >
                             {detection.status}
                           </span>
