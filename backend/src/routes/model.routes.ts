@@ -1,15 +1,15 @@
 import { Router } from "express";
-import { modelController } from "@/controllers/model.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { modelController } from "../controllers/model.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   createModelSchema,
   modelIdSchema,
   modelQuerySchema,
   modelThresholdSchema,
   updateModelSchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 

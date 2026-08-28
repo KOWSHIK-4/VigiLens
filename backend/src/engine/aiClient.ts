@@ -7,7 +7,7 @@
  * are handled by the pipeline stages.
  */
 
-import { config } from "@/config";
+import { config } from "../config";
 import type { BoundingBox } from "./types";
 
 export type AiErrorReason = "unreachable" | "timeout" | "http" | "invalid_payload" | "invalid_frame";

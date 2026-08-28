@@ -1,7 +1,7 @@
-import { prisma } from "@/config/prisma";
-import { ApiError } from "@/utils/errors";
-import { permissionService } from "@/services/permission.service";
-import type { CreateRoleInput, UpdateRoleInput } from "@/types";
+import { prisma } from "../config/prisma";
+import { ApiError } from "../utils/errors";
+import { permissionService } from "./permission.service";
+import type { CreateRoleInput, UpdateRoleInput } from "../types";
 import type { Prisma } from "@prisma/client";
 
 const ROLE_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;

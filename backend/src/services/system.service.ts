@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
-import { appVersion } from "@/config/version";
+import { appVersion } from "../config/version";
 import {
   healthService,
   type OverallStatus,
   type ServiceHealth,
-} from "@/services/health.service";
+} from "./health.service";
 
 interface CpuSample {
   idle: number;

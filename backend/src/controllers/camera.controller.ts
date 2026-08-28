@@ -1,10 +1,10 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
+import type { AuthRequest } from "../types";
 import type { CameraStatus, CameraType } from "@prisma/client";
-import { cameraService } from "@/services/camera.service";
-import { userService } from "@/services/user.service";
-import { success, paginated, error } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+import { cameraService } from "../services/camera.service";
+import { userService } from "../services/user.service";
+import { success, paginated, error } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 function getClientInfo(req: AuthRequest) {
   return {

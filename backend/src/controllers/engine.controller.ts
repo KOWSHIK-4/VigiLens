@@ -1,11 +1,11 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
-import { prisma } from "@/config/prisma";
-import { runtimeRegistry } from "@/engine/runtimeRegistry";
-import { engineService } from "@/engine/engineService";
-import { detectionService } from "@/services/detection.service";
-import { success } from "@/utils/apiResponse";
-import { ApiError } from "@/utils/errors";
+import type { AuthRequest } from "../types";
+import { prisma } from "../config/prisma";
+import { runtimeRegistry } from "../engine/runtimeRegistry";
+import { engineService } from "../engine/engineService";
+import { detectionService } from "../services/detection.service";
+import { success } from "../utils/apiResponse";
+import { ApiError } from "../utils/errors";
 
 export const engineController = {
   async listAll(req: AuthRequest, res: Response, next: NextFunction) {

@@ -4,11 +4,11 @@ import type {
   ModelQueryInput,
   CreateModelInput,
   UpdateModelInput,
-} from "@/types";
-import { modelService } from "@/services/model.service";
-import { userService } from "@/services/user.service";
-import { success, paginated } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+} from "../types";
+import { modelService } from "../services/model.service";
+import { userService } from "../services/user.service";
+import { success, paginated } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 function getClientInfo(req: AuthRequest) {
   return {

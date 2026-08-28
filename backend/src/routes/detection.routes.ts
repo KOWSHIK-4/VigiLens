@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { detectionController } from "@/controllers/detection.controller";
-import { authenticate } from "@/middleware/auth";
-import { requireInternalKey } from "@/middleware/internal";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
-import { detectionIdSchema, detectionQuerySchema } from "@/types";
+import { detectionController } from "../controllers/detection.controller";
+import { authenticate } from "../middleware/auth";
+import { requireInternalKey } from "../middleware/internal";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
+import { detectionIdSchema, detectionQuerySchema } from "../types";
 
 const router = Router();
 

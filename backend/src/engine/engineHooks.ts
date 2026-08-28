@@ -6,7 +6,7 @@
  * state (persistent object trackers) without creating an import cycle.
  */
 
-import { logger } from "@/config/logger";
+import { logger } from "../config/logger";
 
 /**
  * Listener invoked when a detector restarts. Receives the detector key that

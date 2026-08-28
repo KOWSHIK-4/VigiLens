@@ -5,10 +5,10 @@ import type {
   ResetPasswordInput,
   UpdateUserInput,
   UserQueryInput,
-} from "@/types";
-import { userService } from "@/services/user.service";
-import { success, paginated } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+} from "../types";
+import { userService } from "../services/user.service";
+import { success, paginated } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 function getClientInfo(req: AuthRequest) {
   return {

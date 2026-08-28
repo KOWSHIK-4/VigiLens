@@ -1,14 +1,14 @@
 import { Router } from "express";
-import { roleController } from "@/controllers/role.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { roleController } from "../controllers/role.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   createRoleSchema,
   roleNameSchema,
   updateRolePermissionsSchema,
   updateRoleSchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 

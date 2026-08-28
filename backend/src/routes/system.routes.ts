@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { systemController } from "@/controllers/system.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
+import { systemController } from "../controllers/system.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
 
 const router = Router();
 

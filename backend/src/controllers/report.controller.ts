@@ -1,9 +1,9 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
-import { reportService } from "@/services/report.service";
-import { userService } from "@/services/user.service";
-import { success, paginated } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+import type { AuthRequest } from "../types";
+import { reportService } from "../services/report.service";
+import { userService } from "../services/user.service";
+import { success, paginated } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 function getClientInfo(req: AuthRequest) {
   return {

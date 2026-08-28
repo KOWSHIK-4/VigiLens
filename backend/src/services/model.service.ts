@@ -1,12 +1,12 @@
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
 import {
   getDetectorDefinition,
   getDetectorDefinitions,
-} from "@/detectors";
-import { ApiError } from "@/utils/errors";
-import { aiServiceClient } from "@/engine/aiClient";
-import { aiDetectorModel } from "@/engine/modelCatalog";
+} from "../detectors";
+import { ApiError } from "../utils/errors";
+import { aiServiceClient } from "../engine/aiClient";
+import { aiDetectorModel } from "../engine/modelCatalog";
 import type {
   AIModel,
   ModelStatus,

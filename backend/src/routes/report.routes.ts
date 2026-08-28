@@ -1,14 +1,14 @@
 import { Router } from "express";
-import { reportController } from "@/controllers/report.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { reportController } from "../controllers/report.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   generateReportSchema,
   reportDownloadQuerySchema,
   reportIdSchema,
   reportQuerySchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 

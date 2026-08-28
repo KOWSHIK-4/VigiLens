@@ -1,7 +1,7 @@
-import { prisma } from "@/config/prisma";
+import { prisma } from "../config/prisma";
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
-import type { AuditLogQueryInput } from "@/types";
-import { toCsv } from "@/utils/csv";
+import type { AuditLogQueryInput } from "../types";
+import { toCsv } from "../utils/csv";
 
 interface CreateAuditLogInput {
   userId?: string;

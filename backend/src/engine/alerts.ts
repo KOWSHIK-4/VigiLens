@@ -7,9 +7,9 @@
  * runs so repeated frames do not flood the alert queue.
  */
 
-import { logger } from "@/config/logger";
-import { alertService } from "@/services/alert.service";
-import { logAudit } from "@/utils/auditLog";
+import { logger } from "../config/logger";
+import { alertService } from "../services/alert.service";
+import { logAudit } from "../utils/auditLog";
 import type { AlertEvaluationStage } from "./pipeline";
 import type { NormalizedDetection, PipelineContext } from "./types";
 

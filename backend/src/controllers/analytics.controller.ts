@@ -1,7 +1,7 @@
 import type { Response, NextFunction } from "express";
-import type { AnalyticsQueryInput, AuthRequest } from "@/types";
-import { analyticsService } from "@/services/analytics.service";
-import { success } from "@/utils/apiResponse";
+import type { AnalyticsQueryInput, AuthRequest } from "../types";
+import { analyticsService } from "../services/analytics.service";
+import { success } from "../utils/apiResponse";
 
 export const analyticsController = {
   async getOverview(req: AuthRequest, res: Response, next: NextFunction) {

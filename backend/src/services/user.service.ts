@@ -1,13 +1,13 @@
 import bcrypt from "bcrypt";
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { ApiError } from "@/utils/errors";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { ApiError } from "../utils/errors";
 import type {
   CreateUserInput,
   ResetPasswordInput,
   UpdateUserInput,
   UserQueryInput,
-} from "@/types";
+} from "../types";
 import type { Prisma, UserStatus } from "@prisma/client";
 
 const ONLINE_WINDOW_MS = 15 * 60 * 1000;

@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
-import type { AuthRequest, DetectionQueryInput } from "@/types";
-import { prisma } from "@/config/prisma";
-import { detectionService } from "@/services/detection.service";
-import { metricsService } from "@/services/metrics.service";
-import { success, paginated } from "@/utils/apiResponse";
-import { ApiError } from "@/utils/errors";
-import { logAudit } from "@/utils/auditLog";
+import type { AuthRequest, DetectionQueryInput } from "../types";
+import { prisma } from "../config/prisma";
+import { detectionService } from "../services/detection.service";
+import { metricsService } from "../services/metrics.service";
+import { success, paginated } from "../utils/apiResponse";
+import { ApiError } from "../utils/errors";
+import { logAudit } from "../utils/auditLog";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {

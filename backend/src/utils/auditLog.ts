@@ -1,6 +1,6 @@
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
 
 interface LogAuditParams {
   userId?: string;

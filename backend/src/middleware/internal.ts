@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Response, NextFunction } from "express";
 import type { Request } from "express";
-import { config } from "@/config";
-import { error as apiError } from "@/utils/apiResponse";
+import { config } from "../config";
+import { error as apiError } from "../utils/apiResponse";
 
 /**
  * Length-safe constant-time string comparison. A plain `===` leaks the

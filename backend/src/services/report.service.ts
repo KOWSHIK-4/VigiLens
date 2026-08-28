@@ -1,7 +1,7 @@
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { buildPdfDocument } from "@/utils/pdf";
-import { toCsv } from "@/utils/csv";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { buildPdfDocument } from "../utils/pdf";
+import { toCsv } from "../utils/csv";
 import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
 
 interface GenerateReportInput {

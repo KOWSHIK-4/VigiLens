@@ -1,14 +1,14 @@
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
 import {
   getDetectorDefinition,
   getDetectorCategories,
   getDetectorDefinitions,
-} from "@/detectors";
-import { deriveLifecycleStatus, lifecycleManager } from "@/engine/lifecycle";
-import type { DetectorRuntimeStatus } from "@/engine/types";
-import { notifyDetectorRestart } from "@/engine/engineHooks";
-import { ApiError } from "@/utils/errors";
+} from "../detectors";
+import { deriveLifecycleStatus, lifecycleManager } from "../engine/lifecycle";
+import type { DetectorRuntimeStatus } from "../engine/types";
+import { notifyDetectorRestart } from "../engine/engineHooks";
+import { ApiError } from "../utils/errors";
 import type { AIModel, CameraType, DetectorSettings, Prisma } from "@prisma/client";
 
 export type DetectorStatus = "running" | "stopped" | "error";

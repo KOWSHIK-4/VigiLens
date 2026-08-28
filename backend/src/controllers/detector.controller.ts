@@ -6,12 +6,12 @@ import type {
   UpdateDetectorInput,
   DetectorSettingsInput,
   DetectorCamerasInput,
-} from "@/types";
-import { detectorService } from "@/services/detector.service";
-import { userService } from "@/services/user.service";
-import { getMergedDetectorHealth } from "@/engine/health";
-import { success, paginated } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+} from "../types";
+import { detectorService } from "../services/detector.service";
+import { userService } from "../services/user.service";
+import { getMergedDetectorHealth } from "../engine/health";
+import { success, paginated } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 type DetectorAuditAction =
   | "detector_created"

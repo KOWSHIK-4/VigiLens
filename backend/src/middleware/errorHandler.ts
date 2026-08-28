@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { logger } from "@/config/logger";
-import { ApiError, toApiErrorBody } from "@/utils/errors";
+import { logger } from "../config/logger";
+import { ApiError, toApiErrorBody } from "../utils/errors";
 
 export function errorHandler(
   err: Error,

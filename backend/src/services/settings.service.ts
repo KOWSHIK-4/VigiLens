@@ -1,17 +1,17 @@
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { ApiError } from "@/utils/errors";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { ApiError } from "../utils/errors";
 import type {
   SettingDefinition,
   SettingValue,
   SettingsCategoryDefinition,
-} from "@/settings";
+} from "../settings";
 import {
   getSettingCategories,
   getSettingCategory,
   getSettingDefinition,
   isValidSettingValue,
-} from "@/settings";
+} from "../settings";
 import type { Prisma, SystemSetting, SystemSettingCategory } from "@prisma/client";
 
 const CACHE_TTL_MS = 60_000;

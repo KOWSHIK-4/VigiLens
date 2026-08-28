@@ -1,4 +1,4 @@
-import type { DetectorType, DetectorAvailability, ProcessingMode } from "@/engine/types";
+import type { DetectorType, DetectorAvailability, ProcessingMode } from "../engine/types";
 
 export interface DetectorDefinition {
   key: string;

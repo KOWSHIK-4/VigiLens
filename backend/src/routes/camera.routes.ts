@@ -1,14 +1,14 @@
 import { Router } from "express";
-import { cameraController } from "@/controllers/camera.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { cameraController } from "../controllers/camera.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   cameraIdSchema,
   cameraQuerySchema,
   createCameraSchema,
   updateCameraSchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 

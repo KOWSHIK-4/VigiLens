@@ -1,7 +1,7 @@
 import type { Response, NextFunction } from "express";
-import type { AlertQueryInput, AuthRequest } from "@/types";
-import { alertService } from "@/services/alert.service";
-import { success, paginated } from "@/utils/apiResponse";
+import type { AlertQueryInput, AuthRequest } from "../types";
+import { alertService } from "../services/alert.service";
+import { success, paginated } from "../utils/apiResponse";
 
 export const alertController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {

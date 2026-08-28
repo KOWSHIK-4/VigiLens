@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { detectorController } from "@/controllers/detector.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { detectorController } from "../controllers/detector.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   detectorQuerySchema,
   detectorIdSchema,
@@ -10,7 +10,7 @@ import {
   updateDetectorSchema,
   detectorSettingsSchema,
   detectorCamerasSchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 

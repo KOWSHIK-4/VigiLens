@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { analyticsController } from "@/controllers/analytics.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
-import { analyticsQuerySchema } from "@/types";
+import { analyticsController } from "../controllers/analytics.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
+import { analyticsQuerySchema } from "../types";
 
 const router = Router();
 

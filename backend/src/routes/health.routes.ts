@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { healthService } from "@/services/health.service";
+import { healthService } from "../services/health.service";
 
 const router = Router();
 

@@ -1,14 +1,14 @@
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { ApiError } from "@/utils/errors";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { ApiError } from "../utils/errors";
 import type {
   AlertSeverity,
   DetectionStatus,
   Prisma,
 } from "@prisma/client";
-import { logAudit } from "@/utils/auditLog";
-import { toCsv } from "@/utils/csv";
-import { sharedAlertCooldownRegistry } from "@/engine/alerts";
+import { logAudit } from "../utils/auditLog";
+import { toCsv } from "../utils/csv";
+import { sharedAlertCooldownRegistry } from "../engine/alerts";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
 const alertCooldownRegistry = sharedAlertCooldownRegistry;

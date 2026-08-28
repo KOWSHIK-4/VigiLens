@@ -1,9 +1,9 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
-import { monitorScheduler } from "@/engine/monitor";
-import { logAudit } from "@/utils/auditLog";
-import { success } from "@/utils/apiResponse";
-import { userService } from "@/services/user.service";
+import type { AuthRequest } from "../types";
+import { monitorScheduler } from "../engine/monitor";
+import { logAudit } from "../utils/auditLog";
+import { success } from "../utils/apiResponse";
+import { userService } from "../services/user.service";
 
 export const monitorController = {
   async getStatus(_req: AuthRequest, res: Response, next: NextFunction) {

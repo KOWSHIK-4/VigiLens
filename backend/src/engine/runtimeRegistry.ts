@@ -6,9 +6,9 @@
  * assignments) into `DetectorDescriptor`s that the pipeline consumes.
  */
 
-import { getDetectorDefinition, getDetectorDefinitions } from "@/detectors/registry";
-import { detectorService } from "@/services/detector.service";
-import { logger } from "@/config/logger";
+import { getDetectorDefinition, getDetectorDefinitions } from "../detectors/registry";
+import { detectorService } from "../services/detector.service";
+import { logger } from "../config/logger";
 import { aiServiceClient } from "./aiClient";
 import { deriveLifecycleStatus, lifecycleManager } from "./lifecycle";
 import type {

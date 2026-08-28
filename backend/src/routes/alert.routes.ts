@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { alertController } from "@/controllers/alert.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
-import { alertIdSchema, alertQuerySchema } from "@/types";
+import { alertController } from "../controllers/alert.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
+import { alertIdSchema, alertQuerySchema } from "../types";
 
 const router = Router();
 

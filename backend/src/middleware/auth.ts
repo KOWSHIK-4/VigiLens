@@ -1,10 +1,10 @@
 import type { Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { config } from "@/config";
-import { prisma } from "@/config/prisma";
-import type { AuthRequest } from "@/types";
-import { error as apiError } from "@/utils/apiResponse";
-import { permissionService } from "@/services/permission.service";
+import { config } from "../config";
+import { prisma } from "../config/prisma";
+import type { AuthRequest } from "../types";
+import { error as apiError } from "../utils/apiResponse";
+import { permissionService } from "../services/permission.service";
 
 interface JwtPayload {
   userId: string;

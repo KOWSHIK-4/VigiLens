@@ -25,3 +25,5 @@ prisma/migrations/
 docker/**/.env
 ai/app/output/
 yolo11n.pt
+
+.vercel

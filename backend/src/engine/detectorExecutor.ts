@@ -8,7 +8,7 @@
  * unavailable and refuses to run inference — it never fabricates results.
  */
 
-import { ApiError } from "@/utils/errors";
+import { ApiError } from "../utils/errors";
 import type { FrameInput, RawDetection } from "./types";
 import type { DetectorBackend } from "./pipeline";
 

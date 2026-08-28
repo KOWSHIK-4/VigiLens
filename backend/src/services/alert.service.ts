@@ -1,6 +1,6 @@
-import { prisma } from "@/config/prisma";
-import { ApiError } from "@/utils/errors";
-import type { AlertQueryInput } from "@/types";
+import { prisma } from "../config/prisma";
+import { ApiError } from "../utils/errors";
+import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
 interface CreateAlertInput {

@@ -7,11 +7,11 @@
  * pipeline and exposes measured performance data.
  */
 
-import { ApiError } from "@/utils/errors";
-import { logger } from "@/config/logger";
-import { detectionService } from "@/services/detection.service";
-import { logAudit } from "@/utils/auditLog";
-import { metricsService } from "@/services/metrics.service";
+import { ApiError } from "../utils/errors";
+import { logger } from "../config/logger";
+import { detectionService } from "../services/detection.service";
+import { logAudit } from "../utils/auditLog";
+import { metricsService } from "../services/metrics.service";
 import { aiServiceClient, AiServiceError, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
 import { lifecycleManager } from "./lifecycle";

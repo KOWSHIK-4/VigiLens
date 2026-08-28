@@ -17,12 +17,12 @@
  * the scheduler can be unit-tested without a camera, AI service or database.
  */
 
-import { config } from "@/config";
-import { logger } from "@/config/logger";
-import { prisma } from "@/config/prisma";
+import { config } from "../config";
+import { logger } from "../config/logger";
+import { prisma } from "../config/prisma";
 import { engineService } from "./engineService";
 import { aiServiceClient, type AiServiceClient, type CaptureCredentials } from "./aiClient";
-import { loadCameraCredentials } from "@/services/camera.service";
+import { loadCameraCredentials } from "../services/camera.service";
 import type { CameraType } from "@prisma/client";
 import type { PipelineResult } from "./pipeline";
 

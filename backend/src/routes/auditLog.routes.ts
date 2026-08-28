@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { auditLogController } from "@/controllers/auditLog.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { auditLogExportQuerySchema, auditLogIdSchema, auditLogQuerySchema } from "@/types";
-import { validate } from "@/middleware/validate";
+import { auditLogController } from "../controllers/auditLog.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { auditLogExportQuerySchema, auditLogIdSchema, auditLogQuerySchema } from "../types";
+import { validate } from "../middleware/validate";
 
 const router = Router();
 

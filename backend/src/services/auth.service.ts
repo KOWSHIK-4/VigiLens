@@ -1,9 +1,9 @@
 import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import { prisma } from "@/config/prisma";
-import { config } from "@/config";
-import { permissionService } from "@/services/permission.service";
-import type { RegisterInput, LoginInput, ChangePasswordInput } from "@/types";
+import { prisma } from "../config/prisma";
+import { config } from "../config";
+import { permissionService } from "./permission.service";
+import type { RegisterInput, LoginInput, ChangePasswordInput } from "../types";
 
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 

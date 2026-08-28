@@ -7,7 +7,7 @@
  * `/capture` and always hands the engine complete frames.
  */
 
-import { logger } from "@/config/logger";
+import { logger } from "../config/logger";
 import type { FrameCaptureStage } from "./pipeline";
 import type { AiServiceClient } from "./aiClient";
 import type { FrameInput, PipelineContext } from "./types";

@@ -1,9 +1,9 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
-import { healthService } from "@/services/health.service";
-import { systemService } from "@/services/system.service";
-import { metricsService } from "@/services/metrics.service";
-import { success } from "@/utils/apiResponse";
+import type { AuthRequest } from "../types";
+import { healthService } from "../services/health.service";
+import { systemService } from "../services/system.service";
+import { metricsService } from "../services/metrics.service";
+import { success } from "../utils/apiResponse";
 
 export const systemController = {
   async getHealth(_req: AuthRequest, res: Response, next: NextFunction) {

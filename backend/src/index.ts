@@ -3,16 +3,16 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { config } from "@/config";
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { errorHandler, notFoundHandler } from "@/middleware/errorHandler";
-import { requestContext } from "@/middleware/requestContext";
-import routes from "@/routes";
-import healthRoutes from "@/routes/health.routes";
-import { modelService } from "@/services/model.service";
-import { settingsService } from "@/services/settings.service";
-import { monitorScheduler } from "@/engine/monitor";
+import { config } from "./config";
+import { prisma } from "./config/prisma";
+import { logger } from "./config/logger";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { requestContext } from "./middleware/requestContext";
+import routes from "./routes";
+import healthRoutes from "./routes/health.routes";
+import { modelService } from "./services/model.service";
+import { settingsService } from "./services/settings.service";
+import { monitorScheduler } from "./engine/monitor";
 
 const app = express();
 

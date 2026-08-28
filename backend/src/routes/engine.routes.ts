@@ -1,10 +1,10 @@
 import { Router } from "express";
 import multer from "multer";
-import { engineController } from "@/controllers/engine.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
-import { engineKeyParamSchema } from "@/types";
+import { engineController } from "../controllers/engine.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
+import { engineKeyParamSchema } from "../types";
 
 const router = Router();
 

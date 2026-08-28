@@ -1,8 +1,8 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest } from "@/types";
+import type { AuthRequest } from "../types";
 import type { AuditLogAction } from "@prisma/client";
-import { auditLogService } from "@/services/auditLog.service";
-import { success, paginated, error } from "@/utils/apiResponse";
+import { auditLogService } from "../services/auditLog.service";
+import { success, paginated, error } from "../utils/apiResponse";
 
 export const auditLogController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {

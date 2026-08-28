@@ -1,10 +1,10 @@
 import type { Response, NextFunction } from "express";
-import type { AuthRequest, CreateRoleInput, UpdateRoleInput } from "@/types";
-import { roleService } from "@/services/role.service";
-import { permissionService } from "@/services/permission.service";
-import { userService } from "@/services/user.service";
-import { success } from "@/utils/apiResponse";
-import { logAudit } from "@/utils/auditLog";
+import type { AuthRequest, CreateRoleInput, UpdateRoleInput } from "../types";
+import { roleService } from "../services/role.service";
+import { permissionService } from "../services/permission.service";
+import { userService } from "../services/user.service";
+import { success } from "../utils/apiResponse";
+import { logAudit } from "../utils/auditLog";
 
 function getClientInfo(req: AuthRequest) {
   return {

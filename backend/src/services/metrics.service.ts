@@ -1,4 +1,4 @@
-import { appVersion } from "@/config/version";
+import { appVersion } from "../config/version";
 
 interface RequestSample {
   timestamp: number;

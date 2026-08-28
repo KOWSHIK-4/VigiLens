@@ -8,7 +8,7 @@
  * dependency (engine -> detectorService is already an established edge).
  */
 
-import { detectorService } from "@/services/detector.service";
+import { detectorService } from "../services/detector.service";
 import { engineService } from "./engineService";
 
 export interface MergedDetectorHealth {

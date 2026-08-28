@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { settingsController } from "@/controllers/settings.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
-import { settingsCategoryParamSchema, updateSettingsSchema } from "@/types";
+import { settingsController } from "../controllers/settings.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
+import { settingsCategoryParamSchema, updateSettingsSchema } from "../types";
 
 const router = Router();
 

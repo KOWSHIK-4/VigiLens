@@ -1,12 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { ApiError } from "@/utils/errors";
-import { settingsService } from "@/services/settings.service";
-import { aiServiceClient, AiServiceError, type AiServiceClient, type CaptureCredentials } from "@/engine/aiClient";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { ApiError } from "../utils/errors";
+import { settingsService } from "./settings.service";
+import { aiServiceClient, AiServiceError, type AiServiceClient, type CaptureCredentials } from "../engine/aiClient";
 import type { CameraStatus, CameraType, Prisma } from "@prisma/client";
-import type { CreateCameraInput, UpdateCameraInput } from "@/types";
+import type { CreateCameraInput, UpdateCameraInput } from "../types";
 
 const SNAPSHOT_TIMEOUT_MS = 10_000;
 const SNAPSHOT_SUBDIR = "snapshots";

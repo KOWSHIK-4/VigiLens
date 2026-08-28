@@ -1,10 +1,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { config } from "@/config";
-import { prisma } from "@/config/prisma";
-import { logger } from "@/config/logger";
-import { appVersion } from "@/config/version";
-import { settingsService } from "@/services/settings.service";
+import { config } from "../config";
+import { prisma } from "../config/prisma";
+import { logger } from "../config/logger";
+import { appVersion } from "../config/version";
+import { settingsService } from "./settings.service";
 
 export type ServiceStatus = "healthy" | "degraded" | "offline" | "not_configured";
 

@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { userController } from "@/controllers/user.controller";
-import { authenticate } from "@/middleware/auth";
-import { requirePermission } from "@/middleware/permissions";
-import { validate } from "@/middleware/validate";
+import { userController } from "../controllers/user.controller";
+import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
+import { validate } from "../middleware/validate";
 import {
   assignRoleSchema,
   createUserSchema,
@@ -11,7 +11,7 @@ import {
   userIdSchema,
   userQuerySchema,
   userStatusUpdateSchema,
-} from "@/types";
+} from "../types";
 
 const router = Router();
 
