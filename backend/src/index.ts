@@ -123,4 +123,8 @@ process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled promise rejection", { reason });
 });
 
-start();
+export default app;
+
+if (!process.env.VERCEL) {
+  start();
+}
