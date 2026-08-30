@@ -21,12 +21,16 @@ if (config.nodeEnv === "production") {
 }
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: config.cors.origin,
-    credentials: true,
-  }),
-);
+
+  const corsOptions = {
+  origin: [
+    "https://viglens-rho.vercel.app",
+  ],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.json({ limit: "10mb" }));
 app.use(
   rateLimit({
