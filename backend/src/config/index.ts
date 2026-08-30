@@ -46,7 +46,7 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   },
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin: ["https://viglens-rho.vercel.app", "http://localhost:5173"],
   },
   security: {
     /** Shared secret for machine-to-machine ingestion (AI service -> backend). */

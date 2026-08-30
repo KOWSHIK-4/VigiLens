@@ -22,10 +22,8 @@ if (config.nodeEnv === "production") {
 
 app.use(helmet());
 
-  const corsOptions = {
-  origin: [
-    "https://viglens-rho.vercel.app",
-  ],
+const corsOptions = {
+  origin: ["https://vigilens-rho.vercel.app"],
   credentials: true,
 };
 
