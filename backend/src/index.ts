@@ -22,12 +22,12 @@ if (config.nodeEnv === "production") {
 
 app.use(helmet());
 
-const corsOptions = {
-  origin: ["https://vigilens-rho.vercel.app"],
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
+app.use(
+  cors({
+    origin: config.cors.origin,
+    credentials: true,
+  }),
+);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(
