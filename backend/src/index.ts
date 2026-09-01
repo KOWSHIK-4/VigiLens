@@ -19,17 +19,9 @@ if (config.nodeEnv === "production") {
   app.set("trust proxy", 1);
 }
 
-app.use(helmet());
-
-app.use(
-  cors({
-    origin: config.cors.origin,
-    credentials: true,
-  }),
-);
-
-app.use(express.json({ limit: "10mb" }));
-
+// Handle CORS preflight (OPTIONS) as the very first middleware so that no
+// other middleware (helmet, body parser, rate limiter) can interfere with
+// emitting the Access-Control-Allow-Origin header for allowed origins.
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     const origin = req.headers.origin;
@@ -48,6 +40,17 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use(helmet());
+
+app.use(
+  cors({
+    origin: config.cors.origin,
+    credentials: true,
+  }),
+);
+
+app.use(express.json({ limit: "10mb" }));
 
 app.use(
   rateLimit({
