@@ -29,6 +29,26 @@ app.use(
 );
 
 app.use(express.json({ limit: "10mb" }));
+
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    const origin = req.headers.origin;
+    if (origin && config.cors.origin.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Vary", "Origin");
+    }
+    res.header("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
+    res.header(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] || "Content-Type, Authorization, X-Internal-Key",
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Max-Age", "86400");
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(
   rateLimit({
     // The dashboard polls several endpoints every few seconds, so the
