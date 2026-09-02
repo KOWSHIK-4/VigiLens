@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/:path*",
       "destination": "/api/index"
     }
   ]
