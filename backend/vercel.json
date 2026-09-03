@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm ci",
+  "installCommand": "npm ci && npx prisma migrate deploy && npx tsx prisma/seed.ts",
   "buildCommand": "npm run build",
   "rewrites": [
     {
