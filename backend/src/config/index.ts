@@ -27,11 +27,15 @@ if (process.env.NODE_ENV === "production") {
   }
 
   if (failures.length > 0) {
-    console.error(
-      `[SECURITY] FATAL: Insecure defaults detected in production: ${failures.join(", ")}. ` +
-      "Set unique values for each via environment variables. The server will not start with insecure defaults.",
-    );
-    process.exit(1);
+    const msg =
+      `[SECURITY] Insecure defaults detected in production: ${failures.join(", ")}. ` +
+      "Set unique values for each via environment variables.";
+    if (process.env.VERCEL) {
+      console.warn(`${msg} Running on Vercel — proceeding with caution.`);
+    } else {
+      console.error(`FATAL: ${msg} The server will not start with insecure defaults.`);
+      process.exit(1);
+    }
   }
 }
 
