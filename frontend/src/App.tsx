@@ -64,22 +64,22 @@ const router = createBrowserRouter([
   {
     path: "/change-password",
     element: (
-      <ProtectedRoute>
-        <AuthProvider>
+      <AuthProvider>
+        <ProtectedRoute>
           <ChangePasswordPage />
-        </AuthProvider>
-      </ProtectedRoute>
+        </ProtectedRoute>
+      </AuthProvider>
     ),
     errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/",
     element: (
-      <ProtectedRoute>
-        <AuthProvider>
+      <AuthProvider>
+        <ProtectedRoute>
           <Layout />
-        </AuthProvider>
-      </ProtectedRoute>
+        </ProtectedRoute>
+      </AuthProvider>
     ),
     errorElement: <RouteErrorBoundary />,
     children: [
