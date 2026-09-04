@@ -27,3 +27,4 @@ ai/app/output/
 yolo11n.pt
 
 .vercel
+.env*
