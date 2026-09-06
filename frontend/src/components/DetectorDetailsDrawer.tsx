@@ -28,6 +28,7 @@ import EngineStatusBadge from "./EngineStatusBadge";
 
 interface DetectorDetailsDrawerProps {
   detector: MarketplaceDetector | null;
+  canManage?: boolean;
   onClose: () => void;
   onConfigure: (detector: MarketplaceDetector) => void;
   onCameras: (detector: MarketplaceDetector) => void;
@@ -51,6 +52,7 @@ function formatUptime(seconds: number): string {
 
 export default function DetectorDetailsDrawer({
   detector,
+  canManage = true,
   onClose,
   onConfigure,
   onCameras,
@@ -394,37 +396,45 @@ export default function DetectorDetailsDrawer({
 
           <div className="flex flex-wrap gap-2 pt-2">
             {installed ? (
-              <>
-                <button
-                  onClick={() => onConfigure(detector)}
-                  className="btn-primary inline-flex items-center gap-2 text-sm flex-1 justify-center"
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure
-                </button>
-                <button
-                  onClick={() => onCameras(detector)}
-                  className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center"
-                >
-                  <Camera className="w-4 h-4" />
-                  Cameras
-                </button>
-                <button
-                  onClick={() => onEdit(detector)}
-                  className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center"
-                >
-                  <Settings className="w-4 h-4" />
-                  Edit
-                </button>
-                <button
-                  onClick={() => onRestart(detector)}
-                  disabled={!detector.enabled}
-                  className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center disabled:opacity-40"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Restart
-                </button>
-              </>
+              canManage ? (
+                <>
+                  <button
+                    onClick={() => onConfigure(detector)}
+                    className="btn-primary inline-flex items-center gap-2 text-sm flex-1 justify-center"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Configure
+                  </button>
+                  <button
+                    onClick={() => onCameras(detector)}
+                    className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Cameras
+                  </button>
+                  <button
+                    onClick={() => onEdit(detector)}
+                    className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => onRestart(detector)}
+                    disabled={!detector.enabled}
+                    className="btn-secondary inline-flex items-center gap-2 text-sm flex-1 justify-center disabled:opacity-40"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Restart
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 w-full">
+                  You have view-only access. Ask an administrator for the{" "}
+                  <strong>Manage AI Models</strong> permission to configure this
+                  detector.
+                </p>
+              )
             ) : (
               <div className="flex items-center gap-1 text-sm text-gray-400">
                 <Layers className="w-4 h-4" />

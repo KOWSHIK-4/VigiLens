@@ -8,11 +8,14 @@ import {
   PowerOff,
   AlertCircle,
   Cpu,
+  Lock,
 } from "lucide-react";
 import { detectorService } from "@/services/detectors";
 import { engineService } from "@/services/engine";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { hasPermission } from "@/utils/permissions";
+import { useAuth } from "@/hooks/useAuth";
 import DetectorCard from "@/components/DetectorCard";
 import DetectorConfigDialog from "@/components/DetectorConfigDialog";
 import DetectorCameraModal from "@/components/DetectorCameraModal";
@@ -21,6 +24,14 @@ import DetectorDetailsDrawer from "@/components/DetectorDetailsDrawer";
 import type { EngineDetector, MarketplaceDetector } from "@/types";
 
 type Tab = "installed" | "available";
+
+function detectorErrorMessage(err: unknown, name: string, action: string) {
+  const detail = getApiErrorMessage(err);
+  if (detail === "Insufficient permissions") {
+    return `${name} could not be ${action}. Your account is missing the Manage AI Models permission — ask an administrator for access.`;
+  }
+  return `${name}: ${detail}`;
+}
 
 function CardSkeleton() {
   return (
@@ -44,6 +55,8 @@ function CardSkeleton() {
 
 export default function DetectorsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "models.manage");
   const [tab, setTab] = useState<Tab>("installed");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -98,7 +111,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Update failed",
-        message: `${detector.name}: ${getApiErrorMessage(err)}`,
+        message: detectorErrorMessage(err, detector.name, "changed"),
       });
     },
   });
@@ -117,7 +130,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Install failed",
-        message: `${detector.name}: ${getApiErrorMessage(err)}`,
+        message: detectorErrorMessage(err, detector.name, "installed"),
       });
     },
   });
@@ -136,7 +149,7 @@ export default function DetectorsPage() {
       showToast({
         severity: "critical",
         title: "Restart failed",
-        message: `${detector.name}: ${getApiErrorMessage(err)}`,
+        message: detectorErrorMessage(err, detector.name, "restarted"),
       });
     },
   });
@@ -201,6 +214,17 @@ export default function DetectorsPage() {
           Refresh
         </button>
       </div>
+
+      {!canManage && (
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <p>
+            You have <strong>view-only</strong> access to AI detectors. To enable,
+            configure, edit, install, or assign cameras to detection models, ask an
+            administrator for the <strong>Manage AI Models</strong> permission.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -337,6 +361,7 @@ export default function DetectorsPage() {
               key={detector.key}
               detector={detector}
               busy={isBusy(detector)}
+              canManage={canManage}
               availability={descriptorByKey.get(detector.key)?.availability}
               engineType={descriptorByKey.get(detector.key)?.type}
               onToggle={(d) =>
@@ -367,6 +392,7 @@ export default function DetectorsPage() {
       />
       <DetectorDetailsDrawer
         detector={selectedDetector}
+        canManage={canManage}
         onClose={() => setDetailsFor(null)}
         onConfigure={(d) => {
           setDetailsFor(null);

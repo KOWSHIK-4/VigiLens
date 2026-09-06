@@ -63,12 +63,21 @@ export function CameraPreview({ camera }: CameraPreviewProps) {
   }
 
   if (isLive) {
-    const streamUrl = camera.sourceURL || camera.url;
-    if (imgError) {
+    const streamUrl = camera.sourceURL || camera.url || "";
+    const streamPreviewable = /^(https?:|blob:|data:)/i.test(streamUrl);
+    if (imgError || !streamPreviewable) {
       return (
         <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative flex flex-col items-center justify-center gap-2">
-          <WifiOff className="w-10 h-10 text-gray-600" />
-          <span className="text-gray-500 text-xs">Preview unavailable</span>
+          {streamPreviewable ? (
+            <WifiOff className="w-10 h-10 text-gray-600" />
+          ) : (
+            <Monitor className="w-10 h-10 text-gray-600" />
+          )}
+          <span className="text-gray-500 text-xs">
+            {streamPreviewable
+              ? "Preview unavailable"
+              : "RTSP stream not previewable in browser"}
+          </span>
           <ResolutionBadge resolution={camera.resolution} />
         </div>
       );

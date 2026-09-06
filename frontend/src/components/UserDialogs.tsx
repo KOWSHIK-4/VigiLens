@@ -279,7 +279,7 @@ export function DeleteUserDialog({ open, onClose, user }: DeleteUserDialogProps)
     },
   });
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -339,7 +339,7 @@ interface AssignRoleDialogProps {
 export function AssignRoleDialog({ open, onClose, user }: AssignRoleDialogProps) {
   const queryClient = useQueryClient();
   const roleOptions = useRoleOptions();
-  const [role, setRole] = useState<string>(user.role);
+  const [role, setRole] = useState<string>(user?.role ?? "");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -365,7 +365,7 @@ export function AssignRoleDialog({ open, onClose, user }: AssignRoleDialogProps)
     },
   });
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   const options = roleOptions.length > 0 ? roleOptions : [{ name: user.role } as Role];
 
@@ -444,7 +444,7 @@ interface ToggleStatusDialogProps {
 export function ToggleStatusDialog({ open, onClose, user }: ToggleStatusDialogProps) {
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
-  const disabling = user.status === "active";
+  const disabling = user?.status === "active";
 
   const mutation = useMutation({
     mutationFn: () => userService.setStatus(user.id, disabling ? "disabled" : "active"),
@@ -462,7 +462,7 @@ export function ToggleStatusDialog({ open, onClose, user }: ToggleStatusDialogPr
     },
   });
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -584,7 +584,7 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
     mutation.mutate();
   };
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -694,7 +694,7 @@ export function LockUserDialog({ open, onClose, user }: LockUserDialogProps) {
     },
   });
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -771,7 +771,7 @@ export function UnlockUserDialog({ open, onClose, user }: UnlockUserDialogProps)
     },
   });
 
-  if (!open) return null;
+  if (!open || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

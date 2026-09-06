@@ -20,6 +20,7 @@ import DetectorRuntimeStatusBadge from "./DetectorRuntimeStatusBadge";
 interface DetectorCardProps {
   detector: MarketplaceDetector;
   busy?: boolean;
+  canManage?: boolean;
   availability?: DetectorAvailability;
   engineType?: DetectorEngineType;
   onToggle: (detector: MarketplaceDetector) => void;
@@ -51,6 +52,7 @@ function severityBadge(severity: MarketplaceDetector["alertSeverity"] | null) {
 export default function DetectorCard({
   detector,
   busy,
+  canManage = true,
   availability,
   engineType,
   onToggle,
@@ -178,11 +180,12 @@ export default function DetectorCard({
             role="switch"
             aria-checked={enabled}
             onClick={() => onToggle(detector)}
-            disabled={busy}
+            disabled={busy || !canManage}
+            aria-label={`${enabled ? "Disable" : "Enable"} ${detector.name}`}
+            title={canManage ? undefined : "You don’t have permission to change detectors"}
             className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
               enabled ? "bg-brand-600" : "bg-gray-300"
             }`}
-            aria-label={`${enabled ? "Disable" : "Enable"} ${detector.name}`}
           >
             <span
               className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
@@ -193,7 +196,7 @@ export default function DetectorCard({
         ) : (
           <button
             onClick={() => onInstall(detector)}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
@@ -203,42 +206,46 @@ export default function DetectorCard({
 
         {isInstalled ? (
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => onConfigure(detector)}
-              disabled={busy}
-              className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
-              aria-label={`Configure ${detector.name}`}
-              title="Configure"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onCameras(detector)}
-              disabled={busy}
-              className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
-              aria-label={`Assign cameras to ${detector.name}`}
-              title="Assign cameras"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onEdit(detector)}
-              disabled={busy}
-              className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
-              aria-label={`Edit ${detector.name}`}
-              title="Edit"
-            >
-              <PencilLine className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onRestart(detector)}
-              disabled={busy || !enabled}
-              className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
-              aria-label={`Restart ${detector.name}`}
-              title="Restart"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            {canManage && (
+              <>
+                <button
+                  onClick={() => onConfigure(detector)}
+                  disabled={busy}
+                  className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                  aria-label={`Configure ${detector.name}`}
+                  title="Configure"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onCameras(detector)}
+                  disabled={busy}
+                  className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                  aria-label={`Assign cameras to ${detector.name}`}
+                  title="Assign cameras"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onEdit(detector)}
+                  disabled={busy}
+                  className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                  aria-label={`Edit ${detector.name}`}
+                  title="Edit"
+                >
+                  <PencilLine className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onRestart(detector)}
+                  disabled={busy || !enabled}
+                  className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                  aria-label={`Restart ${detector.name}`}
+                  title="Restart"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </>
+            )}
             <button
               onClick={() => onDetails(detector)}
               className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
