@@ -32,8 +32,8 @@ VigiLens is a production-ready, open-source security monitoring platform that de
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourorg/vigilens.git
-cd vigilens
+git clone https://github.com/KOWSHIK-4/VigiLens.git
+cd VigiLens
 
 # Copy environment variables
 cp .env.example .env
