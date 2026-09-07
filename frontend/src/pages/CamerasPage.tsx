@@ -17,6 +17,7 @@ import {
   Play,
   Square,
   Activity,
+  RefreshCw,
   Camera as CameraIcon,
   Loader2,
 } from "lucide-react";
@@ -46,6 +47,7 @@ export default function CamerasPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editCamera, setEditCamera] = useState<Camera | null>(null);
   const [deleteCamera, setDeleteCamera] = useState<Camera | null>(null);
@@ -60,6 +62,7 @@ export default function CamerasPage() {
         page,
         limit: 12,
       }),
+    refetchInterval: autoRefresh ? 15000 : false,
   });
 
   const startMutation = useMutation({
@@ -139,8 +142,26 @@ export default function CamerasPage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Cameras</h2>
           <p className="text-gray-500 mt-1">Manage your camera feeds</p>
+          {!isLoading && !isError && cameras.length > 0 && (
+            <p className="text-xs text-gray-400 mt-1">
+              Showing {cameras.length} of {data?.total ?? cameras.length} cameras
+            </p>
+          )}
         </div>
-        {canManage ? (
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`}
+            />
+            Auto-refresh
+          </label>
+          {canManage ? (
           <button onClick={() => setAddOpen(true)} className="btn-primary flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add Camera
@@ -151,6 +172,7 @@ export default function CamerasPage() {
             View only
           </span>
         )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
