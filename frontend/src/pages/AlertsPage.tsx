@@ -10,6 +10,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  ShieldAlert,
 } from "lucide-react";
 import { alertService } from "@/services/alerts";
 import { showToast } from "@/utils/toast";
@@ -20,7 +21,6 @@ import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
 import type { Alert } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
-import { ShieldAlert } from "lucide-react";
 
 const severityFilters = [
   { value: "", label: "All" },
@@ -44,6 +44,7 @@ export default function AlertsPage() {
   const [severity, setSeverity] = useState("");
   const [isRead, setIsRead] = useState("");
   const [search, setSearch] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
@@ -53,7 +54,13 @@ export default function AlertsPage() {
     queryKey: ["alerts", { page, limit, severity, isRead, search }],
     queryFn: () =>
       alertService.getAll({ page, limit, severity: severity || undefined, isRead: isRead || undefined, search: search || undefined }),
-    refetchInterval: 5000,
+    refetchInterval: autoRefresh ? 5000 : false,
+  });
+
+  const { data: unreadCount } = useQuery({
+    queryKey: ["alerts", "unread-count"],
+    queryFn: () => alertService.getUnreadCount(),
+    refetchInterval: autoRefresh ? 10000 : false,
   });
 
   const markReadMutation = useMutation({
@@ -106,12 +113,33 @@ export default function AlertsPage() {
         <>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
+            {!!unreadCount && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold border border-brand-200">
+                <Bell className="w-3.5 h-3.5" />
+                {unreadCount} unread
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Monitor and manage security alerts
           </p>
         </div>
-        {canManage ? (
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <CheckCheck
+              className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`}
+            />
+            Auto-refresh
+          </label>
+          {canManage ? (
           <button
             onClick={() => markAllReadMutation.mutate()}
             disabled={markAllReadMutation.isPending || total === 0}
@@ -129,6 +157,7 @@ export default function AlertsPage() {
             View only
           </span>
         )}
+      </div>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
