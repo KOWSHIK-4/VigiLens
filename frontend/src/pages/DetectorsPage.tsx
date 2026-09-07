@@ -61,6 +61,7 @@ export default function DetectorsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [configFor, setConfigFor] = useState<MarketplaceDetector | null>(null);
   const [camerasFor, setCamerasFor] = useState<MarketplaceDetector | null>(null);
   const [editFor, setEditFor] = useState<MarketplaceDetector | null>(null);
@@ -74,7 +75,7 @@ export default function DetectorsPage() {
   } = useQuery({
     queryKey: ["detectors", "marketplace"],
     queryFn: () => detectorService.getMarketplace(),
-    refetchInterval: 5000,
+    refetchInterval: autoRefresh ? 5000 : false,
   });
 
   const { data: categories } = useQuery({
@@ -85,7 +86,7 @@ export default function DetectorsPage() {
   const { data: engineDescriptors } = useQuery({
     queryKey: ["detectors", "engine"],
     queryFn: () => engineService.getAll(),
-    refetchInterval: 5000,
+    refetchInterval: autoRefresh ? 5000 : false,
   });
 
   const descriptorByKey = useMemo(() => {
@@ -206,13 +207,27 @@ export default function DetectorsPage() {
             Browse, install, and configure detection models for your camera network
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="btn-secondary inline-flex items-center gap-2 text-sm"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`}
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={() => refetch()}
+            className="btn-secondary inline-flex items-center gap-2 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {!canManage && (
