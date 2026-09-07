@@ -138,6 +138,7 @@ export default function DashboardPage() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState("Detection");
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const {
     data: stats,
@@ -149,7 +150,7 @@ export default function DashboardPage() {
   } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => detectionService.getStats(),
-    refetchInterval: 30000,
+    refetchInterval: autoRefresh ? 30000 : false,
     placeholderData: keepPreviousData,
   });
 
@@ -157,14 +158,14 @@ export default function DashboardPage() {
     queryKey: ["models", "active"],
     queryFn: () =>
       modelService.getActive().catch(() => null),
-    refetchInterval: 30000,
+    refetchInterval: autoRefresh ? 30000 : false,
     placeholderData: keepPreviousData,
   });
 
   const { data: modelStats } = useQuery({
     queryKey: ["models", "stats"],
     queryFn: () => modelService.getAll({ page: 1, limit: 100 }),
-    refetchInterval: 60000,
+    refetchInterval: autoRefresh ? 60000 : false,
     placeholderData: keepPreviousData,
   });
 
@@ -177,7 +178,7 @@ export default function DashboardPage() {
     queryKey: ["users", "stats"],
     enabled: showUserStats,
     queryFn: () => userService.getStats(),
-    refetchInterval: 60000,
+    refetchInterval: autoRefresh ? 60000 : false,
     placeholderData: keepPreviousData,
   });
 
@@ -185,7 +186,7 @@ export default function DashboardPage() {
     queryKey: ["alerts", "dashboard-latest"],
     enabled: canSeeAlerts,
     queryFn: () => alertService.getAll({ page: 1, limit: 8 }),
-    refetchInterval: 15000,
+    refetchInterval: autoRefresh ? 15000 : false,
     placeholderData: keepPreviousData,
   });
 
@@ -196,7 +197,7 @@ export default function DashboardPage() {
       alertService
         .getAll({ page: 1, limit: 1, severity: "critical", isRead: "false" })
         .then((res) => res.total),
-    refetchInterval: 30000,
+    refetchInterval: autoRefresh ? 30000 : false,
   });
 
   const { data: warningUnread } = useQuery({
@@ -206,7 +207,7 @@ export default function DashboardPage() {
       alertService
         .getAll({ page: 1, limit: 1, severity: "warning", isRead: "false" })
         .then((res) => res.total),
-    refetchInterval: 30000,
+    refetchInterval: autoRefresh ? 30000 : false,
   });
 
   const securityLevel: SecurityLevel =
@@ -228,6 +229,7 @@ export default function DashboardPage() {
     [stats],
   );
   const recentAlerts = latestAlerts?.data ?? [];
+  const dataIsStale = dataUpdatedAt > 0 && Date.now() - dataUpdatedAt > 100000;
 
   if (isLoading && !stats) {
     return <DashboardSkeleton />;
@@ -251,19 +253,38 @@ export default function DashboardPage() {
             Real-time security monitoring overview
           </p>
           {dataUpdatedAt > 0 && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p
+              className={`text-xs mt-1 ${
+                dataIsStale ? "text-amber-600 font-medium" : "text-gray-400"
+              }`}
+            >
               Last updated {new Date(dataUpdatedAt).toLocaleTimeString()}
+              {dataIsStale ? " — data may be stale" : ""}
             </p>
           )}
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="btn-secondary inline-flex items-center gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`}
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="btn-secondary inline-flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {isError && (
