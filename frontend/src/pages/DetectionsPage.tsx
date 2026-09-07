@@ -23,6 +23,7 @@ import {
   Eye,
   Maximize2,
   Trash2,
+  ShieldAlert,
 } from "lucide-react";
 
 const statusColors = {
@@ -45,6 +46,7 @@ export default function DetectionsPage() {
 
   const { user } = useAuth();
   const canManage = hasPermission(user, "detections.manage");
+  const canRead = hasPermission(user, "detections.read");
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -141,6 +143,16 @@ export default function DetectionsPage() {
 
   return (
     <div className="space-y-6">
+      {!canRead ? (
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500">Access required</h3>
+          <p className="text-gray-400 mt-1">
+            You don't have permission to view detection history.
+          </p>
+        </div>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Detection History</h2>
@@ -505,6 +517,8 @@ export default function DetectionsPage() {
             )}
           </div>
         </>
+      )}
+      </>
       )}
 
       {previewImage && (

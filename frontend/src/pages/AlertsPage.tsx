@@ -18,6 +18,9 @@ import { formatRelativeTime } from "@/utils/format";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
 import type { Alert } from "@/types";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
+import { ShieldAlert } from "lucide-react";
 
 const severityFilters = [
   { value: "", label: "All" },
@@ -34,6 +37,9 @@ const readFilters = [
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "alerts.manage");
+  const canRead = hasPermission(user, "alerts.read");
   const [page, setPage] = useState(1);
   const [severity, setSeverity] = useState("");
   const [isRead, setIsRead] = useState("");
@@ -90,6 +96,14 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
+      {!canRead ? (
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500">Alert access required</h3>
+          <p className="text-gray-400 mt-1">You don't have permission to view alerts.</p>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
@@ -97,14 +111,24 @@ export default function AlertsPage() {
             Monitor and manage security alerts
           </p>
         </div>
-        <button
-          onClick={() => markAllReadMutation.mutate()}
-          disabled={markAllReadMutation.isPending || total === 0}
-          className="btn-primary flex items-center gap-2"
-        >
-          <CheckCheck className="w-4 h-4" />
-          Mark All as Read
-        </button>
+        {canManage ? (
+          <button
+            onClick={() => markAllReadMutation.mutate()}
+            disabled={markAllReadMutation.isPending || total === 0}
+            className="btn-primary flex items-center gap-2"
+          >
+            <CheckCheck className="w-4 h-4" />
+            Mark All as Read
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-2 text-sm text-gray-400"
+            title="You don't have permission to manage alerts"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            View only
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -244,7 +268,7 @@ export default function AlertsPage() {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    {!alert.isRead && (
+                    {canManage && !alert.isRead && (
                       <button
                         onClick={() => markReadMutation.mutate(alert.id)}
                         disabled={markReadMutation.isPending}
@@ -254,17 +278,19 @@ export default function AlertsPage() {
                         <CheckCheck className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        setDeleteError("");
-                        setDeleteTarget(alert);
-                      }}
-                      disabled={deleteMutation.isPending}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete alert"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteTarget(alert);
+                        }}
+                        disabled={deleteMutation.isPending}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete alert"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -316,6 +342,8 @@ export default function AlertsPage() {
         </div>
       )}
 
+      </>
+      )}
       <AlertDetailsDrawer
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}

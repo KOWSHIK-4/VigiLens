@@ -12,12 +12,15 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   Tag,
   Trash2,
 } from "lucide-react";
 import { modelService } from "@/services/models";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 import ModelStatusBadge from "@/components/ModelStatusBadge";
 import {
   AddModelDialog,
@@ -72,9 +75,11 @@ function GpuBadge({ supported }: { supported: boolean }) {
 
 function ConfidenceSlider({
   model,
+  disabled,
   onCommit,
 }: {
   model: AIModel;
+  disabled?: boolean;
   onCommit: (model: AIModel, threshold: number) => void;
 }) {
   const [value, setValue] = useState(model.confidenceThreshold);
@@ -92,7 +97,7 @@ function ConfidenceSlider({
         max={100}
         step={1}
         value={value}
-        disabled={!model.enabled}
+        disabled={!model.enabled || disabled}
         onChange={(e) => setValue(Number(e.target.value))}
         onMouseUp={(e) => sync(Number((e.target as HTMLInputElement).value))}
         onTouchEnd={(e) => sync(Number((e.target as HTMLInputElement).value))}
@@ -163,6 +168,9 @@ function TableSkeleton() {
 
 export default function ModelsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "models.manage");
+  const canRead = hasPermission(user, "models.read");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -327,6 +335,14 @@ export default function ModelsPage() {
 
   return (
     <div className="space-y-6">
+      {!canRead ? (
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500">Model catalog access required</h3>
+          <p className="text-gray-400 mt-1">You don't have permission to view AI models.</p>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Models</h1>
@@ -335,13 +351,23 @@ export default function ModelsPage() {
             configure detectors
           </p>
         </div>
-        <button
-          className="btn-primary inline-flex items-center gap-2"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus className="w-4 h-4" />
-          Add Model
-        </button>
+        {canManage ? (
+          <button
+            className="btn-primary inline-flex items-center gap-2"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="w-4 h-4" />
+            Add Model
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-2 text-sm text-gray-400"
+            title="You don't have permission to add models"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            View only
+          </span>
+        )}
       </div>
 
       {statsLoading ? (
@@ -466,6 +492,7 @@ export default function ModelsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <ConfidenceSlider
                         model={model}
+                        disabled={!canManage}
                         onCommit={(m, threshold) =>
                           thresholdMutation.mutate({ model: m, threshold })
                         }
@@ -474,6 +501,7 @@ export default function ModelsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <Switch
                         checked={model.enabled}
+                        disabled={!canManage}
                         label={`${model.enabled ? "Disable" : "Enable"} ${model.name}`}
                         onToggle={() =>
                           toggleMutation.mutate({
@@ -490,6 +518,7 @@ export default function ModelsPage() {
                       {new Date(model.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
+                      {canManage ? (
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => loadMutation.mutate(model)}
@@ -537,6 +566,15 @@ export default function ModelsPage() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs text-gray-400"
+                          title="Management requires the Manage AI Models permission"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          View only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -611,6 +649,8 @@ export default function ModelsPage() {
         </div>
       )}
 
+      </>
+      )}
       <AddModelDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <EditModelDialog
         open={Boolean(editing)}

@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
 import type { Camera, CameraStatus, CameraType } from "@/types";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
+import { ShieldAlert } from "lucide-react";
 import { AddCameraDialog, EditCameraDialog, DeleteCameraDialog } from "@/components/CameraDialogs";
 import { CameraPreview } from "@/components/CameraPreview";
 import {
@@ -35,6 +38,10 @@ const typeLabels: Record<string, string> = {
 
 export default function CamerasPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "cameras.manage");
+  const canControl = hasPermission(user, "cameras.control");
+  const canRead = hasPermission(user, "cameras.read");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -120,15 +127,30 @@ export default function CamerasPage() {
 
   return (
     <div className="space-y-6">
+      {!canRead ? (
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500">Camera access required</h3>
+          <p className="text-gray-400 mt-1">You don't have permission to view cameras.</p>
+        </div>
+      ) : (
+        <>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Cameras</h2>
           <p className="text-gray-500 mt-1">Manage your camera feeds</p>
         </div>
-        <button onClick={() => setAddOpen(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Camera
-        </button>
+        {canManage ? (
+          <button onClick={() => setAddOpen(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Camera
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-2 text-sm text-gray-400" title="You don't have permission to add cameras">
+            <ShieldAlert className="w-4 h-4" />
+            View only
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -197,6 +219,8 @@ export default function CamerasPage() {
                   key={camera.id}
                   camera={camera}
                   status={status}
+                  canManage={canManage}
+                  canControl={canControl}
                   onEdit={() => setEditCamera(camera)}
                   onDelete={() => setDeleteCamera(camera)}
                   onStart={() => startMutation.mutate(camera.id)}
@@ -265,7 +289,8 @@ export default function CamerasPage() {
           )}
         </>
       )}
-
+      </>
+      )}
       <AddCameraDialog open={addOpen} onClose={() => setAddOpen(false)} />
       {editCamera && (
         <EditCameraDialog open={!!editCamera} onClose={() => setEditCamera(null)} camera={editCamera} />
@@ -280,6 +305,8 @@ export default function CamerasPage() {
 function CameraCard({
   camera,
   status,
+  canManage,
+  canControl,
   onEdit,
   onDelete,
   onStart,
@@ -293,6 +320,8 @@ function CameraCard({
 }: {
   camera: Camera;
   status: { dot: string; bg: string; label: string };
+  canManage: boolean;
+  canControl: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onStart: () => void;
@@ -340,24 +369,36 @@ function CameraCard({
       </div>
 
       <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-        {isLive ? (
-          <button
-            onClick={onStop}
-            disabled={isStopping}
-            className="flex-1 text-sm py-1.5 px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-          >
-            {isStopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
-            Stop
-          </button>
+        {canControl ? (
+          isLive ? (
+            <button
+              onClick={onStop}
+              disabled={isStopping}
+              className="flex-1 text-sm py-1.5 px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+              title="Stop camera"
+            >
+              {isStopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+              Stop
+            </button>
+          ) : (
+            <button
+              onClick={onStart}
+              disabled={isStarting}
+              className="flex-1 text-sm py-1.5 px-3 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+              title="Start camera"
+            >
+              {isStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+              Start
+            </button>
+          )
         ) : (
-          <button
-            onClick={onStart}
-            disabled={isStarting}
-            className="flex-1 text-sm py-1.5 px-3 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+          <span
+            className="flex-1 text-sm py-1.5 px-3 rounded-lg bg-gray-50 text-gray-400 flex items-center justify-center gap-1.5"
+            title="You don't have permission to start/stop cameras"
           >
-            {isStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-            Start
-          </button>
+            <ShieldAlert className="w-3.5 h-3.5" />
+            View only
+          </span>
         )}
 
         <button
@@ -369,30 +410,36 @@ function CameraCard({
           <Activity className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} />
         </button>
 
-        <button
-          onClick={onCapture}
-          disabled={isCapturing}
-          className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-sky-50 hover:text-sky-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-          title="Capture snapshot"
-        >
-          <CameraIcon className={`w-3.5 h-3.5 ${isCapturing ? "animate-pulse" : ""}`} />
-        </button>
+        {canControl && (
+          <button
+            onClick={onCapture}
+            disabled={isCapturing}
+            className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-sky-50 hover:text-sky-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+            title="Capture snapshot"
+          >
+            <CameraIcon className={`w-3.5 h-3.5 ${isCapturing ? "animate-pulse" : ""}`} />
+          </button>
+        )}
 
-        <button
-          onClick={onEdit}
-          className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors flex items-center justify-center"
-          title="Edit camera"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
+        {canManage && (
+          <button
+            onClick={onEdit}
+            className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors flex items-center justify-center"
+            title="Edit camera"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+        )}
 
-        <button
-          onClick={onDelete}
-          className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors flex items-center justify-center"
-          title="Delete camera"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {canManage && (
+          <button
+            onClick={onDelete}
+            className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors flex items-center justify-center"
+            title="Delete camera"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

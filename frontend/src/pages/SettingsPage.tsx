@@ -15,6 +15,7 @@ import {
   Save,
   Search,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   X,
@@ -22,6 +23,8 @@ import {
 import { settingsService } from "@/services/settings";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 import type {
   SettingsCategory,
   SettingsUpdateInput,
@@ -104,11 +107,13 @@ function SettingField({
   value,
   onChange,
   modified,
+  disabled,
 }: {
   setting: SystemSetting;
   value: SettingsValue;
   onChange: (value: SettingsValue) => void;
   modified?: boolean;
+  disabled?: boolean;
 }) {
   if (setting.type === "boolean") {
     const checked = Boolean(value);
@@ -127,9 +132,10 @@ function SettingField({
           aria-checked={checked}
           aria-label={setting.label}
           onClick={() => onChange(!checked)}
+          disabled={disabled}
           className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
             checked ? "bg-brand-600" : "bg-gray-300"
-          }`}
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -164,12 +170,13 @@ function SettingField({
             max={setting.max}
             step={setting.step ?? 1}
             value={String(value)}
+            disabled={disabled}
             onChange={(e) => {
               if (e.target.value === "") return;
               const next = Number(e.target.value);
               if (Number.isFinite(next)) onChange(next);
             }}
-            className="input max-w-[180px]"
+            className="input max-w-[180px] disabled:opacity-40"
             aria-label={setting.label}
           />
           {setting.unit && (
@@ -190,8 +197,9 @@ function SettingField({
         </label>
         <select
           value={String(value)}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="input mt-1.5"
+          className="input mt-1.5 disabled:opacity-40"
           aria-label={setting.label}
         >
           {setting.options?.map((option) => (
@@ -219,9 +227,10 @@ function SettingField({
               key={option.value}
               type="button"
               onClick={() => onChange(option.value)}
+              disabled={disabled}
               title={option.label}
               aria-label={`${setting.label}: ${option.label}`}
-              className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${
+              className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-40 disabled:cursor-not-allowed ${
                 String(value).toLowerCase() === option.value.toLowerCase()
                   ? "border-gray-900 scale-110"
                   : "border-gray-200"
@@ -232,8 +241,9 @@ function SettingField({
           <input
             type="color"
             value={String(value)}
+            disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
-            className="h-8 w-8 cursor-pointer rounded-full border border-gray-200"
+            className="h-8 w-8 cursor-pointer rounded-full border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label={`${setting.label} custom color`}
           />
         </div>
@@ -251,8 +261,9 @@ function SettingField({
       <input
         type="text"
         value={String(value)}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="input mt-1.5"
+        className="input mt-1.5 disabled:opacity-40"
         aria-label={setting.label}
       />
       <p className="text-xs text-gray-500 mt-1.5">{setting.description}</p>
@@ -271,6 +282,9 @@ function SkeletonField() {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "settings.manage");
+  const canRead = hasPermission(user, "settings.read");
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("general");
   const [search, setSearch] = useState("");
   const [values, setValues] = useState<SettingsMap>({});
@@ -458,6 +472,7 @@ export default function SettingsPage() {
             value={values[setting.key] ?? setting.value}
             onChange={(value) => setValue(setting.key, value)}
             modified={isModified}
+            disabled={!canManage}
           />
         </div>
       );
@@ -466,6 +481,19 @@ export default function SettingsPage() {
   const activeMeta = CATEGORY_META[activeCategory];
   const ActiveIcon = activeMeta.icon;
   const isSearching = Boolean(searchQuery);
+
+  if (!canRead) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
+          <h3 className="text-lg font-medium text-gray-500 mt-4">Settings access required</h3>
+          <p className="text-gray-400 mt-1">You don't have permission to view system settings.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -627,9 +655,18 @@ export default function SettingsPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {!canManage && (
+              <span
+                className="inline-flex items-center gap-1.5 text-sm text-gray-400"
+                title="You don't have permission to change settings"
+              >
+                <ShieldAlert className="w-4 h-4" />
+                Read only
+              </span>
+            )}
             <button
               onClick={() => resetMutation.mutate(activeCategory)}
-              disabled={isSearching || resetMutation.isPending}
+              disabled={isSearching || resetMutation.isPending || !canManage}
               className="btn-secondary inline-flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {resetMutation.isPending ? (
@@ -641,7 +678,7 @@ export default function SettingsPage() {
             </button>
             <button
               onClick={() => saveMutation.mutate()}
-              disabled={!dirty || saveMutation.isPending}
+              disabled={!dirty || saveMutation.isPending || !canManage}
               className="btn-primary inline-flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saveMutation.isPending ? (

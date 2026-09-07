@@ -19,6 +19,9 @@ import { showToast } from "@/utils/toast";
 import type { Report } from "@/types";
 import GenerateReportDialog from "@/components/GenerateReportDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
+import { ShieldAlert } from "lucide-react";
 
 const typeConfig: Record<string, { label: string; color: string }> = {
   daily: { label: "Daily", color: "bg-blue-100 text-blue-700" },
@@ -48,6 +51,9 @@ const statusFilters = [
 
 export default function ReportsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "reports.manage");
+  const canRead = hasPermission(user, "reports.read");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -99,6 +105,14 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
+      {!canRead ? (
+        <div className="text-center py-16">
+          <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500">Report access required</h3>
+          <p className="text-gray-400 mt-1">You don't have permission to view reports.</p>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
@@ -106,13 +120,23 @@ export default function ReportsPage() {
             Generate and manage security reports
           </p>
         </div>
-        <button
-          onClick={() => setShowGenerate(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Generate Report
-        </button>
+        {canManage ? (
+          <button
+            onClick={() => setShowGenerate(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Generate Report
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-2 text-sm text-gray-400"
+            title="You don't have permission to generate reports"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            View only
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -268,17 +292,19 @@ export default function ReportsPage() {
                               </button>
                             </>
                           )}
-                          <button
-                            onClick={() => {
-                              setDeleteError("");
-                              setDeleteTarget(report);
-                            }}
-                            disabled={deleteMutation.isPending}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete report"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canManage && (
+                            <button
+                              onClick={() => {
+                                setDeleteError("");
+                                setDeleteTarget(report);
+                              }}
+                              disabled={deleteMutation.isPending}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete report"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -333,6 +359,8 @@ export default function ReportsPage() {
         </div>
       )}
 
+      </>
+      )}
       {showGenerate && (
         <GenerateReportDialog onClose={() => setShowGenerate(false)} />
       )}
