@@ -1,4 +1,5 @@
 import api from "./api";
+import { useAuth } from "@/hooks/useAuth";
 import type { AuthResponse, ChangePasswordInput, User } from "@/types";
 
 export const authService = {
@@ -11,6 +12,7 @@ export const authService = {
       },
     );
     localStorage.setItem("token", data.data.token);
+    useAuth.getState().setUser(data.data.user);
     return data.data;
   },
 
@@ -28,6 +30,7 @@ export const authService = {
       },
     );
     localStorage.setItem("token", data.data.token);
+    useAuth.getState().setUser(data.data.user);
     return data.data;
   },
 
@@ -50,6 +53,10 @@ export const authService = {
 
   async changePassword(input: ChangePasswordInput): Promise<void> {
     await api.post("/auth/change-password", input);
+    // The backend clears `mustChangePassword` on success; refresh the stored
+    // user so role-based UI and the redirect guard reflect it immediately.
+    const user = await this.me();
+    useAuth.getState().setUser(user);
   },
 
   getToken(): string | null {
