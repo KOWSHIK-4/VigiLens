@@ -129,6 +129,16 @@ VigiLens/
 └── .github/           # CI/CD workflows
 ```
 
+## Documentation
+
+- **[Deployment](docs/deployment.md)** — Docker Compose, hardening, and manual setup
+- **[Roles & Permissions](docs/roles-and-permissions.md)** — the RBAC model, permission catalog, role matrix, and seeded accounts
+- **[API](docs/api.md)** — RESTful API reference
+- **[Detection Pipeline](docs/detection-pipeline.md)** — how detections flow through the engine
+- **[Adding a Detector](docs/adding-a-detector.md)** — extending the detector catalog
+- **[Implementation Status](docs/implementation-status.md)** — what is implemented today
+- **[Limitations](docs/limitations.md)** — known limits and constraints
+
 ## License
 
 MIT
