@@ -10,8 +10,19 @@
 import { logger } from "../config/logger";
 import { alertService } from "../services/alert.service";
 import { logAudit } from "../utils/auditLog";
+import type { AlertSeverity } from "@prisma/client";
 import type { AlertEvaluationStage } from "./pipeline";
 import type { NormalizedDetection, PipelineContext } from "./types";
+
+/** Matches `deriveDetectionStatus` thresholds in `detection.service` so event
+ *  severity stays consistent between plain detections and raised alerts. */
+const SEVERITY_RANK: Record<string, number> = { info: 0, warning: 1, critical: 2 };
+
+function confidenceSeverity(confidence: number): AlertSeverity {
+  if (confidence >= 0.85) return "critical";
+  if (confidence >= 0.6) return "warning";
+  return "info";
+}
 
 export class AlertCooldownRegistry {
   private readonly lastAlert = new Map<string, number>();
@@ -82,7 +93,12 @@ export class CooldownAlertStage implements AlertEvaluationStage {
       const key = `${d.detectorKey}:${d.cameraId}:${d.className}`;
       if (!this.registry.shouldRaise(key, now, cooldownMs)) continue;
 
-      const severity = ctx.detector.configuration.alertSeverity;
+      // Escalate so the most severe of the detector's default and the
+      // event's per-detection confidence wins.
+      const configured = ctx.detector.configuration.alertSeverity;
+      const derived = confidenceSeverity(d.confidence);
+      const severity =
+        SEVERITY_RANK[derived] > SEVERITY_RANK[configured] ? derived : configured;
       const title = `${ctx.detector.name}: ${d.className}`;
       const message = `${d.className} detected on camera ${d.cameraId} with ${(d.confidence * 100).toFixed(1)}% confidence.`;
 

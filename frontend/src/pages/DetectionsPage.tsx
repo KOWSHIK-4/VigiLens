@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { detectionService } from "@/services/detections";
 import { cameraService } from "@/services/cameras";
 import DetectionImagePreview from "@/components/DetectionImagePreview";
@@ -10,7 +11,7 @@ import { DeleteDetectionDialog } from "@/components/DeleteDetectionDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
 import { showToast } from "@/utils/toast";
-import type { Detection, DetectionFilters } from "@/types";
+import type { Detection, DetectionFilters, DetectionWithCamera } from "@/types";
 import {
   Search,
   Download,
@@ -47,6 +48,17 @@ export default function DetectionsPage() {
   const { user } = useAuth();
   const canManage = hasPermission(user, "detections.manage");
   const canRead = hasPermission(user, "detections.read");
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const highlight = location.state as
+      | { highlightDetection?: DetectionWithCamera }
+      | null;
+    if (highlight?.highlightDetection) {
+      setSelectedDetection(highlight.highlightDetection);
+    }
+  }, [location.state]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {

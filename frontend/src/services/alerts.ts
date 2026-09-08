@@ -8,6 +8,9 @@ export const alertService = {
     severity?: string;
     isRead?: string;
     search?: string;
+    cameraId?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }) {
     const { data } = await api.get<PaginatedResponse<Alert>>("/alerts", {
       params,

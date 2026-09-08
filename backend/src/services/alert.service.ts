@@ -41,6 +41,23 @@ export const alertService = {
       ];
     }
 
+    if (params.cameraId) {
+      where.detection = { cameraId: params.cameraId };
+    }
+
+    if (params.dateFrom || params.dateTo) {
+      const createdAtFilter: Prisma.DateTimeFilter = {};
+      if (params.dateFrom) {
+        createdAtFilter.gte = new Date(params.dateFrom);
+      }
+      if (params.dateTo) {
+        const end = new Date(params.dateTo);
+        end.setHours(23, 59, 59, 999);
+        createdAtFilter.lte = end;
+      }
+      where.createdAt = createdAtFilter;
+    }
+
     const [data, total] = await Promise.all([
       prisma.alert.findMany({
         where,

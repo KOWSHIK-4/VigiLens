@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCheck,
@@ -11,14 +12,16 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
+  X,
 } from "lucide-react";
 import { alertService } from "@/services/alerts";
+import { cameraService } from "@/services/cameras";
 import { showToast } from "@/utils/toast";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatRelativeTime } from "@/utils/format";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
-import type { Alert } from "@/types";
+import type { Alert, DetectionWithCamera } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
 
@@ -37,6 +40,7 @@ const readFilters = [
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = hasPermission(user, "alerts.manage");
   const canRead = hasPermission(user, "alerts.read");
@@ -44,18 +48,40 @@ export default function AlertsPage() {
   const [severity, setSeverity] = useState("");
   const [isRead, setIsRead] = useState("");
   const [search, setSearch] = useState("");
+  const [cameraId, setCameraId] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const limit = 20;
 
+  const queryFilters = useCallback(
+    () => ({
+      page,
+      limit,
+      severity: severity || undefined,
+      isRead: isRead || undefined,
+      search: search || undefined,
+      cameraId: cameraId || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    }),
+    [page, limit, severity, isRead, search, cameraId, dateFrom, dateTo],
+  );
+
   const { data, isLoading } = useQuery({
-    queryKey: ["alerts", { page, limit, severity, isRead, search }],
-    queryFn: () =>
-      alertService.getAll({ page, limit, severity: severity || undefined, isRead: isRead || undefined, search: search || undefined }),
+    queryKey: ["alerts", queryFilters()],
+    queryFn: () => alertService.getAll(queryFilters()),
     refetchInterval: autoRefresh ? 5000 : false,
   });
+
+  const { data: camerasData } = useQuery({
+    queryKey: ["cameras"],
+    queryFn: () => cameraService.getAll({ limit: 100 }),
+  });
+  const cameras = camerasData?.data ?? [];
 
   const { data: unreadCount } = useQuery({
     queryKey: ["alerts", "unread-count"],
@@ -100,6 +126,29 @@ export default function AlertsPage() {
   const alerts = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 0;
+  const hasActiveFilters = Boolean(severity || isRead || search || cameraId || dateFrom || dateTo);
+
+  const clearFilters = () => {
+    setSeverity("");
+    setIsRead("");
+    setSearch("");
+    setCameraId("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  };
+
+  const handleOpenAlert = (alert: Alert) => {
+    setSelectedAlert(alert);
+    if (canManage && !alert.isRead) {
+      markReadMutation.mutate(alert.id);
+    }
+  };
+
+  const handleViewDetection = (detection: DetectionWithCamera) => {
+    setSelectedAlert(null);
+    navigate("/detections", { state: { highlightDetection: detection } });
+  };
 
   return (
     <div className="space-y-6">
@@ -217,7 +266,66 @@ export default function AlertsPage() {
             </button>
           ))}
         </div>
+
+        <div>
+          <select
+            value={cameraId}
+            onChange={(e) => {
+              setCameraId(e.target.value);
+              setPage(1);
+            }}
+            className="input text-sm"
+            aria-label="Filter by camera"
+          >
+            <option value="">All Cameras</option>
+            {cameras.map((camera) => (
+              <option key={camera.id} value={camera.id}>
+                {camera.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              setPage(1);
+            }}
+            className="input text-sm"
+            title="From date"
+            aria-label="From date"
+          />
+        </div>
+
+        <div>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setPage(1);
+            }}
+            className="input text-sm"
+            title="To date"
+            aria-label="To date"
+          />
+        </div>
       </div>
+
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 -mt-1">
+          <button
+            onClick={clearFilters}
+            className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1"
+          >
+            <X className="w-3 h-3" />
+            Clear all filters
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12">
@@ -228,7 +336,7 @@ export default function AlertsPage() {
           <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">No alerts found</p>
           <p className="text-gray-400 text-sm mt-1">
-            {severity || isRead || search
+            {hasActiveFilters
               ? "Try adjusting your filters"
               : "New alerts will appear here"}
           </p>
@@ -244,7 +352,7 @@ export default function AlertsPage() {
                 className={`${cfg.bg} border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md ${
                   !alert.isRead ? "ring-1 ring-brand-200" : ""
                 }`}
-                onClick={() => setSelectedAlert(alert)}
+                onClick={() => handleOpenAlert(alert)}
               >
                 <div className="flex items-start gap-3">
                   <Icon className={`w-5 h-5 mt-0.5 ${cfg.iconColor} flex-shrink-0`} />
@@ -290,7 +398,7 @@ export default function AlertsPage() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
-                      onClick={() => setSelectedAlert(alert)}
+                      onClick={() => handleOpenAlert(alert)}
                       className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                       title="View alert details"
                       aria-label={`View details for ${alert.title}`}
@@ -376,6 +484,7 @@ export default function AlertsPage() {
       <AlertDetailsDrawer
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}
+        onViewDetection={handleViewDetection}
       />
 
       <ConfirmDialog

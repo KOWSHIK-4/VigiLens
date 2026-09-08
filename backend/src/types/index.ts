@@ -197,6 +197,15 @@ export const alertQuerySchema = z.object({
   severity: alertSeveritySchema.optional(),
   isRead: z.enum(["true", "false"]).optional(),
   search: z.string().max(200).optional(),
+  cameraId: z.string().uuid().optional(),
+  dateFrom: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date")
+    .optional(),
+  dateTo: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date")
+    .optional(),
 });
 
 export const alertIdSchema = z.object({ id: z.string().uuid() });
