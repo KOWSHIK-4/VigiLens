@@ -143,6 +143,69 @@ async function main() {
     fail("delete model", removed);
   }
 
+  const monitoring = await json("/system/monitoring", {}, token);
+  const monBody = (monitoring.body as {
+    data: {
+      scheduler: { running: boolean; loopCount: number; loops?: unknown[] };
+      engines: unknown[];
+    };
+  }).data;
+  if (
+    monitoring.status === 200 &&
+    typeof monBody.scheduler?.running === "boolean" &&
+    Array.isArray(monBody.scheduler?.loops) &&
+    Array.isArray(monBody.engines)
+  ) {
+    ok(`GET /system/monitoring returns ${monBody.engines.length} engines and ${monBody.scheduler.loopCount} loops`);
+  } else {
+    fail("GET /system/monitoring", monitoring);
+  }
+
+  const metrics = await json("/system/metrics", {}, token);
+  const metricsBody = (metrics.body as {
+    data: { requests: { total: number }; detections: { total: number } };
+  }).data;
+  if (
+    metrics.status === 200 &&
+    typeof metricsBody.requests?.total === "number" &&
+    typeof metricsBody.detections?.total === "number"
+  ) {
+    ok("GET /system/metrics returns request and detection aggregates");
+  } else {
+    fail("GET /system/metrics", metrics);
+  }
+
+  const detections = await json("/detections?page=1&limit=5", {}, token);
+  const detBody = detections.body as { data: Array<{ status: string }> };
+  const validDetStatuses = ["critical", "warning", "info"];
+  if (
+    detections.status === 200 &&
+    Array.isArray(detBody?.data) &&
+    detBody.data.every((d) => validDetStatuses.includes(d.status))
+  ) {
+    ok(`GET /detections returns ${detBody.data.length} detections with valid statuses`);
+  } else {
+    fail("GET /detections", detections);
+  }
+
+  const alerts = await json("/alerts?page=1&limit=5", {}, token);
+  const alertsBody = alerts.body as { data: unknown[] };
+  if (alerts.status === 200 && Array.isArray(alertsBody?.data)) {
+    ok(`GET /alerts returns ${alertsBody.data.length} alerts`);
+  } else {
+    fail("GET /alerts", alerts);
+  }
+
+  const exportRes = await fetchWithTimeout(`${BASE_URL}/alerts/export`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const csvText = await exportRes.text();
+  if (exportRes.status === 200 && csvText.startsWith("ID,")) {
+    ok("GET /alerts/export returns CSV rows");
+  } else {
+    fail("GET /alerts/export", { status: exportRes.status, preview: csvText.slice(0, 80) });
+  }
+
   await sleep(200);
 }
 

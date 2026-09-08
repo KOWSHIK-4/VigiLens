@@ -207,6 +207,66 @@ async function run() {
       statuses: detectorList.body?.data?.map((d) => d.status),
     });
   }
+
+  const monitoring = await request("/system/monitoring", {}, token);
+  const monBody = monitoring.body?.data ?? {};
+  if (
+    monitoring.status === 200 &&
+    typeof monBody.scheduler === "object" &&
+    typeof monBody.scheduler.running === "boolean" &&
+    Array.isArray(monBody.scheduler.loops) &&
+    Array.isArray(monBody.engines)
+  ) {
+    ok(`GET /system/monitoring through proxy returns ${monBody.engines.length} engines and ${monBody.scheduler.loopCount} scheduler loops`);
+  } else {
+    fail("GET /system/monitoring through proxy", monitoring);
+  }
+
+  const metrics = await request("/system/metrics", {}, token);
+  const metricsBody = metrics.body?.data ?? {};
+  if (
+    metrics.status === 200 &&
+    metricsBody.requests &&
+    typeof metricsBody.requests.total === "number" &&
+    metricsBody.detections &&
+    typeof metricsBody.detections.total === "number"
+  ) {
+    ok("GET /system/metrics through proxy returns request and detection aggregates");
+  } else {
+    fail("GET /system/metrics through proxy", metrics);
+  }
+
+  const detections = await request("/detections?page=1&limit=5", {}, token);
+  const validDetStatuses = new Set(["critical", "warning", "info"]);
+  if (
+    detections.status === 200 &&
+    Array.isArray(detections.body.data) &&
+    detections.body.data.every((d) => validDetStatuses.has(d.status))
+  ) {
+    ok(`GET /detections through proxy returns ${detections.body.data.length} detections with valid statuses`);
+  } else {
+    fail("GET /detections through proxy", detections);
+  }
+
+  const alerts = await request("/alerts?page=1&limit=5", {}, token);
+  if (alerts.status === 200 && Array.isArray(alerts.body.data)) {
+    ok(`GET /alerts through proxy returns ${alerts.body.data.length} alerts`);
+  } else {
+    fail("GET /alerts through proxy", alerts);
+  }
+
+  const exportRes = await fetch(`${API}/alerts/export`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const csvText = await exportRes.text();
+  if (exportRes.status === 200 && csvText.startsWith("ID,")) {
+    ok("GET /alerts/export through proxy returns CSV rows");
+  } else {
+    fail("GET /alerts/export through proxy", {
+      status: exportRes.status,
+      preview: csvText.slice(0, 80),
+    });
+  }
 }
 
 async function main() {
