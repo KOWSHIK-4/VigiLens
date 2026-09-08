@@ -10,7 +10,7 @@ const router = Router();
 router.use(authenticate);
 router.use(requirePermission("analytics.read"));
 
-router.get("/overview", analyticsController.getOverview);
+router.get("/overview", validate(analyticsQuerySchema, "query"), analyticsController.getOverview);
 router.get("/daily", validate(analyticsQuerySchema, "query"), analyticsController.getDaily);
 router.get("/cameras", validate(analyticsQuerySchema, "query"), analyticsController.getCameras);
 router.get("/detectors", validate(analyticsQuerySchema, "query"), analyticsController.getDetectors);

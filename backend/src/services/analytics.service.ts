@@ -115,16 +115,59 @@ function getDateRange(days: number): { from: Date; to: Date } {
   return { from, to };
 }
 
+/**
+ * Resolves the period/from/to params into a timestamp filter. The `period`
+ * wins; otherwise explicit `from`/`to` bounds are honoured, with `to` clamped
+ * to the end of its day (matching the detection list filter). When no filter
+ * applies the helpers return undefined so callers keep their all-time scope.
+ */
+function periodDateFilter(params: PeriodParams): { gte?: Date; lte?: Date } | undefined {
+  if (params.period) {
+    const { from, to } = getDateRange(parseInt(params.period));
+    return { gte: from, lte: to };
+  }
+  const gte = params.from ? new Date(params.from) : undefined;
+  const lte = params.to ? new Date(params.to) : undefined;
+  if (lte) lte.setHours(23, 59, 59, 999);
+  if (gte || lte) return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+  return undefined;
+}
+
+/** Builds the full raw-SQL `WHERE ...` clause for a resolved date filter. */
+function dateWhereSql(filter: { gte?: Date; lte?: Date } | undefined): Prisma.Sql {
+  if (!filter) return Prisma.empty;
+  if (filter.gte && filter.lte) {
+    return Prisma.sql`WHERE timestamp >= ${filter.gte} AND timestamp <= ${filter.lte}`;
+  }
+  if (filter.gte) return Prisma.sql`WHERE timestamp >= ${filter.gte}`;
+  if (filter.lte) return Prisma.sql`WHERE timestamp <= ${filter.lte}`;
+  return Prisma.empty;
+}
+
+/** Number of days spanned by the active period/from/to filter (for rates). */
+function windowDaysFor(params: PeriodParams): number | undefined {
+  if (params.period) return parseInt(params.period);
+  if (params.from || params.to) {
+    const start = params.from ? new Date(params.from).getTime() : Date.now();
+    const end = params.to ? new Date(params.to).getTime() : Date.now();
+    if (Number.isNaN(start) || Number.isNaN(end) || end < start) return undefined;
+    return Math.max(1, Math.round((end - start) / 86400000));
+  }
+  return undefined;
+}
+
 export const analyticsService = {
-  async getOverview(): Promise<OverviewResult> {
-    const cacheKey = "analytics:overview";
+  async getOverview(params: PeriodParams = {}): Promise<OverviewResult> {
+    const cacheKey = `analytics:overview:${rangeKeyFor(params)}`;
     const cached = cacheGet<OverviewResult>(cacheKey);
     if (cached) return cached;
 
     const now = new Date();
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+    const filter = periodDateFilter(params);
+    const scopeWhere = filter ? { timestamp: filter } : undefined;
+    const windowDays = windowDaysFor(params);
 
     const [
       totalDetections,
@@ -134,28 +177,31 @@ export const analyticsService = {
       topCamera,
       topLabel,
       cameraTotal,
-      detectionRate,
       severityCounts,
     ] = await Promise.all([
-      prisma.detection.count(),
+      prisma.detection.count({ where: scopeWhere }),
       prisma.detection.count({ where: { timestamp: { gte: todayStart } } }),
       prisma.camera.groupBy({ by: ["status"], _count: { id: true } }),
-      prisma.detection.aggregate({ _avg: { confidence: true } }),
+      prisma.detection.aggregate({
+        _avg: { confidence: true },
+        where: scopeWhere,
+      }),
       prisma.detection.groupBy({
         by: ["cameraId"],
         _count: { id: true },
+        where: scopeWhere,
         orderBy: { _count: { id: "desc" } },
         take: 1,
       }),
       prisma.detection.groupBy({
         by: ["label"],
         _count: { id: true },
+        where: scopeWhere,
         orderBy: { _count: { id: "desc" } },
         take: 1,
       }),
       prisma.camera.count(),
-      prisma.detection.count({ where: { timestamp: { gte: sevenDaysAgo } } }),
-      prisma.detection.groupBy({ by: ["status"], _count: { id: true } }),
+      prisma.detection.groupBy({ by: ["status"], _count: { id: true }, where: scopeWhere }),
     ]);
 
     let mostActiveCamera: { name: string; count: number } = { name: "N/A", count: 0 };
@@ -169,6 +215,19 @@ export const analyticsService = {
       .filter((s) => s.status === "offline" || s.status === "error")
       .reduce((sum, s) => sum + s._count.id, 0);
 
+    // With an explicit window the scoped total IS the per-window count; without
+    // one keep the historical fixed 7-day rolling average.
+    let detectionRate: number;
+    if (windowDays !== undefined) {
+      detectionRate = totalDetections / windowDays;
+    } else {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+      const sevenDayCount = await prisma.detection.count({
+        where: { timestamp: { gte: sevenDaysAgo } },
+      });
+      detectionRate = sevenDayCount / 7;
+    }
+
     const result: OverviewResult = {
       totalDetections,
       todayDetections,
@@ -176,7 +235,7 @@ export const analyticsService = {
       offlineCameras: offlineCount,
       totalCameras: cameraTotal,
       averageConfidence: avgConfidence._avg.confidence ?? 0,
-      detectionRate: detectionRate / 7,
+      detectionRate,
       mostActiveCamera,
       mostCommonDetectionType: topLabel.length > 0 ? topLabel[0].label : "N/A",
       severityDistribution: severityCounts.map((s) => ({
@@ -190,12 +249,11 @@ export const analyticsService = {
   },
 
   async getDaily(params: PeriodParams): Promise<DailyResult[]> {
-    const days = parseInt(params.period || "7");
-    const cacheKey = `analytics:daily:${days}`;
+    const cacheKey = `analytics:daily:${rangeKeyFor(params)}`;
     const cached = cacheGet<DailyResult[]>(cacheKey);
     if (cached) return cached;
 
-    const { from, to } = getDateRange(days);
+    const where = dateWhereSql(periodDateFilter(params));
 
     const rows = await prisma.$queryRaw<
       { date: string; count: number; critical: number; warning: number; info: number }[]
@@ -207,7 +265,7 @@ export const analyticsService = {
         COUNT(*) FILTER (WHERE status = 'warning')::int as warning,
         COUNT(*) FILTER (WHERE status = 'info')::int as info
       FROM detections
-      WHERE timestamp >= ${from} AND timestamp <= ${to}
+      ${where}
       GROUP BY DATE(timestamp)
       ORDER BY date ASC
     `;
@@ -229,11 +287,7 @@ export const analyticsService = {
     const cached = cacheGet<CameraAnalyticsResult[]>(cacheKey);
     if (cached) return cached;
 
-    const dateFilter = params.period
-      ? { gte: getDateRange(parseInt(params.period)).from }
-      : params.from
-        ? { gte: new Date(params.from) }
-        : undefined;
+    const dateFilter = periodDateFilter(params);
 
     const cameraStats = await prisma.camera.findMany({
       include: {
@@ -270,11 +324,7 @@ export const analyticsService = {
     const cached = cacheGet<DetectorResult[]>(cacheKey);
     if (cached) return cached;
 
-    const dateFilter = params.period
-      ? { gte: getDateRange(parseInt(params.period)).from }
-      : params.from
-        ? { gte: new Date(params.from) }
-        : undefined;
+    const dateFilter = periodDateFilter(params);
 
     const where = dateFilter ? { timestamp: dateFilter } : {};
 
@@ -304,17 +354,16 @@ export const analyticsService = {
   },
 
   async getTimeline(params: PeriodParams): Promise<TimelineResult[]> {
-    const cacheKey = `analytics:timeline:${params.period || "7"}`;
+    const cacheKey = `analytics:timeline:${rangeKeyFor(params)}`;
     const cached = cacheGet<TimelineResult[]>(cacheKey);
     if (cached) return cached;
 
-    const days = parseInt(params.period || "7");
-    const { from, to } = getDateRange(days);
+    const where = dateWhereSql(periodDateFilter(params));
 
     const rows = await prisma.$queryRaw<{ hour: number; count: number }[]>`
       SELECT EXTRACT(HOUR FROM timestamp)::int as hour, COUNT(*)::int as count
       FROM detections
-      WHERE timestamp >= ${from} AND timestamp <= ${to}
+      ${where}
       GROUP BY EXTRACT(HOUR FROM timestamp)
       ORDER BY hour ASC
     `;
@@ -336,42 +385,24 @@ export const analyticsService = {
     const cached = cacheGet<ConfidenceBucket[]>(cacheKey);
     if (cached) return cached;
 
-    const dateFilter = params.period
-      ? { gte: getDateRange(parseInt(params.period)).from }
-      : params.from
-        ? { gte: new Date(params.from) }
-        : undefined;
+    const where = dateWhereSql(periodDateFilter(params));
 
     // Single-pass aggregation in PostgreSQL instead of loading every
     // detection row into Node memory.
     const rows = await prisma.$queryRaw<
       Array<{ b0: bigint; b1: bigint; b2: bigint; b3: bigint; b4: bigint; b5: bigint; total: bigint }>
-    >(
-      dateFilter
-        ? Prisma.sql`
-            SELECT
-              COUNT(*) FILTER (WHERE confidence >= 0    AND confidence < 0.2) AS "b0",
-              COUNT(*) FILTER (WHERE confidence >= 0.2  AND confidence < 0.4) AS "b1",
-              COUNT(*) FILTER (WHERE confidence >= 0.4  AND confidence < 0.6) AS "b2",
-              COUNT(*) FILTER (WHERE confidence >= 0.6  AND confidence < 0.8) AS "b3",
-              COUNT(*) FILTER (WHERE confidence >= 0.8  AND confidence < 0.9) AS "b4",
-              COUNT(*) FILTER (WHERE confidence >= 0.9)                        AS "b5",
-              COUNT(*)                                                         AS "total"
-            FROM detections
-            WHERE timestamp >= ${dateFilter.gte}
-          `
-        : Prisma.sql`
-            SELECT
-              COUNT(*) FILTER (WHERE confidence >= 0    AND confidence < 0.2) AS "b0",
-              COUNT(*) FILTER (WHERE confidence >= 0.2  AND confidence < 0.4) AS "b1",
-              COUNT(*) FILTER (WHERE confidence >= 0.4  AND confidence < 0.6) AS "b2",
-              COUNT(*) FILTER (WHERE confidence >= 0.6  AND confidence < 0.8) AS "b3",
-              COUNT(*) FILTER (WHERE confidence >= 0.8  AND confidence < 0.9) AS "b4",
-              COUNT(*) FILTER (WHERE confidence >= 0.9)                        AS "b5",
-              COUNT(*)                                                         AS "total"
-            FROM detections
-          `,
-    );
+    >`
+      SELECT
+        COUNT(*) FILTER (WHERE confidence >= 0    AND confidence < 0.2) AS "b0",
+        COUNT(*) FILTER (WHERE confidence >= 0.2  AND confidence < 0.4) AS "b1",
+        COUNT(*) FILTER (WHERE confidence >= 0.4  AND confidence < 0.6) AS "b2",
+        COUNT(*) FILTER (WHERE confidence >= 0.6  AND confidence < 0.8) AS "b3",
+        COUNT(*) FILTER (WHERE confidence >= 0.8  AND confidence < 0.9) AS "b4",
+        COUNT(*) FILTER (WHERE confidence >= 0.9)                        AS "b5",
+        COUNT(*)                                                         AS "total"
+      FROM detections
+      ${where}
+    `;
 
     const counts = rows[0] ?? { b0: 0n, b1: 0n, b2: 0n, b3: 0n, b4: 0n, b5: 0n, total: 0n };
     const total = Number(counts.total);

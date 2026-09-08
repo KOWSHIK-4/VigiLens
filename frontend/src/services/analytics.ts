@@ -10,8 +10,8 @@ import type {
 } from "@/types";
 
 export const analyticsService = {
-  async getOverview(): Promise<AnalyticsOverview> {
-    const { data } = await api.get("/analytics/overview");
+  async getOverview(params?: AnalyticsParams): Promise<AnalyticsOverview> {
+    const { data } = await api.get("/analytics/overview", { params });
     return data.data;
   },
 

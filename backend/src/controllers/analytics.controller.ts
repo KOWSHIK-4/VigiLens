@@ -6,7 +6,7 @@ import { success } from "../utils/apiResponse";
 export const analyticsController = {
   async getOverview(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getOverview();
+      const data = await analyticsService.getOverview(req.query as unknown as AnalyticsQueryInput);
       success(res, data);
     } catch (err) {
       next(err);

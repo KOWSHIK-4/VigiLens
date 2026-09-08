@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
-import { Download, RefreshCw, Calendar, Clock } from "lucide-react";
+import { Download, RefreshCw, Calendar, Clock, AlertTriangle, Inbox } from "lucide-react";
 import { analyticsService } from "@/services/analytics";
 import StatsCard from "@/components/StatsCard";
 import type { AnalyticsParams } from "@/types";
@@ -20,6 +20,18 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+function ChartEmpty({ height = 320 }: { height?: number }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-gray-400"
+      style={{ height }}
+    >
+      <Inbox className="w-8 h-8 mb-2" />
+      <p className="text-sm">No data for this period</p>
+    </div>
+  );
 }
 
 function downloadCSV(filename: string, headers: string[], rows: string[][]) {
@@ -62,8 +74,8 @@ export default function AnalyticsPage() {
   const refetchInterval = autoRefresh ? 30_000 : undefined;
 
   const overviewQuery = useQuery({
-    queryKey: ["analytics", "overview"],
-    queryFn: analyticsService.getOverview,
+    queryKey: ["analytics", "overview", period],
+    queryFn: () => analyticsService.getOverview(params),
     refetchInterval,
   });
 
@@ -97,7 +109,13 @@ export default function AnalyticsPage() {
     refetchInterval,
   });
 
-  const isLoading = overviewQuery.isLoading || dailyQuery.isLoading;
+  const queries = [overviewQuery, dailyQuery, camerasQuery, detectorsQuery, timelineQuery, confidenceQuery];
+  const isLoading = queries.some((q) => q.isLoading);
+  const hasError = queries.some((q) => q.isError);
+
+  const retry = () => {
+    queries.forEach((q) => q.refetch());
+  };
 
   const overview = overviewQuery.data;
   const dailyData = useMemo(() => dailyQuery.data ?? [], [dailyQuery.data]);
@@ -164,6 +182,27 @@ export default function AnalyticsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="card p-10 text-center">
+        <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900">
+          Analytics data unavailable
+        </h3>
+        <p className="text-gray-500 mt-1 text-sm">
+          We couldn't load analytics for the selected period.
+        </p>
+        <button
+          onClick={retry}
+          className="mt-5 btn-secondary inline-flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Retry
+        </button>
       </div>
     );
   }
@@ -253,6 +292,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {dailyData.length === 0 ? (
+            <ChartEmpty height={320} />
+          ) : (
           <ResponsiveContainer width="100%" height={320}>
             <AreaChart data={dailyData}>
               <defs>
@@ -270,6 +312,7 @@ export default function AnalyticsPage() {
               <Area type="monotone" dataKey="warning" stroke="#f59e0b" fill="none" strokeWidth={2} name="Warning" />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="card">
@@ -279,6 +322,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {detectorsData.length === 0 ? (
+            <ChartEmpty height={320} />
+          ) : (
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
@@ -298,6 +344,7 @@ export default function AnalyticsPage() {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="card">
@@ -307,6 +354,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {camerasData.length === 0 ? (
+            <ChartEmpty height={320} />
+          ) : (
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={camerasData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -326,6 +376,7 @@ export default function AnalyticsPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="card">
@@ -335,6 +386,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {timelineData.length === 0 ? (
+            <ChartEmpty height={320} />
+          ) : (
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={timelineData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -351,6 +405,7 @@ export default function AnalyticsPage() {
               />
             </LineChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="card">
@@ -360,6 +415,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {severityData.length === 0 ? (
+            <ChartEmpty height={280} />
+          ) : (
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
@@ -386,6 +444,7 @@ export default function AnalyticsPage() {
               <Legend />
             </PieChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="card">
@@ -395,6 +454,9 @@ export default function AnalyticsPage() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {confidenceData.length === 0 ? (
+            <ChartEmpty height={280} />
+          ) : (
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={confidenceData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -413,6 +475,7 @@ export default function AnalyticsPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
