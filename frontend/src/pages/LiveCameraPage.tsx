@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { engineService } from "@/services/engine";
 import { cameraService } from "@/services/cameras";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,9 +21,15 @@ interface WebcamStats {
   image_height: number;
 }
 
+type StreamState = "stopped" | "starting" | "streaming" | "reconnecting" | "error";
+
 const AI_STREAM_URL = "/detect/webcam";
 const AI_STATS_URL = "/detect/webcam/stats";
 const POLL_INTERVAL = 1000;
+const MAX_STATS_FAILURES = 3;
+const MAX_FEED_FAILURES = 3;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_EVERY_MS = 3000;
 
 function formatTime(iso: string) {
   try {
@@ -50,38 +56,123 @@ function statusBadgeClass(status: string) {
   }
 }
 
+const STREAM_STATE_META: Record<
+  StreamState,
+  { label: string; className: string }
+> = {
+  stopped: { label: "Stopped", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  starting: { label: "Connecting", className: "bg-amber-100 text-amber-800 border-amber-200" },
+  streaming: { label: "Streaming", className: "bg-green-100 text-green-800 border-green-200" },
+  reconnecting: { label: "Reconnecting", className: "bg-amber-100 text-amber-800 border-amber-200" },
+  error: { label: "Error", className: "bg-red-100 text-red-800 border-red-200" },
+};
+
 export default function LiveCameraPage() {
   const imgRef = useRef<HTMLImageElement>(null);
   const { user } = useAuth();
   const canRunInference = hasPermission(user, "models.run");
   const [active, setActive] = useState(false);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamState, setStreamState] = useState<StreamState>("stopped");
+  const [streamEpoch, setStreamEpoch] = useState<number | null>(null);
   const [stats, setStats] = useState<WebcamStats | null>(null);
   const [detections, setDetections] = useState<EngineStoredDetection[]>([]);
   const [detectors, setDetectors] = useState<EngineDetector[]>([]);
   const [detectorKey, setDetectorKey] = useState<string>("person");
   const [liveResult, setLiveResult] = useState<EngineLiveProcessResponse | null>(null);
   const [processingLive, setProcessingLive] = useState(false);
-  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [feedUnavailable, setFeedUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraId, setCameraId] = useState<string>("default");
   const [cameras, setCameras] = useState<Camera[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const feedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statsFailuresRef = useRef(0);
+  const feedFailuresRef = useRef(0);
+  const reconnectAttemptsRef = useRef(0);
+  const streamStateRef = useRef<StreamState>("stopped");
 
   const selectedCamera = cameras.find((c) => c.id === cameraId) ?? null;
 
-  const refreshFeed = useCallback(async () => {
+  const updateStreamState = useCallback((next: StreamState) => {
+    streamStateRef.current = next;
+    setStreamState(next);
+  }, []);
+
+  const streamUrl = useMemo(() => {
+    if (!active || streamEpoch == null) return null;
+    return `${AI_STREAM_URL}?camera_id=${encodeURIComponent(cameraId)}&detector=${encodeURIComponent(detectorKey)}&t=${streamEpoch}`;
+  }, [active, cameraId, detectorKey, streamEpoch]);
+
+  const refreshFeed = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setManualRefreshing(true);
     try {
-      setLoadingFeed(true);
       const data = await engineService.getDetections(detectorKey, 20);
       setDetections(data.detections);
+      feedFailuresRef.current = 0;
+      setFeedUnavailable(false);
     } catch {
-      /* feed poll silently fails while stream is warming up */
+      feedFailuresRef.current += 1;
+      if (feedFailuresRef.current >= MAX_FEED_FAILURES) {
+        setFeedUnavailable(true);
+      }
     } finally {
-      setLoadingFeed(false);
+      if (!silent) setManualRefreshing(false);
     }
   }, [detectorKey]);
+
+  const startStream = useCallback(() => {
+    setError(null);
+    setStats(null);
+    statsFailuresRef.current = 0;
+    feedFailuresRef.current = 0;
+    reconnectAttemptsRef.current = 0;
+    setFeedUnavailable(false);
+    setManualRefreshing(false);
+    setStreamEpoch(Date.now());
+    updateStreamState("starting");
+    setActive(true);
+    void refreshFeed({ silent: true });
+  }, [updateStreamState, refreshFeed]);
+
+  const stopStream = useCallback(() => {
+    statsFailuresRef.current = 0;
+    feedFailuresRef.current = 0;
+    reconnectAttemptsRef.current = 0;
+    setStreamEpoch(null);
+    setActive(false);
+    setStats(null);
+    setDetections([]);
+    setLiveResult(null);
+    setFeedUnavailable(false);
+    updateStreamState("stopped");
+  }, [updateStreamState]);
+
+  const recordStatsFailure = useCallback(
+    (emptyPayload = false) => {
+      if (emptyPayload) {
+        // An empty payload while the stream is warming up is normal; it is
+        // only meaningful once we had a live stream and it went stale.
+        if (streamStateRef.current !== "streaming") return;
+        statsFailuresRef.current += 1;
+      } else {
+        statsFailuresRef.current += 1;
+      }
+      if (statsFailuresRef.current >= MAX_STATS_FAILURES) {
+        if (streamStateRef.current !== "reconnecting") {
+          reconnectAttemptsRef.current = 0;
+          updateStreamState("reconnecting");
+        }
+      }
+    },
+    [updateStreamState],
+  );
+
+  const resetStreamHealth = useCallback(() => {
+    statsFailuresRef.current = 0;
+    reconnectAttemptsRef.current = 0;
+    updateStreamState("streaming");
+  }, [updateStreamState]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,55 +201,56 @@ export default function LiveCameraPage() {
     };
   }, []);
 
-  const startStream = useCallback(() => {
-    setError(null);
-    setStreamUrl(
-      `${AI_STREAM_URL}?camera_id=${encodeURIComponent(cameraId)}&detector=${encodeURIComponent(detectorKey)}&t=${Date.now()}`,
-    );
-    setActive(true);
-    void refreshFeed();
-  }, [cameraId, detectorKey, refreshFeed]);
-
-  const stopStream = useCallback(() => {
-    setStreamUrl(null);
-    setActive(false);
-    setStats(null);
-    setDetections([]);
-    setLiveResult(null);
-  }, []);
-
   useEffect(() => {
-    if (active) {
-      pollRef.current = setInterval(async () => {
-        try {
-          // The stats endpoint lives on the AI service (/detect/* is proxied
-          // to it by the dev server and nginx) — NOT under the backend /api.
-          const params = new URLSearchParams({
-            camera_id: cameraId,
-            detector: detectorKey,
-          });
-          const res = await fetch(`${AI_STATS_URL}?${params.toString()}`);
-          if (!res.ok) return;
-          setStats((await res.json()) as WebcamStats);
-        } catch {
-          /* stats poll silently fails */
-        }
-      }, POLL_INTERVAL);
-
-      feedRef.current = setInterval(() => {
-        void refreshFeed();
-      }, POLL_INTERVAL);
-    } else {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      if (feedRef.current) {
-        clearInterval(feedRef.current);
-        feedRef.current = null;
-      }
+    if (!active) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (feedRef.current) clearInterval(feedRef.current);
+      pollRef.current = null;
+      feedRef.current = null;
+      return;
     }
+    let cancelled = false;
+    const params = new URLSearchParams({
+      camera_id: cameraId,
+      detector: detectorKey,
+    });
+
+    pollRef.current = setInterval(async () => {
+      try {
+        // The stats endpoint lives on the AI service (/detect/* is proxied
+        // to it by the dev server and nginx) — NOT under the backend /api.
+        const res = await fetch(`${AI_STATS_URL}?${params.toString()}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          recordStatsFailure();
+          return;
+        }
+        const data = (await res.json()) as WebcamStats;
+        if (cancelled) return;
+        const hasLiveStats =
+          data && typeof data === "object" && Object.keys(data).length > 0;
+        if (hasLiveStats) {
+          // If the stream had dropped, reattach the <img> to the fresh stream
+          // so the viewport resumes rendering instead of staying frozen.
+          if (streamStateRef.current === "reconnecting") {
+            setStreamEpoch(Date.now());
+          }
+          setStats(data);
+          resetStreamHealth();
+        } else {
+          recordStatsFailure(true);
+        }
+      } catch {
+        if (!cancelled) recordStatsFailure();
+      }
+    }, POLL_INTERVAL);
+
+    feedRef.current = setInterval(() => {
+      void refreshFeed({ silent: true });
+    }, POLL_INTERVAL);
+
     return () => {
+      cancelled = true;
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -168,12 +260,39 @@ export default function LiveCameraPage() {
         feedRef.current = null;
       }
     };
-  }, [active, cameraId, detectorKey, refreshFeed]);
+  }, [active, cameraId, detectorKey, refreshFeed, recordStatsFailure, resetStreamHealth]);
+
+  // Bounded auto-reconnect: while the stream reports connection trouble,
+  // re-request the MJPEG stream after a short delay so transient AI-service
+  // blips recover on their own. A reattach is capped so a permanently dead
+  // stream cannot trigger an endless refresh loop; the user can also
+  // reconnect manually from the video overlay.
+  useEffect(() => {
+    if (!active || streamState !== "reconnecting") return;
+    const timer = setTimeout(() => {
+      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttemptsRef.current += 1;
+        setStreamEpoch(Date.now());
+      }
+    }, RECONNECT_EVERY_MS);
+    return () => clearTimeout(timer);
+  }, [active, streamState, streamEpoch]);
 
   const handleImgError = useCallback(() => {
-    setError("Failed to connect to camera stream. Make sure the AI service is running.");
+    if (!active) return;
+    // A failed reattach during auto-reconnect is expected; keep retrying.
+    if (streamStateRef.current === "reconnecting") return;
+    updateStreamState("error");
     stopStream();
-  }, [stopStream]);
+    setError("Failed to connect to camera stream. Make sure the AI service is running.");
+  }, [active, updateStreamState, stopStream]);
+
+  const handleReconnect = useCallback(() => {
+    setError(null);
+    reconnectAttemptsRef.current = 0;
+    setManualRefreshing(false);
+    setStreamEpoch(Date.now());
+  }, []);
 
   const handleProcessLive = useCallback(async () => {
     if (!selectedCamera || processingLive) return;
@@ -201,6 +320,7 @@ export default function LiveCameraPage() {
 
   const objectCount = stats?.objects ?? stats?.persons ?? 0;
   const totalObjectCount = stats?.total_objects ?? stats?.total_persons ?? 0;
+  const streamMeta = STREAM_STATE_META[streamState];
 
   return (
     <div className="space-y-6">
@@ -258,7 +378,7 @@ export default function LiveCameraPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
           <div className="card !p-0 overflow-hidden bg-black relative">
-            {streamUrl ? (
+            {active && streamUrl ? (
               <>
                 <img
                   ref={imgRef}
@@ -267,6 +387,29 @@ export default function LiveCameraPage() {
                   className="w-full h-auto"
                   onError={handleImgError}
                 />
+                {streamState === "starting" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-sm font-medium border border-amber-200">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                      Connecting to camera stream…
+                    </span>
+                  </div>
+                )}
+                {streamState === "streaming" && (
+                  <span className="absolute top-2 left-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500 text-white text-xs font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    LIVE
+                  </span>
+                )}
+                {streamState === "reconnecting" && (
+                  <div className="absolute inset-x-0 bottom-0 bg-amber-500/90 text-white text-xs font-medium text-center px-3 py-1.5">
+                    Connection lost — reconnecting
+                    {reconnectAttemptsRef.current > 0
+                      ? ` (attempt ${reconnectAttemptsRef.current})`
+                      : ""}
+                    …
+                  </div>
+                )}
                 {overlayBoxes.length > 0 && (
                   <div className="absolute inset-0 pointer-events-none">
                     {overlayBoxes.map(({ detection: d, frameW, frameH }) => {
@@ -330,6 +473,27 @@ export default function LiveCameraPage() {
               <span className="text-sm text-gray-500">
                 Detector: <span className="font-medium text-gray-700">{detectorKey}</span>
               </span>
+              {active && (
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${streamMeta.className}`}
+                >
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      streamState === "streaming"
+                        ? "bg-green-500"
+                        : streamState === "starting" || streamState === "reconnecting"
+                          ? "bg-amber-500"
+                          : "bg-gray-400"
+                    }`}
+                  />
+                  Stream: {streamMeta.label}
+                </span>
+              )}
+              {active && streamState === "reconnecting" && (
+                <button onClick={handleReconnect} className="btn-secondary text-xs">
+                  Reconnect now
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -410,13 +574,19 @@ export default function LiveCameraPage() {
             <p className="text-sm text-gray-500 mt-0.5">
               Real engine detections persisted by the backend
             </p>
+            {feedUnavailable && (
+              <p className="text-xs text-amber-600 mt-1">
+                Feed temporarily unavailable — retrying automatically. Showing
+                the last known detections.
+              </p>
+            )}
           </div>
           <button
             onClick={() => void refreshFeed()}
             className="btn-secondary text-sm"
-            disabled={loadingFeed}
+            disabled={manualRefreshing}
           >
-            {loadingFeed ? "Refreshing..." : "Refresh"}
+            {manualRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
 
@@ -426,7 +596,7 @@ export default function LiveCameraPage() {
             camera streams and the engine persists them.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto ${feedUnavailable ? "opacity-60" : ""}`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
