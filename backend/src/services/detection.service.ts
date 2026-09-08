@@ -149,6 +149,66 @@ function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhere
 }
 
 export const detectionService = {
+  /**
+   * Batch-persists detections produced by one engine frame in a single
+   * transaction, then writes the corresponding audit entries in one batch.
+   *
+   * The engine can emit up to `maxDetectionsPerFrame` detections per frame;
+   * persisting them one-by-one previously cost as many sequential DB round
+   * trips and audit inserts as there were detections. Batching keeps the
+   * writes atomic and bounds the per-frame latency spike.
+   */
+  async createMany(inputs: Array<Omit<CreateDetectionInput, "skipAlert" | "applyAlertCooldown">>) {
+    if (inputs.length === 0) return [];
+
+    const rows = await prisma.$transaction(
+      inputs.map((input) =>
+        prisma.detection.create({
+          data: {
+            cameraId: input.cameraId,
+            label: input.label,
+            confidence: input.confidence,
+            imageUrl: input.imageUrl || "",
+            status: input.status ?? deriveDetectionStatus(input.confidence),
+            metadata: (input.metadata || {}) as Prisma.InputJsonValue,
+            detectorId: input.detectorId,
+            detectorKey: input.detectorKey,
+            modelVersion: input.modelVersion,
+            trackId: input.trackId,
+            className: input.className,
+            ...(input.boundingBox ? { boundingBox: input.boundingBox as Prisma.InputJsonValue } : {}),
+            snapshotUrl: input.snapshotUrl,
+            processingTimeMs: input.processingTimeMs,
+          },
+          include: { camera: true },
+        }),
+      ),
+    );
+
+    await prisma.auditLog.createMany({
+      data: rows.map((row, index) => ({
+        userId: null,
+        username: "",
+        email: "",
+        action: "detection_created",
+        module: "detections",
+        description: `Detection created: ${row.label}`,
+        ipAddress: "",
+        userAgent: "",
+        status: "success",
+        metadata: {
+          detectionId: row.id,
+          label: row.label,
+          cameraId: row.cameraId,
+          detectorKey: inputs[index].detectorKey ?? undefined,
+          source: "detector-engine",
+        },
+      })),
+    });
+
+    return rows;
+  },
+
   async create(input: CreateDetectionInput) {
     const detection = await prisma.detection.create({
       data: {

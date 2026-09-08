@@ -10,7 +10,6 @@
 import { ApiError } from "../utils/errors";
 import { logger } from "../config/logger";
 import { detectionService } from "../services/detection.service";
-import { logAudit } from "../utils/auditLog";
 import { metricsService } from "../services/metrics.service";
 import { aiServiceClient, AiServiceError, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
@@ -82,9 +81,14 @@ class AiInferenceStage implements InferenceStage {
 /** Persistence stage: stores qualifying detections via detectionService. */
 export class DetectionPersistenceStage implements PersistenceStage {
   async persist(detections: NormalizedDetection[], ctx: PipelineContext): Promise<NormalizedDetection[]> {
-    const persisted: NormalizedDetection[] = [];
-    for (const d of detections) {
-      const created = await detectionService.create({
+    // Batch-persist the whole frame in one transaction instead of issuing a
+    // create + audit write per detection, which scaled with the frame's
+    // detection count.
+    const detectionsOut: NormalizedDetection[] = [];
+    if (detections.length === 0) return detectionsOut;
+
+    const createdRows = await detectionService.createMany(
+      detections.map((d) => ({
         cameraId: d.cameraId,
         label: d.className,
         confidence: d.confidence,
@@ -102,23 +106,14 @@ export class DetectionPersistenceStage implements PersistenceStage {
           normalized: d.normalized,
           source: "detector-engine",
         },
-        skipAlert: true,
-      });
-      await logAudit({
-        action: "detection_created",
-        module: "detections",
-        description: `Detection created: ${d.className}`,
-        metadata: {
-          detectionId: created.id,
-          label: d.className,
-          cameraId: d.cameraId,
-          detectorKey: d.detectorKey,
-          source: "detector-engine",
-        },
-      });
-      persisted.push({ ...d, id: created.id });
-    }
-    return persisted;
+      })),
+    );
+
+    // `createMany` returns rows in input order, so indexes line up 1:1.
+    detections.forEach((d, index) => {
+      detectionsOut.push({ ...d, id: createdRows[index]!.id });
+    });
+    return detectionsOut;
   }
 }
 

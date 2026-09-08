@@ -35,12 +35,20 @@ export interface IouTrackerOptions {
   maxMisses: number;
   /** Detections must exceed this IoU with the tracker start to get a new id. */
   startNewTrackIoU: number;
+  /**
+   * Hard cap on the number of concurrently tracked objects. When creating a
+   * brand-new track would exceed the cap, the least-recently-seen track is
+   * evicted first so a very busy scene can never grow the track table
+   * without bound (retirement alone can lag behind in dense scenes).
+   */
+  maxTracks: number;
 }
 
 const DEFAULT_OPTIONS: IouTrackerOptions = {
   matchIoU: 0.35,
   maxMisses: 30,
   startNewTrackIoU: 0.05,
+  maxTracks: 4096,
 };
 
 /**
@@ -99,6 +107,9 @@ export class IouTracker implements ObjectTracker {
           lastSeenAt: timestamp,
         };
         this.tracks.set(id, entry);
+        if (this.tracks.size > this.options.maxTracks) {
+          this.evictStalestTrack();
+        }
       }
       entry.bbox = detection.bbox;
       entry.hits += 1;
@@ -129,6 +140,21 @@ export class IouTracker implements ObjectTracker {
   reset(): void {
     this.tracks.clear();
     this.nextId = 0;
+  }
+
+  /** Removes the track that has not been seen for the longest time. */
+  private evictStalestTrack(): void {
+    let stalestId: number | null = null;
+    let stalestLastSeenAt = Infinity;
+    for (const [id, track] of this.tracks) {
+      if (track.lastSeenAt < stalestLastSeenAt) {
+        stalestLastSeenAt = track.lastSeenAt;
+        stalestId = id;
+      }
+    }
+    if (stalestId !== null) {
+      this.tracks.delete(stalestId);
+    }
   }
 
   get activeTrackCount(): number {

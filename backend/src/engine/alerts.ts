@@ -15,6 +15,13 @@ import type { NormalizedDetection, PipelineContext } from "./types";
 
 export class AlertCooldownRegistry {
   private readonly lastAlert = new Map<string, number>();
+  /** Entries idle this long can never be within a configured cooldown window. */
+  private static readonly MAX_ENTRY_TTL_MS = 60 * 60 * 1000;
+  /** Start pruning once the map holds at least this many keys. */
+  private static readonly PRUNE_AT_KEYS = 1000;
+  /** Only scan when at least this many records were added since the last prune. */
+  private static readonly PRUNE_EVERY_RECORDS = 256;
+  private recordsSincePrune = 0;
 
   /** True if (key, now) passes the cooldown and should raise an alert. */
   shouldRaise(key: string, now: number, cooldownMs: number): boolean {
@@ -24,10 +31,33 @@ export class AlertCooldownRegistry {
 
   record(key: string, now: number): void {
     this.lastAlert.set(key, now);
+    this.maybePrune(now);
+  }
+
+  /** Drops entries idle longer than `olderThanMs`, bounding the map's growth. */
+  prune(now: number = Date.now(), olderThanMs: number = AlertCooldownRegistry.MAX_ENTRY_TTL_MS): number {
+    let removed = 0;
+    for (const [key, last] of this.lastAlert) {
+      if (now - last >= olderThanMs) {
+        this.lastAlert.delete(key);
+        removed += 1;
+      }
+    }
+    this.recordsSincePrune = 0;
+    return removed;
+  }
+
+  private maybePrune(now: number): void {
+    this.recordsSincePrune += 1;
+    if (this.lastAlert.size >= AlertCooldownRegistry.PRUNE_AT_KEYS &&
+        this.recordsSincePrune >= AlertCooldownRegistry.PRUNE_EVERY_RECORDS) {
+      this.prune(now);
+    }
   }
 
   reset(): void {
     this.lastAlert.clear();
+    this.recordsSincePrune = 0;
   }
 }
 

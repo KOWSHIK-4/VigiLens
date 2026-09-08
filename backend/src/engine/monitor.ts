@@ -28,6 +28,15 @@ import type { PipelineResult } from "./pipeline";
 
 export type MonitorLoopStatus = "idle" | "running" | "ok" | "error" | "skipped";
 
+/**
+ * A loop is only backed off once a sustained streak of consecutive failures
+ * (aligned with the engine's own error threshold) indicates the source is
+ * actually down. A single transient failure retries at the full interval.
+ */
+const BACKOFF_FAILURES_THRESHOLD = 3;
+/** Cap so a dead camera never stops being retried entirely. */
+const BACKOFF_MAX_MS = 60_000;
+
 export interface MonitorCameraRef {
   id: string;
   name: string;
@@ -312,6 +321,17 @@ export class MonitorScheduler {
     return Date.now() >= state.nextRunAt.getTime();
   }
 
+  /**
+   * Exponential backoff for a loop that keeps failing. The base interval is
+   * doubled per additional failure beyond the threshold, capped so the loop
+   * always retries: a dead camera is throttled, never abandoned.
+   */
+  private backoffMs(consecutiveFailures: number, baseMs: number): number {
+    if (consecutiveFailures < BACKOFF_FAILURES_THRESHOLD) return baseMs;
+    const extraDoublings = Math.min(consecutiveFailures - BACKOFF_FAILURES_THRESHOLD + 1, 8);
+    return Math.min(baseMs * 2 ** extraDoublings, BACKOFF_MAX_MS);
+  }
+
   private ensureState(loop: MonitorLoop): LoopRuntimeState {
     let state = this.loopStates.get(loop.id);
     if (!state) {
@@ -375,12 +395,15 @@ export class MonitorScheduler {
       state.consecutiveFailures += 1;
       state.lastError = message;
       state.lastErrorAt = new Date();
+      // Back off the next attempt when the loop is failing repeatedly.
+      state.nextRunAt = new Date(Date.now() + this.backoffMs(state.consecutiveFailures, state.intervalMs));
       logger.warn("Monitor loop failed", {
         loop: loop.id,
         detectorKey: loop.detectorKey,
         cameraId: loop.camera.id,
         error: message,
         consecutiveFailures: state.consecutiveFailures,
+        nextRunAt: state.nextRunAt.toISOString(),
       });
     }
   }
