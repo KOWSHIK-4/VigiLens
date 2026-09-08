@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
-import type { Camera, CameraStatus, CameraType } from "@/types";
+import type { Camera, CameraDisplayStatus, CameraStatus, CameraType } from "@/types";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { resolveDisplayStatus } from "@/utils/cameraDisplay";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
 import { ShieldAlert } from "lucide-react";
@@ -23,12 +24,29 @@ import {
 } from "lucide-react";
 import { showToast } from "@/utils/toast";
 
-const statusConfig = {
+const statusConfig: Record<CameraDisplayStatus, { dot: string; bg: string; label: string }> = {
   online: { dot: "bg-green-500", bg: "bg-green-100 text-green-800", label: "Online" },
   offline: { dot: "bg-gray-400", bg: "bg-gray-100 text-gray-800", label: "Offline" },
   connecting: { dot: "bg-yellow-500 animate-pulse", bg: "bg-yellow-100 text-yellow-800", label: "Connecting" },
   error: { dot: "bg-red-500", bg: "bg-red-100 text-red-800", label: "Error" },
+  unknown: { dot: "bg-gray-300", bg: "bg-gray-100 text-gray-600", label: "Unknown" },
 };
+
+function healthIndicator(camera: Camera): { dot: string; title: string } {
+  const display = resolveDisplayStatus(camera);
+  switch (display) {
+    case "online":
+      return { dot: camera.isHealthy ? "bg-green-500" : "bg-red-500", title: camera.isHealthy ? "Healthy" : "Unhealthy" };
+    case "error":
+      return { dot: "bg-red-500", title: "In error state" };
+    case "connecting":
+      return { dot: "bg-yellow-500 animate-pulse", title: "Connecting..." };
+    case "unknown":
+      return { dot: "bg-gray-300", title: "Health not verified yet" };
+    default:
+      return { dot: "bg-gray-400", title: "Offline" };
+  }
+}
 
 const typeLabels: Record<string, string> = {
   usb: "USB Camera",
@@ -65,8 +83,12 @@ export default function CamerasPage() {
     refetchInterval: autoRefresh ? 15000 : false,
   });
 
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+
   const startMutation = useMutation({
     mutationFn: (id: string) => cameraService.start(id),
+    onMutate: (id: string) => setStartingId(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       showToast({ severity: "info", title: "Camera started", message: "Camera is connecting..." });
@@ -74,10 +96,12 @@ export default function CamerasPage() {
     onError: (err: unknown) => {
       showToast({ severity: "critical", title: "Failed to start", message: getApiErrorMessage(err, "Failed to start camera") });
     },
+    onSettled: () => setStartingId(null),
   });
 
   const stopMutation = useMutation({
     mutationFn: (id: string) => cameraService.stop(id),
+    onMutate: (id: string) => setStoppingId(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       showToast({ severity: "info", title: "Camera stopped", message: "Camera has been disconnected" });
@@ -85,10 +109,14 @@ export default function CamerasPage() {
     onError: (err: unknown) => {
       showToast({ severity: "critical", title: "Failed to stop", message: getApiErrorMessage(err, "Failed to stop camera") });
     },
+    onSettled: () => setStoppingId(null),
   });
+
+  const [checkingId, setCheckingId] = useState<string | null>(null);
 
   const healthMutation = useMutation({
     mutationFn: (id: string) => cameraService.healthCheck(id),
+    onMutate: (id: string) => setCheckingId(id),
     onSuccess: (camera) => {
       queryClient.invalidateQueries({ queryKey: ["cameras"] });
       showToast({
@@ -100,6 +128,7 @@ export default function CamerasPage() {
     onError: (err: unknown) => {
       showToast({ severity: "critical", title: "Health check failed", message: getApiErrorMessage(err, "Health check failed") });
     },
+    onSettled: () => setCheckingId(null),
   });
 
   const handleRefresh = (id: string) => {
@@ -127,6 +156,7 @@ export default function CamerasPage() {
 
   const cameras = data?.data ?? [];
   const totalPages = data?.totalPages ?? 1;
+  const hasActiveFilters = Boolean(search || statusFilter || typeFilter);
 
   return (
     <div className="space-y-6">
@@ -228,14 +258,29 @@ export default function CamerasPage() {
       ) : cameras.length === 0 ? (
         <div className="text-center py-16">
           <Monitor className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-500">No cameras found</h3>
-          <p className="text-gray-400 mt-1">Try adjusting your search or filters</p>
+          <h3 className="text-lg font-medium text-gray-500">
+            {hasActiveFilters ? "No cameras found" : "No cameras yet"}
+          </h3>
+          <p className="text-gray-400 mt-1">
+            {hasActiveFilters
+              ? "Try adjusting your search or filters"
+              : "Add your first camera to start monitoring feeds"}
+          </p>
+          {!hasActiveFilters &&
+            (canManage ? (
+              <button onClick={() => setAddOpen(true)} className="btn-primary mt-4 flex items-center gap-2 mx-auto">
+                <Plus className="w-4 h-4" />
+                Add Camera
+              </button>
+            ) : (
+              <p className="text-gray-400 mt-2">Ask an administrator to add cameras.</p>
+            ))}
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cameras.map((camera) => {
-              const status = statusConfig[camera.status] ?? statusConfig.offline;
+              const status = statusConfig[resolveDisplayStatus(camera)];
               return (
                 <CameraCard
                   key={camera.id}
@@ -249,9 +294,9 @@ export default function CamerasPage() {
                   onStop={() => stopMutation.mutate(camera.id)}
                   onHealthCheck={() => handleRefresh(camera.id)}
                   onCapture={() => captureMutation.mutate(camera.id)}
-                  isStarting={startMutation.isPending}
-                  isStopping={stopMutation.isPending}
-                  isChecking={healthMutation.isPending}
+                  isStarting={startingId === camera.id}
+                  isStopping={stoppingId === camera.id}
+                  isChecking={checkingId === camera.id}
                   isCapturing={capturingId === camera.id}
                 />
               );
@@ -355,7 +400,9 @@ function CameraCard({
   isChecking: boolean;
   isCapturing: boolean;
 }) {
-  const isLive = camera.status === "online";
+  const display = resolveDisplayStatus(camera);
+  const isLive = display === "online";
+  const health = healthIndicator(camera);
 
   return (
     <div className="card hover:shadow-md transition-shadow">
@@ -366,7 +413,7 @@ function CameraCard({
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-gray-900 truncate flex items-center gap-2">
           {camera.name}
-          <span className={`inline-block w-2 h-2 rounded-full ${camera.isHealthy ? "bg-green-500" : "bg-red-500"}`} title={camera.isHealthy ? "Healthy" : "Unhealthy"} />
+          <span className={`inline-block w-2 h-2 rounded-full ${health.dot}`} title={health.title} />
         </h3>
         <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${status.bg}`}>
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${status.dot}`} />
@@ -382,6 +429,11 @@ function CameraCard({
         </p>
         <p className="text-gray-400">
           Last seen: {new Date(camera.lastSeen).toLocaleString()}
+        </p>
+        <p className="text-gray-400">
+          {camera.lastHealthCheck
+            ? `Health checked: ${new Date(camera.lastHealthCheck).toLocaleString()}`
+            : "Health not checked yet"}
         </p>
         {camera.lastSnapshotAt && (
           <p className="text-gray-400">

@@ -98,6 +98,44 @@ function redactPassword<T extends { password?: string | null }>(
   return rest;
 }
 
+export type CameraDisplayStatus =
+  | "online"
+  | "offline"
+  | "connecting"
+  | "error"
+  | "unknown";
+
+/**
+ * Derives a truthful display status for a camera.
+ *
+ * A camera may legitimately be in any one of its stored states only once it
+ * has been verified by a health check or a snapshot capture. Before that
+ * (e.g. right after creation — the schema even defaults `isHealthy` to
+ * true), the camera is reported as "unknown" rather than pretending it is
+ * online, offline or broken based on fields that were never populated.
+ */
+function deriveDisplayStatus(camera: {
+  status: CameraStatus;
+  lastHealthCheck: Date | null;
+}): CameraDisplayStatus {
+  if (!camera.lastHealthCheck) return "unknown";
+  return camera.status;
+}
+
+/** Redacts credentials and enriches the row with the derived display status. */
+function toApiCamera<
+  T extends {
+    status: CameraStatus;
+    lastHealthCheck: Date | null;
+    password?: string | null;
+  },
+>(camera: T) {
+  return {
+    ...redactPassword(camera),
+    displayStatus: deriveDisplayStatus(camera),
+  };
+}
+
 function credentialsOf(camera: {
   username?: string | null;
   password?: string | null;
@@ -158,7 +196,7 @@ export const cameraService = {
       prisma.camera.count({ where }),
     ]);
 
-    const data = rows.map(redactPassword);
+    const data = rows.map(toApiCamera);
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
@@ -176,7 +214,7 @@ export const cameraService = {
         },
       },
     });
-    return camera ? redactPassword(camera) : null;
+    return camera ? toApiCamera(camera) : null;
   },
 
   async create(data: CreateCameraInput) {
@@ -193,7 +231,7 @@ export const cameraService = {
         password: data.password || null,
       },
     });
-    return redactPassword(camera);
+    return toApiCamera(camera);
   },
 
   async update(id: string, data: UpdateCameraInput) {
@@ -214,7 +252,7 @@ export const cameraService = {
         ...(data.password !== undefined && { password: data.password }),
       },
     });
-    return redactPassword(camera);
+    return toApiCamera(camera);
   },
 
   async remove(id: string) {
@@ -229,8 +267,11 @@ export const cameraService = {
     const camera = await prisma.camera.findUnique({ where: { id } });
     if (!camera) return null;
 
-    if (camera.status === "online") {
-      throw new Error("Camera is already online");
+    // Start is idempotent: cameras that are already online or still in the
+    // process of connecting are returned unchanged instead of failing, so a
+    // stale UI or a repeated request can never surface a spurious 500.
+    if (camera.status === "online" || camera.status === "connecting") {
+      return toApiCamera(camera);
     }
 
     const updated = await prisma.camera.update({
@@ -240,15 +281,16 @@ export const cameraService = {
         lastSeen: new Date(),
       },
     });
-    return redactPassword(updated);
+    return toApiCamera(updated);
   },
 
   async stopCamera(id: string) {
     const camera = await prisma.camera.findUnique({ where: { id } });
     if (!camera) return null;
 
+    // Stop is idempotent: an already-offline camera is returned unchanged.
     if (camera.status === "offline") {
-      throw new Error("Camera is already offline");
+      return toApiCamera(camera);
     }
 
     const updated = await prisma.camera.update({
@@ -257,7 +299,7 @@ export const cameraService = {
         status: "offline",
       },
     });
-    return redactPassword(updated);
+    return toApiCamera(updated);
   },
 
   async healthCheck(id: string, client: AiServiceClient = aiServiceClient) {
@@ -336,7 +378,7 @@ export const cameraService = {
         lastSeen: isHealthy ? now : undefined,
       },
     });
-    return redactPassword(updated);
+    return toApiCamera(updated);
   },
 
   async getHealthLogs(cameraId: string, limit = 50) {
@@ -395,7 +437,7 @@ export const cameraService = {
       });
 
       return {
-        camera: redactPassword(updated),
+        camera: toApiCamera(updated),
         snapshotUrl,
         responseTimeMs,
         capturedAt,

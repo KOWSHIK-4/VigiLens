@@ -107,11 +107,12 @@ function CameraFormFields({
             type="number"
             value={form.fps ?? ""}
             onChange={(e) => onChange({ fps: e.target.value ? parseInt(e.target.value) : null })}
-            className="input"
+            className={`input ${errors.fps ? "border-red-400 focus:ring-red-500" : ""}`}
             placeholder="30"
             min="1"
             max="120"
           />
+          {errors.fps && <p className="text-xs text-red-500 mt-1">{errors.fps}</p>}
         </div>
       </div>
 
@@ -167,6 +168,9 @@ function validateCameraForm(form: CreateCameraInput): Record<string, string> {
   }
   if (form.resolution && !/^\d+x\d+$/.test(form.resolution)) {
     errors.resolution = "Use format WxH (e.g. 1920x1080)";
+  }
+  if (form.fps != null && (form.fps < 1 || form.fps > 120)) {
+    errors.fps = "FPS must be between 1 and 120";
   }
   return errors;
 }

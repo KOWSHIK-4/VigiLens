@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Camera } from "@/types";
 import { cameraService } from "@/services/cameras";
-import { Monitor, Video, Webcam, FileVideo, Wifi, WifiOff } from "lucide-react";
+import { resolveDisplayStatus } from "@/utils/cameraDisplay";
+import { Monitor, Video, Webcam, FileVideo, Wifi, WifiOff, HelpCircle } from "lucide-react";
 
 const typeIcons = {
   usb: Webcam,
@@ -18,8 +19,10 @@ export function CameraPreview({ camera }: CameraPreviewProps) {
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const Icon = typeIcons[camera.cameraType] || Monitor;
-  const isLive = camera.status === "online";
-  const isConnecting = camera.status === "connecting";
+  const display = resolveDisplayStatus(camera);
+  const isLive = display === "online";
+  const isConnecting = display === "connecting";
+  const isUnknown = display === "unknown";
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -107,6 +110,12 @@ export function CameraPreview({ camera }: CameraPreviewProps) {
             </div>
           </div>
           <span className="text-yellow-500 text-xs font-medium">Connecting...</span>
+        </>
+      ) : isUnknown ? (
+        <>
+          <Icon className="w-10 h-10 text-gray-600" />
+          <HelpCircle className="w-4 h-4 text-gray-500" />
+          <span className="text-gray-500 text-xs">Not verified yet</span>
         </>
       ) : (
         <>

@@ -142,6 +142,7 @@ export interface Report {
 }
 
 export type CameraStatus = "online" | "offline" | "connecting" | "error";
+export type CameraDisplayStatus = "online" | "offline" | "connecting" | "error" | "unknown";
 export type CameraType = "usb" | "rtsp" | "ip" | "video_file";
 
 export interface Camera {
@@ -151,6 +152,7 @@ export interface Camera {
   cameraType: CameraType;
   sourceURL: string | null;
   status: CameraStatus;
+  displayStatus?: CameraDisplayStatus;
   location: string | null;
   resolution: string | null;
   fps: number | null;
