@@ -102,9 +102,9 @@ export default function DetectorConfigDialog({
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Configure Detector</h2>
-            <p className="text-xs text-gray-500">{detector.name}</p>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-gray-900 truncate">Configure Detector</h2>
+            <p className="text-xs text-gray-500 truncate">{detector.name}</p>
           </div>
           <button
             onClick={onClose}

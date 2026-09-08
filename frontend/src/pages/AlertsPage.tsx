@@ -74,7 +74,7 @@ export default function AlertsPage() {
     [page, limit, severity, isRead, search, cameraId, dateFrom, dateTo],
   );
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["alerts", queryFilters()],
     queryFn: () => alertService.getAll(queryFilters()),
     refetchInterval: autoRefresh ? 5000 : false,
@@ -359,6 +359,21 @@ export default function AlertsPage() {
           >
             <X className="w-3 h-3" />
             Clear all filters
+          </button>
+        </div>
+      )}
+
+      {isError && (
+        <div className="card flex flex-col items-center gap-3 border-red-200 bg-red-50 py-10 text-center">
+          <ShieldAlert className="w-8 h-8 text-red-500" />
+          <div>
+            <p className="font-semibold text-red-700">Failed to load alerts</p>
+            <p className="mt-1 text-sm text-red-600">
+              The alerts service could not be reached.
+            </p>
+          </div>
+          <button onClick={() => refetch()} className="btn-secondary">
+            Try again
           </button>
         </div>
       )}

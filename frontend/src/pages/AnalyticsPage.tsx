@@ -8,6 +8,7 @@ import { Download, RefreshCw, Calendar, Clock, AlertTriangle, Inbox } from "luci
 import { analyticsService } from "@/services/analytics";
 import StatsCard from "@/components/StatsCard";
 import { downloadClientCSV } from "@/utils/csv";
+import { formatNumber } from "@/utils/format";
 import type { AnalyticsParams } from "@/types";
 
 type Period = "7" | "30" | "90";
@@ -16,12 +17,6 @@ const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ec4
 const CHART_COLORS = ["#3b82f6", "#ef4444", "#f59e0b", "#10b981", "#8b5cf6"];
 
 const periodLabels: Record<Period, string> = { "7": "Last 7 Days", "30": "Last 30 Days", "90": "Last 90 Days" };
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
 
 function ChartEmpty({ height = 320 }: { height?: number }) {
   return (

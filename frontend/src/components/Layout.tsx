@@ -122,6 +122,15 @@ export default function Layout() {
     setSidebarOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sidebarOpen]);
+
   return (
     <div className="flex h-screen bg-gray-50">
       <div
@@ -135,11 +144,11 @@ export default function Layout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight leading-none">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold tracking-tight leading-none truncate">
               VigiLens
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">Security Monitoring</p>
+            <p className="text-xs text-gray-400 mt-0.5 truncate">Security Monitoring</p>
           </div>
         </div>
         <button

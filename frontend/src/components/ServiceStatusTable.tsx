@@ -1,15 +1,7 @@
 import { Activity } from "lucide-react";
 import StatusBadge from "./StatusBadge";
+import { formatMs, formatTime } from "@/utils/format";
 import type { ServiceHealth } from "@/types";
-
-function formatMs(ms: number): string {
-  return `${Math.round(ms * 100) / 100} ms`;
-}
-
-function formatTime(iso: string | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString();
-}
 
 export default function ServiceStatusTable({ services }: { services: ServiceHealth[] }) {
   return (

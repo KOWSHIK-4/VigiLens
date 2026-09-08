@@ -1,16 +1,9 @@
 import { Activity, Gauge, ScanEye, Timer, TrendingUp } from "lucide-react";
+import { formatMs, formatPercent } from "@/utils/format";
 import type { SystemMetrics } from "@/types";
-
-function formatMs(ms: number): string {
-  return `${Math.round(ms * 100) / 100} ms`;
-}
 
 function formatCount(value: number): string {
   return value.toLocaleString();
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 1000) / 10}%`;
 }
 
 interface MetricTileProps {

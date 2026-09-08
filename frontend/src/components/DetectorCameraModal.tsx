@@ -111,9 +111,9 @@ export default function DetectorCameraModal({
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Assign Cameras</h2>
-            <p className="text-xs text-gray-500">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-gray-900 truncate">Assign Cameras</h2>
+            <p className="text-xs text-gray-500 truncate">
               Select feeds monitored by {detector.name} — toggling Active pauses
               detection on that feed without removing it
             </p>

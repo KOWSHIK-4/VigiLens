@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { systemService } from "@/services/system";
+import { formatDuration, formatMs, formatTime } from "@/utils/format";
 import StatusBadge from "@/components/StatusBadge";
 import ServiceStatusTable from "@/components/ServiceStatusTable";
 import SystemResources from "@/components/SystemResources";
@@ -25,27 +26,6 @@ import type {
   OverallStatus,
   ServiceHealth,
 } from "@/types";
-
-function formatMs(ms: number): string {
-  if (ms < 1) return `${Math.round(ms * 100) / 100} ms`;
-  return `${Math.round(ms * 100) / 100} ms`;
-}
-
-function formatDuration(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-}
-
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString();
-}
 
 const OVERALL_STYLES: Record<
   OverallStatus,

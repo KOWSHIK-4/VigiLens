@@ -592,6 +592,14 @@ export default function RolesPage() {
 
       {isLoading ? (
         <RolesSkeleton />
+      ) : (roles ?? []).length === 0 ? (
+        <div className="card text-center py-12">
+          <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">No roles found</p>
+          <p className="text-gray-400 text-sm mt-1">
+            Roles will appear here once they are created
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {(roles ?? []).map((role) => (

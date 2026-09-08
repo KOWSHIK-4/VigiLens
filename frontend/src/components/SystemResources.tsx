@@ -1,24 +1,6 @@
 import { Cpu, Gauge, Timer } from "lucide-react";
+import { formatBytes, formatDuration } from "@/utils/format";
 import type { SystemMonitoring } from "@/types";
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} TB`;
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
-
-function formatDuration(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-}
 
 function barColor(usage: number): string {
   if (usage >= 90) return "bg-red-500";
