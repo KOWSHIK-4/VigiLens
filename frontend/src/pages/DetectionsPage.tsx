@@ -11,6 +11,7 @@ import { DeleteDetectionDialog } from "@/components/DeleteDetectionDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
 import { showToast } from "@/utils/toast";
+import { downloadBlob } from "@/utils/csv";
 import type { Detection, DetectionFilters, DetectionWithCamera } from "@/types";
 import {
   Search,
@@ -111,12 +112,7 @@ export default function DetectionsPage() {
   const handleExportCSV = async () => {
     try {
       const blob = await detectionService.exportCSV(filters);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `detections-${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `detections-${Date.now()}.csv`);
     } catch (err) {
       console.error("Failed to export CSV:", err);
       showToast({

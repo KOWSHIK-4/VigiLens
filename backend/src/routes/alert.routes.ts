@@ -10,6 +10,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get("/", requirePermission("alerts.read"), validate(alertQuerySchema, "query"), alertController.getAll);
+router.get("/export", requirePermission("alerts.read"), validate(alertQuerySchema, "query"), alertController.exportCsv);
 router.get("/unread-count", requirePermission("alerts.read"), alertController.getUnreadCount);
 router.patch("/read-all", requirePermission("alerts.manage"), alertController.markAllAsRead);
 router.patch("/:id/read", requirePermission("alerts.manage"), validate(alertIdSchema, "params"), alertController.markAsRead);

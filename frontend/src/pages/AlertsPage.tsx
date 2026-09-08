@@ -13,10 +13,12 @@ import {
   EyeOff,
   ShieldAlert,
   X,
+  Download,
 } from "lucide-react";
 import { alertService } from "@/services/alerts";
 import { cameraService } from "@/services/cameras";
 import { showToast } from "@/utils/toast";
+import { downloadBlob } from "@/utils/csv";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatRelativeTime } from "@/utils/format";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -55,6 +57,7 @@ export default function AlertsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [exporting, setExporting] = useState(false);
   const limit = 20;
 
   const queryFilters = useCallback(
@@ -145,6 +148,30 @@ export default function AlertsPage() {
     }
   };
 
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const blob = await alertService.exportCSV({
+        severity: severity || undefined,
+        isRead: isRead || undefined,
+        search: search || undefined,
+        cameraId: cameraId || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      });
+      downloadBlob(blob, `alerts-${Date.now()}.csv`);
+    } catch (err) {
+      console.error("Failed to export alerts:", err);
+      showToast({
+        severity: "critical",
+        title: "Export failed",
+        message: "Could not generate the CSV export. Please try again.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleViewDetection = (detection: DetectionWithCamera) => {
     setSelectedAlert(null);
     navigate("/detections", { state: { highlightDetection: detection } });
@@ -206,6 +233,15 @@ export default function AlertsPage() {
             View only
           </span>
         )}
+
+        <button
+          onClick={handleExportCSV}
+          disabled={exporting}
+          className="btn-secondary flex items-center gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
       </div>
       </div>
 

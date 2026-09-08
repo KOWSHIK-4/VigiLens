@@ -23,6 +23,7 @@ import type { AuditLog, AuditLogAction, AuditLogStatus } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
 import { showToast } from "@/utils/toast";
+import { downloadBlob } from "@/utils/csv";
 import { useEffect } from "react";
 
 const PAGE_SIZE = 15;
@@ -81,14 +82,7 @@ function TableSkeleton() {
 }
 
 function downloadCSV(blob: Blob) {
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
+  downloadBlob(blob, `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
 export default function AuditLogsPage() {

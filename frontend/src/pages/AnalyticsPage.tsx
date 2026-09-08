@@ -7,6 +7,7 @@ import {
 import { Download, RefreshCw, Calendar, Clock, AlertTriangle, Inbox } from "lucide-react";
 import { analyticsService } from "@/services/analytics";
 import StatsCard from "@/components/StatsCard";
+import { downloadClientCSV } from "@/utils/csv";
 import type { AnalyticsParams } from "@/types";
 
 type Period = "7" | "30" | "90";
@@ -35,17 +36,7 @@ function ChartEmpty({ height = 320 }: { height?: number }) {
 }
 
 function downloadCSV(filename: string, headers: string[], rows: string[][]) {
-  const csv = [
-    headers.join(","),
-    ...rows.map((row) => row.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")),
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}-${Date.now()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadClientCSV(`${filename}-${Date.now()}.csv`, headers, rows);
 }
 
 import type { TooltipProps } from "recharts";

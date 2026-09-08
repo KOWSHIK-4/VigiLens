@@ -37,6 +37,20 @@ export default function GenerateReportDialog({ onClose }: Props) {
     },
   });
 
+  const handleTypeSelect = (next: ReportType) => {
+    setType(next);
+    // Pre-fill a sensible window for the rolling summaries only when the user
+    // hasn't picked dates yet; they can still override afterwards.
+    if (!dateFrom && !dateTo && (next === "daily" || next === "weekly" || next === "monthly")) {
+      const now = new Date();
+      const from = new Date(now);
+      const daysBack = next === "daily" ? 1 : next === "weekly" ? 7 : 30;
+      from.setDate(from.getDate() - daysBack);
+      setDateFrom(from.toISOString().slice(0, 10));
+      setDateTo(now.toISOString().slice(0, 10));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     generateMutation.mutate();
@@ -72,7 +86,7 @@ export default function GenerateReportDialog({ onClose }: Props) {
                 <button
                   key={rt.value}
                   type="button"
-                  onClick={() => setType(rt.value)}
+                  onClick={() => handleTypeSelect(rt.value)}
                   className={`p-3 rounded-lg border text-left transition-colors ${
                     type === rt.value
                       ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"

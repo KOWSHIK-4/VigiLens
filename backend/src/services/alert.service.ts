@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
+import { toCsv } from "../utils/csv";
 import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
@@ -8,6 +9,44 @@ interface CreateAlertInput {
   severity: AlertSeverity;
   title: string;
   message: string;
+}
+
+function buildAlertWhere(params: Pick<AlertQueryInput, "severity" | "isRead" | "search" | "cameraId" | "dateFrom" | "dateTo">): Prisma.AlertWhereInput {
+  const where: Prisma.AlertWhereInput = {};
+
+  if (params.severity) {
+    where.severity = params.severity;
+  }
+
+  if (params.isRead !== undefined) {
+    where.isRead = params.isRead === "true";
+  }
+
+  if (params.search) {
+    where.OR = [
+      { title: { contains: params.search, mode: "insensitive" } },
+      { message: { contains: params.search, mode: "insensitive" } },
+    ];
+  }
+
+  if (params.cameraId) {
+    where.detection = { cameraId: params.cameraId };
+  }
+
+  if (params.dateFrom || params.dateTo) {
+    const createdAtFilter: Prisma.DateTimeFilter = {};
+    if (params.dateFrom) {
+      createdAtFilter.gte = new Date(params.dateFrom);
+    }
+    if (params.dateTo) {
+      const end = new Date(params.dateTo);
+      end.setHours(23, 59, 59, 999);
+      createdAtFilter.lte = end;
+    }
+    where.createdAt = createdAtFilter;
+  }
+
+  return where;
 }
 
 export const alertService = {
@@ -24,39 +63,7 @@ export const alertService = {
   },
 
   async findAll(params: AlertQueryInput) {
-    const where: Prisma.AlertWhereInput = {};
-
-    if (params.severity) {
-      where.severity = params.severity;
-    }
-
-    if (params.isRead !== undefined) {
-      where.isRead = params.isRead === "true";
-    }
-
-    if (params.search) {
-      where.OR = [
-        { title: { contains: params.search, mode: "insensitive" } },
-        { message: { contains: params.search, mode: "insensitive" } },
-      ];
-    }
-
-    if (params.cameraId) {
-      where.detection = { cameraId: params.cameraId };
-    }
-
-    if (params.dateFrom || params.dateTo) {
-      const createdAtFilter: Prisma.DateTimeFilter = {};
-      if (params.dateFrom) {
-        createdAtFilter.gte = new Date(params.dateFrom);
-      }
-      if (params.dateTo) {
-        const end = new Date(params.dateTo);
-        end.setHours(23, 59, 59, 999);
-        createdAtFilter.lte = end;
-      }
-      where.createdAt = createdAtFilter;
-    }
+    const where = buildAlertWhere(params);
 
     const [data, total] = await Promise.all([
       prisma.alert.findMany({
@@ -70,6 +77,29 @@ export const alertService = {
     ]);
 
     return { data, total };
+  },
+
+  async exportCSV(params: AlertQueryInput) {
+    const where = buildAlertWhere(params);
+    const alerts = await prisma.alert.findMany({
+      where,
+      include: { detection: { include: { camera: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return toCsv(
+      ["ID", "Severity", "Title", "Message", "Camera", "Location", "Timestamp", "Read"],
+      alerts.map((a) => [
+        a.id,
+        a.severity,
+        a.title,
+        a.message,
+        a.detection?.camera?.name ?? a.detection?.cameraId ?? "",
+        a.detection?.camera?.location ?? "",
+        a.createdAt.toISOString(),
+        a.isRead ? "Read" : "Unread",
+      ]),
+    );
   },
 
   async markAsRead(id: string) {

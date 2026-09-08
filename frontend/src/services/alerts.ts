@@ -47,4 +47,19 @@ export const alertService = {
     }>("/alerts/unread-count");
     return data.data.count;
   },
+
+  async exportCSV(params?: {
+    severity?: string;
+    isRead?: string;
+    search?: string;
+    cameraId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<Blob> {
+    const { data } = await api.get("/alerts/export", {
+      params,
+      responseType: "blob",
+    });
+    return data;
+  },
 };

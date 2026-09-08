@@ -13,6 +13,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { reportService } from "@/services/reports";
 import { showToast } from "@/utils/toast";
@@ -63,7 +65,7 @@ export default function ReportsPage() {
   const [deleteError, setDeleteError] = useState("");
   const limit = 20;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["reports", { page, limit, search, type: typeFilter, status: statusFilter }],
     queryFn: () =>
       reportService.getAll({
@@ -196,6 +198,21 @@ export default function ReportsPage() {
       {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+        </div>
+      ) : isError ? (
+        <div className="card text-center py-12">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">Couldn't load reports</p>
+          <p className="text-gray-400 text-sm mt-1">
+            Something went wrong while fetching your reports.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 btn-secondary inline-flex items-center gap-2 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       ) : reports.length === 0 ? (
         <div className="card text-center py-12">

@@ -43,11 +43,29 @@ export const reportService = {
       params: { format },
       responseType: "blob",
     });
+
+    // Honour the backend's Content-Disposition filename (which is derived from
+    // the report title) instead of always using the raw report id.
+    const disposition = response.headers?.["content-disposition"] as string | undefined;
+    let filename = `report-${id}.${format}`;
+    if (typeof disposition === "string") {
+      const starMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const raw = starMatch?.[1] ?? plainMatch?.[1];
+      if (raw) {
+        try {
+          filename = decodeURIComponent(raw);
+        } catch {
+          filename = raw;
+        }
+      }
+    }
+
     const blob = new Blob([response.data]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `report-${id}.${format}`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   },

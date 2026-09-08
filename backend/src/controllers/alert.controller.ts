@@ -14,6 +14,19 @@ export const alertController = {
     }
   },
 
+  async exportCsv(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const q = req.query as unknown as AlertQueryInput;
+      const csv = await alertService.exportCSV(q);
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename=alerts-${Date.now()}.csv`);
+      res.send(csv);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async markAsRead(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const alert = await alertService.markAsRead(req.params.id as string);
