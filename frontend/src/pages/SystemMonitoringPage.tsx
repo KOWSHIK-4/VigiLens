@@ -9,6 +9,7 @@ import {
   HardDrive,
   RefreshCw,
   Server,
+  Timer,
   XCircle,
 } from "lucide-react";
 import { systemService } from "@/services/system";
@@ -16,7 +17,14 @@ import StatusBadge from "@/components/StatusBadge";
 import ServiceStatusTable from "@/components/ServiceStatusTable";
 import SystemResources from "@/components/SystemResources";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
-import type { OverallStatus, ServiceHealth } from "@/types";
+import EngineStatusBadge from "@/components/EngineStatusBadge";
+import type {
+  EngineHealthSummary,
+  MonitorLoopSummary,
+  MonitorSchedulerSummary,
+  OverallStatus,
+  ServiceHealth,
+} from "@/types";
 
 function formatMs(ms: number): string {
   if (ms < 1) return `${Math.round(ms * 100) / 100} ms`;
@@ -34,7 +42,7 @@ function formatDuration(seconds: number): string {
   return `${secs}s`;
 }
 
-function formatTime(iso: string | undefined): string {
+function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString();
 }
@@ -133,6 +141,259 @@ function ServiceCardsSkeleton() {
   );
 }
 
+const LOOP_STATUS_STYLES: Record<
+  MonitorLoopSummary["status"],
+  { label: string; className: string }
+> = {
+  idle: { label: "Idle", className: "bg-gray-100 text-gray-600" },
+  running: { label: "Running", className: "bg-blue-50 text-blue-700" },
+  ok: { label: "OK", className: "bg-green-50 text-green-700" },
+  error: { label: "Error", className: "bg-red-50 text-red-700" },
+  skipped: { label: "Skipped", className: "bg-amber-50 text-amber-700" },
+};
+
+const BACKOFF_FAILURES_THRESHOLD = 3;
+
+function LoopStatusBadge({ loop }: { loop: MonitorLoopSummary }) {
+  const style =
+    LOOP_STATUS_STYLES[loop.status] ?? LOOP_STATUS_STYLES.idle;
+  const backedOff = loop.consecutiveFailures >= BACKOFF_FAILURES_THRESHOLD;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${style.className}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {style.label}
+      {backedOff && (
+        <span
+          className="inline-flex items-center gap-1 text-red-700"
+          title="Loop is backed off because of repeated consecutive failures"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          backed off
+        </span>
+      )}
+    </span>
+  );
+}
+
+function LoopStatusSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3">
+      <div className="h-8 w-64 rounded bg-gray-200" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="h-12 rounded bg-gray-200" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SchedulerCard({ scheduler }: { scheduler: MonitorSchedulerSummary }) {
+  const { loops } = scheduler;
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Timer className="h-4 w-4 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">
+            Monitoring Scheduler
+          </h2>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            scheduler.running
+              ? "bg-green-100 text-green-700"
+              : "bg-gray-100 text-gray-600"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              scheduler.running ? "bg-green-500" : "bg-gray-400"
+            }`}
+          />
+          {scheduler.running ? "Running" : "Stopped"}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-gray-100 sm:grid-cols-3">
+        <SchedulerStat label="Tick interval" value={`${scheduler.tickMs} ms`} />
+        <SchedulerStat label="Loops" value={String(scheduler.loopCount)} />
+        <SchedulerStat
+          label="Frames processed"
+          value={scheduler.framesProcessed.toLocaleString()}
+        />
+        <SchedulerStat
+          label="Detections created"
+          value={scheduler.detectionsCreated.toLocaleString()}
+        />
+        <SchedulerStat label="Errors" value={String(scheduler.errorCount)} />
+        <SchedulerStat
+          label="Next run"
+          value={scheduler.nextTickAt ? formatTime(scheduler.nextTickAt) : "—"}
+        />
+      </div>
+      {loops.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 font-medium">Camera / Detector</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Interval</th>
+                <th className="px-4 py-3 font-medium">Frames</th>
+                <th className="px-4 py-3 font-medium">Detections</th>
+                <th className="px-4 py-3 font-medium">Errors</th>
+                <th className="px-4 py-3 font-medium">Last Run</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loops.map((loop) => (
+                <tr key={loop.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{loop.cameraName}</p>
+                    <p className="text-xs text-gray-500">{loop.detectorName}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <LoopStatusBadge loop={loop} />
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {`${loop.intervalMs} ms`}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-800">
+                    {loop.framesProcessed.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {loop.detectionsCreated.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {loop.errorCount.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">
+                    {formatTime(loop.lastRunAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SchedulerStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="mt-0.5 font-medium text-gray-800">{value}</p>
+    </div>
+  );
+}
+
+function EngineHealthCard({ engines }: { engines: EngineHealthSummary[] }) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3">
+        <Cpu className="h-4 w-4 text-gray-500" />
+        <h2 className="text-sm font-semibold text-gray-900">Detector Engines</h2>
+      </div>
+      {engines.length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-gray-500">
+          No detectors are installed yet.
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {engines.map((engine) => (
+            <div
+              key={engine.key}
+              className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="font-medium text-gray-900">{engine.key}</p>
+                  <div className="mt-1">
+                    <EngineStatusBadge status={engine.status} />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-gray-500">Latency</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.latencyMs == null
+                      ? "—"
+                      : formatMs(engine.latencyMs)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Throughput</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.throughputFps == null
+                      ? "—"
+                      : `${engine.throughputFps} fps`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Frames</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.framesProcessed.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Errors</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.errorCount.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Failures streak</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.consecutiveFailures}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">AI reachable</p>
+                  <p className="font-medium text-gray-800">
+                    {engine.aiReachable == null
+                      ? "Unknown"
+                      : engine.aiReachable
+                        ? "Yes"
+                        : "No"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Last successful</p>
+                  <p className="font-medium text-gray-800">
+                    {formatTime(engine.lastSuccessfulInferenceAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Last detection</p>
+                  <p className="font-medium text-gray-800">
+                    {formatTime(engine.lastDetectionAt)}
+                  </p>
+                </div>
+                {engine.lastError && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500">Last error</p>
+                    <p
+                      className="truncate font-medium text-red-700"
+                      title={engine.lastError}
+                    >
+                      {engine.lastError}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SystemMonitoringPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -152,6 +413,10 @@ export default function SystemMonitoringPage() {
   useEffect(() => {
     if (monitoringQuery.dataUpdatedAt > 0) setLastRefreshed(new Date());
   }, [monitoringQuery.dataUpdatedAt]);
+
+  const dataIsStale =
+    monitoringQuery.dataUpdatedAt > 0 &&
+    Date.now() - monitoringQuery.dataUpdatedAt > 60000;
 
   const { data: monitoring, isLoading, isError, refetch, isFetching } = monitoringQuery;
 
@@ -190,8 +455,13 @@ export default function SystemMonitoringPage() {
             Auto-refresh (15s)
           </button>
           {lastRefreshed && (
-            <p className="text-xs text-gray-500">
+            <p
+              className={`text-xs ${
+                dataIsStale ? "font-medium text-amber-600" : "text-gray-500"
+              }`}
+            >
               Last refreshed: {lastRefreshed.toLocaleTimeString()}
+              {dataIsStale ? " — data may be stale" : ""}
             </p>
           )}
           <button
@@ -228,6 +498,7 @@ export default function SystemMonitoringPage() {
             <div className="h-3 w-48 rounded bg-gray-200" />
           </div>
           <ServiceCardsSkeleton />
+          <LoopStatusSkeleton />
         </>
       ) : (
         monitoring && (
@@ -275,6 +546,9 @@ export default function SystemMonitoringPage() {
               ))}
             </div>
             <ServiceStatusTable services={monitoring.services} />
+
+            <SchedulerCard scheduler={monitoring.scheduler} />
+            <EngineHealthCard engines={monitoring.engines} />
 
             <div className="grid gap-6 xl:grid-cols-2">
               <SystemResources

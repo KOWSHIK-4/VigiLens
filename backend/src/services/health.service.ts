@@ -248,16 +248,18 @@ async function checkStorage(): Promise<ServiceHealth> {
   }
 }
 
-function overallStatus(services: ServiceHealth[]): OverallStatus {
+/**
+ * Aggregates the per-service checks into an overall readiness status.
+ * `not_configured` services (e.g. an optional Redis cache that is not part of
+ * the deployment) are reported in the payload but deliberately excluded from
+ * the aggregate: an optional service that is simply absent must not force the
+ * whole report into a permanent `degraded` state.
+ */
+export function overallStatus(services: ServiceHealth[]): OverallStatus {
   if (services.some((service) => service.status === "offline")) {
     return "unhealthy";
   }
-  if (
-    services.some(
-      (service) =>
-        service.status === "degraded" || service.status === "not_configured",
-    )
-  ) {
+  if (services.some((service) => service.status === "degraded")) {
     return "degraded";
   }
   return "healthy";

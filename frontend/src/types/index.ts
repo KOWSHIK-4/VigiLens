@@ -779,6 +779,8 @@ export interface SystemMonitoring {
     system: number;
   };
   services: ServiceHealth[];
+  scheduler: MonitorSchedulerSummary;
+  engines: EngineHealthSummary[];
   resources: {
     cpu: { usagePercent: number; cores: number };
     memory: { totalBytes: number; usedBytes: number; usagePercent: number };
@@ -789,6 +791,57 @@ export interface SystemMonitoring {
       mount: string;
     };
   };
+}
+
+export interface MonitorLoopSummary {
+  id: string;
+  detectorKey: string;
+  detectorName: string;
+  cameraName: string;
+  status: "idle" | "running" | "ok" | "error" | "skipped";
+  intervalMs: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  framesProcessed: number;
+  detectionsCreated: number;
+  errorCount: number;
+  consecutiveFailures: number;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  lastProcessingTimeMs: number | null;
+  videoPosSeconds: number;
+}
+
+export interface MonitorSchedulerSummary {
+  running: boolean;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  loopCount: number;
+  framesProcessed: number;
+  detectionsCreated: number;
+  errorCount: number;
+  lastTickAt: string | null;
+  nextTickAt: string | null;
+  loops: MonitorLoopSummary[];
+}
+
+export interface EngineHealthSummary {
+  key: string;
+  status: DetectorRuntimeStatus;
+  healthy: boolean;
+  latencyMs: number | null;
+  throughputFps: number | null;
+  framesProcessed: number;
+  errorCount: number;
+  consecutiveFailures: number;
+  aiReachable: boolean | null;
+  lastInferenceAt: string | null;
+  lastSuccessfulInferenceAt: string | null;
+  lastDetectionAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
 }
 
 export interface SystemMetrics {
