@@ -311,9 +311,7 @@ export const modelService = {
     const frame = Buffer.from(PROBE_JPEG_BASE64, "base64");
 
     // Probe the real AI inference backend: a synthetic frame runs through
-    // the registered model and the latency is measured. When the backend
-    // is unreachable no fabricated metrics are reported — the response
-    // states exactly why inference could not be measured.
+    // the registered model and the latency is measured.
     const startedAt = Date.now();
     try {
       const result = await aiServiceClient.detectImage(frame, modelName, threshold);
@@ -336,20 +334,23 @@ export const modelService = {
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : "unknown error";
-      logger.warn("AI model test inference could not be measured", {
+      const inferenceTimeMs = Date.now() - startedAt;
+      logger.warn("AI model test inference failed", {
         modelId: id,
         modelName,
         reason,
+        inferenceTimeMs,
       });
       return {
-        success: true,
+        success: false,
         modelId: model.id,
         modelName: model.name,
-        message: `${detector} is loaded, but live inference could not be measured: ${reason}`,
-        inferenceTimeMs: null,
-        framesProcessed: 0,
+        message: `${detector} inference failed: ${reason}`,
+        inferenceTimeMs,
+        framesProcessed: 1,
         detections: 0,
         thresholdApplied: model.confidenceThreshold,
+        error: reason,
       };
     }
   },

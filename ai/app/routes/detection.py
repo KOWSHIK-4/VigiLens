@@ -15,6 +15,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
+from app.detectors.yolo import InferenceError
 from app.services.capture import usb_device_index
 from app.services.detector import detector_service
 from app.services.stats import stream_stats
@@ -142,6 +143,8 @@ async def detect_image(
 
     try:
         image_data = await file.read()
+        if not image_data or len(image_data) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
         # Decode + model inference are CPU-bound; keep them off the event
         # loop so a slow frame never stalls concurrent requests.
         loop = asyncio.get_running_loop()
@@ -152,10 +155,24 @@ async def detect_image(
             ),
         )
         return result
+    except InferenceError as e:
+        status_map = {
+            "timeout": 504,
+            "model_unavailable": 503,
+            "invalid_input": 400,
+            "inference_error": 500,
+        }
+        status_code = status_map.get(e.reason, 500)
+        raise HTTPException(
+            status_code=status_code,
+            detail={"error": str(e), "reason": e.reason, "attempts": e.attempts},
+        ) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Image detection failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -209,6 +226,8 @@ async def detect_video(
 
     try:
         content = await file.read()
+        if not content or len(content) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded video file is empty")
         with open(tmp_path, "wb") as f:
             f.write(content)
 
@@ -227,6 +246,20 @@ async def detect_video(
             "output_path": out_path,
             "filename": file.filename,
         }
+    except InferenceError as e:
+        status_map = {
+            "timeout": 504,
+            "model_unavailable": 503,
+            "invalid_input": 400,
+            "inference_error": 500,
+        }
+        status_code = status_map.get(e.reason, 500)
+        raise HTTPException(
+            status_code=status_code,
+            detail={"error": str(e), "reason": e.reason, "attempts": e.attempts},
+        ) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Video detection failed")
         raise HTTPException(status_code=500, detail=str(e)) from e

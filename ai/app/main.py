@@ -22,8 +22,23 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting VigiLens AI Service...")
-    logger.info("Registered detectors: %s", list(detector_service._detectors.keys()))
-    logger.info("VigiLens AI Service ready")
+    registered = list(detector_service._detectors.keys())
+    logger.info("Registered detectors: %s", registered)
+    summary = detector_service.status_summary()
+    for name, info in summary["detectors"].items():
+        loaded = info.get("model_loaded", False)
+        logger.info(
+            "  %s: model_loaded=%s, class=%s",
+            name, loaded, info.get("class", "unknown"),
+        )
+    all_loaded = all(
+        info.get("model_loaded", False)
+        for info in summary["detectors"].values()
+    )
+    if all_loaded:
+        logger.info("VigiLens AI Service ready — all models loaded")
+    else:
+        logger.warning("VigiLens AI Service started — some models failed to load")
     yield
 
 

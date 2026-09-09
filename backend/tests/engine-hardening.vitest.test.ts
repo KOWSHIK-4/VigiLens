@@ -14,7 +14,9 @@ function makeResponse(body: unknown, ok = true, status = 200): Response {
   return {
     ok,
     status,
+    headers: new Headers(),
     json: async () => body,
+    text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
 
@@ -56,11 +58,11 @@ describe("Engine Hardening", () => {
     );
   });
 
-  it("HTTP 404 -> http (unknown model)", async () => {
+  it("HTTP 404 -> model_unavailable (unknown model)", async () => {
     const client = new HttpAiServiceClient("http://ai.test", 5000);
     globalThis.fetch = async () => makeResponse({ detail: "Model not found" }, false, 404);
     await expect(client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "ghost_detector")).rejects.toThrow(
-      expect.objectContaining({ reason: "http" }),
+      expect.objectContaining({ reason: "model_unavailable" }),
     );
   });
 
@@ -77,7 +79,8 @@ describe("Engine Hardening", () => {
     globalThis.fetch = async () => ({
       ok: true,
       status: 200,
-      json: async () => {
+      headers: new Headers(),
+      text: async () => {
         throw new SyntaxError("Unexpected token");
       },
     } as unknown as Response);
@@ -140,5 +143,230 @@ describe("Engine Hardening", () => {
     };
     await client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector");
     expect(seenUrl?.includes("confidence=")).toBe(false);
+  });
+
+  describe("retry behavior", () => {
+    it("retries transient 503 then succeeds", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 2,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) return makeResponse({ detail: "not ready" }, false, 503);
+        return makeResponse({
+          success: true,
+          count: 0,
+          detections: [],
+          output_path: "/tmp/out.jpg",
+        });
+      };
+      const result = await client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector");
+      expect(calls).toBe(2);
+      expect(result.success).toBe(true);
+    });
+
+    it("retries network unreachable then succeeds", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 2,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) throw new TypeError("fetch failed");
+        return makeResponse({
+          success: true,
+          count: 0,
+          detections: [],
+          output_path: "/tmp/out.jpg",
+        });
+      };
+      const result = await client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector");
+      expect(calls).toBe(2);
+      expect(result.success).toBe(true);
+    });
+
+    it("gives up after exhausting retries", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 2,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        throw new TypeError("fetch failed");
+      };
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "unreachable" }));
+      expect(calls).toBe(3);
+    });
+
+    it("does not retry 404 model unavailable", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 3,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        return makeResponse({ detail: "Model not found" }, false, 404);
+      };
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "ghost"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "model_unavailable" }));
+      expect(calls).toBe(1);
+    });
+
+    it("does not retry invalid payloads", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 3,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        return makeResponse({ success: "yes" });
+      };
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+      expect(calls).toBe(1);
+    });
+
+    it("retries capture frame on transient 5xx", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000, {
+        maxRetries: 2,
+        backoffBaseMs: 0,
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) return makeResponse({ detail: "busy" }, false, 503);
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => new ArrayBuffer(4),
+        } as unknown as Response;
+      };
+      const buffer = await client.captureFrame("rtsp://example.test/live", "rtsp");
+      expect(calls).toBe(2);
+      expect(buffer.length).toBe(4);
+    });
+  });
+
+  describe("response validation", () => {
+    it("rejects detection without class_name", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        makeResponse({
+          success: true,
+          count: 1,
+          detections: [{ confidence: 0.9, bbox: { x1: 0, y1: 0, x2: 1, y2: 1 } }],
+          output_path: "/tmp/out.jpg",
+        });
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+    });
+
+    it("rejects detection with non-finite confidence", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        makeResponse({
+          success: true,
+          count: 1,
+          detections: [{ class_name: "person", confidence: NaN, bbox: { x1: 0, y1: 0, x2: 1, y2: 1 } }],
+          output_path: "/tmp/out.jpg",
+        });
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+    });
+
+    it("rejects confidence out of range", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        makeResponse({
+          success: true,
+          count: 1,
+          detections: [{ class_name: "person", confidence: 1.5, bbox: { x1: 0, y1: 0, x2: 1, y2: 1 } }],
+          output_path: "/tmp/out.jpg",
+        });
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+    });
+
+    it("rejects detection with malformed bbox", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        makeResponse({
+          success: true,
+          count: 1,
+          detections: [{ class_name: "person", confidence: 0.8, bbox: "bad" }],
+          output_path: "/tmp/out.jpg",
+        });
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+    });
+
+    it("rejects count that does not match detections length", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        makeResponse({
+          success: true,
+          count: 5,
+          detections: [
+            { class_name: "person", confidence: 0.8, bbox: { x1: 0, y1: 0, x2: 1, y2: 1 } },
+          ],
+          output_path: "/tmp/out.jpg",
+        });
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(expect.objectContaining({ reason: "invalid_payload" }));
+    });
+
+    it("rejects oversized response bodies", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      const bigPayload = JSON.stringify({
+        success: true,
+        count: 0,
+        detections: [],
+        output_path: "/tmp/out.jpg",
+        padding: "x".repeat(6 * 1024 * 1024),
+      });
+      globalThis.fetch = async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          text: async () => bigPayload,
+        }) as unknown as Response;
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(
+        expect.objectContaining({ reason: "invalid_payload" }),
+      );
+    });
+
+    it("rejects response hinting oversize via content-length header", async () => {
+      const client = new HttpAiServiceClient("http://ai.test", 5000);
+      globalThis.fetch = async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-length": String(6 * 1024 * 1024) }),
+          text: async () => JSON.stringify({ success: true, count: 0, detections: [], output_path: "" }),
+        }) as unknown as Response;
+      await expect(
+        client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector"),
+      ).rejects.toThrow(
+        expect.objectContaining({ reason: "invalid_payload" }),
+      );
+    });
   });
 });

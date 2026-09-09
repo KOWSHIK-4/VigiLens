@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from pathlib import Path
 from typing import List
@@ -7,6 +8,7 @@ import cv2
 import numpy as np
 
 from app.detectors.base import BaseDetector, Detection
+from app.detectors.yolo import InferenceError
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +16,11 @@ logger = logging.getLogger(__name__)
 class DetectorService:
     def __init__(self):
         self._detectors: dict[str, BaseDetector] = {}
+        self._register_times: dict[str, float] = {}
 
     def register(self, detector: BaseDetector) -> None:
         self._detectors[detector.name] = detector
+        self._register_times[detector.name] = time.time()
         logger.info("Registered detector: %s", detector.name)
 
     def get(self, name: str | None = None) -> BaseDetector:
@@ -27,15 +31,50 @@ class DetectorService:
         return self._detectors[name]
 
     def list(self) -> list[dict]:
-        return [
-            {
+        result = []
+        for name, detector in self._detectors.items():
+            entry = {
                 "key": name,
                 "name": detector.__class__.__name__,
                 "type": "object_detection",
                 "availability": "available",
             }
-            for name, detector in self._detectors.items()
-        ]
+            if hasattr(detector, "status"):
+                ds = detector.status
+                entry["model_loaded"] = ds.model_loaded
+                entry["last_inference_at"] = ds.last_inference_at
+                entry["last_inference_duration_ms"] = ds.last_inference_duration_ms
+                entry["consecutive_failures"] = ds.consecutive_failures
+                entry["total_inferences"] = ds.total_inferences
+                entry["total_failures"] = ds.total_failures
+                if ds.last_error:
+                    entry["last_error"] = ds.last_error
+            result.append(entry)
+        return result
+
+    def status_summary(self) -> dict:
+        """Return a summary of all detector statuses for the health endpoint."""
+        detectors_info = {}
+        for name, detector in self._detectors.items():
+            info: dict = {
+                "class": detector.__class__.__name__,
+                "registered_at": self._register_times.get(name),
+            }
+            if hasattr(detector, "status"):
+                ds = detector.status
+                info["model_loaded"] = ds.model_loaded
+                info["model_available"] = ds.model_loaded and ds.consecutive_failures < 5
+                info["last_inference_at"] = ds.last_inference_at
+                info["total_inferences"] = ds.total_inferences
+                info["total_failures"] = ds.total_failures
+                info["consecutive_failures"] = ds.consecutive_failures
+                if ds.last_error:
+                    info["last_error"] = ds.last_error
+            detectors_info[name] = info
+        return {
+            "detector_count": len(self._detectors),
+            "detectors": detectors_info,
+        }
 
     def detect_image(
         self,
@@ -43,12 +82,29 @@ class DetectorService:
         detector_name: str | None = None,
         confidence_threshold: float | None = None,
     ) -> tuple[List[Detection], np.ndarray]:
+        if not image_data or len(image_data) == 0:
+            raise ValueError("Empty image data provided for inference")
+
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if image is None:
-            raise ValueError("Could not decode image data")
+            raise ValueError(
+                "Could not decode image data — "
+                "the file may be corrupted or not a supported image format"
+            )
+        if image.size == 0:
+            raise ValueError("Decoded image is empty (0 bytes of pixel data)")
+
         detector = self.get(detector_name)
-        detections = detector.detect(image, confidence_threshold=confidence_threshold)
+        try:
+            detections = detector.detect(image, confidence_threshold=confidence_threshold)
+        except InferenceError:
+            raise
+        except Exception as exc:
+            raise InferenceError(
+                f"Unexpected inference error for detector '{detector_name or 'default'}': {exc}",
+                reason="inference_error",
+            )
         return detections, image
 
     def detect_video_frames(

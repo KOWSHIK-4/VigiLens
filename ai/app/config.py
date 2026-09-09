@@ -22,6 +22,10 @@ class Settings:
     )
     media_root: str = os.getenv("MEDIA_ROOT", "/data/vigilens/media")
     capture_open_timeout_ms: int = int(os.getenv("CAPTURE_OPEN_TIMEOUT_MS", "5000"))
+    # Maximum seconds a single inference call may take before being aborted.
+    inference_timeout_s: float = float(os.getenv("INFERENCE_TIMEOUT_S", "30"))
+    # Number of inference retries on transient failure before giving up.
+    inference_max_retries: int = int(os.getenv("INFERENCE_MAX_RETRIES", "2"))
 
     def __init__(self) -> None:
         node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))

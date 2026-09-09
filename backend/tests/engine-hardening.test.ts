@@ -44,7 +44,9 @@ function makeResponse(body: unknown, ok = true, status = 200): Response {
   return {
     ok,
     status,
+    headers: new Headers(),
     json: async () => body,
+    text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
 
@@ -84,12 +86,12 @@ async function run() {
     "abort -> timeout",
   );
 
-  // 4. HTTP 404 (unknown model) -> http with status 404.
+  // 4. HTTP 404 (unknown model) -> model_unavailable with status 404.
   globalThis.fetch = async () => makeResponse({ detail: "Model not found" }, false, 404);
   await expectErrorType(
     Promise.resolve(client.detectImage(frame, "ghost_detector")),
-    "http",
-    "HTTP 404 -> http (unknown model)",
+    "model_unavailable",
+    "HTTP 404 -> model_unavailable (unknown model)",
   );
 
   // 5. HTTP 500 -> http.
@@ -104,7 +106,8 @@ async function run() {
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    json: async () => {
+    headers: new Headers(),
+    text: async () => {
       throw new SyntaxError("Unexpected token");
     },
   } as unknown as Response);

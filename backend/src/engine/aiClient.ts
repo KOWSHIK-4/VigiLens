@@ -10,7 +10,13 @@
 import { config } from "../config";
 import type { BoundingBox } from "./types";
 
-export type AiErrorReason = "unreachable" | "timeout" | "http" | "invalid_payload" | "invalid_frame";
+export type AiErrorReason =
+  | "unreachable"
+  | "timeout"
+  | "http"
+  | "invalid_payload"
+  | "invalid_frame"
+  | "model_unavailable";
 
 /** Typed error for AI service failures so callers can classify/recover. */
 export class AiServiceError extends Error {
@@ -94,23 +100,75 @@ function toBoundingBox(bbox: { x1: number; y1: number; x2: number; y2: number })
   };
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isValidDetection(det: unknown): det is AiImageDetectionResponse["detections"][0] {
+  if (typeof det !== "object" || det === null) return false;
+  const d = det as Record<string, unknown>;
+  if (typeof d.class_name !== "string" || d.class_name.length === 0) return false;
+  if (!isFiniteNumber(d.confidence) || d.confidence < 0 || d.confidence > 1) return false;
+  if (typeof d.bbox !== "object" || d.bbox === null) return false;
+  const bbox = d.bbox as Record<string, unknown>;
+  if (!isFiniteNumber(bbox.x1) || !isFiniteNumber(bbox.y1) || !isFiniteNumber(bbox.x2) || !isFiniteNumber(bbox.y2)) return false;
+  return true;
+}
+
+/**
+ * Maximum allowed size for an AI service JSON response (5 MB).
+ * Prevents memory exhaustion from a buggy or compromised AI service.
+ */
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
 function isDetectionPayload(value: unknown): value is AiImageDetectionResponse {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
-  return (
-    typeof record.success === "boolean" &&
-    Array.isArray(record.detections) &&
-    typeof record.count === "number"
-  );
+  if (typeof record.success !== "boolean") return false;
+  if (!Array.isArray(record.detections)) return false;
+  if (!isFiniteNumber(record.count)) return false;
+  if (record.count !== record.detections.length) return false;
+  // Validate individual detections have the expected shape
+  for (const det of record.detections) {
+    if (!isValidDetection(det)) return false;
+  }
+  return true;
+}
+
+/** Retry configuration for AI service calls. */
+interface RetryConfig {
+  maxRetries: number;
+  /** HTTP status codes eligible for retry. */
+  retryableStatuses: Set<number>;
+  /** Base delay in ms for exponential backoff. */
+  backoffBaseMs: number;
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 2,
+  retryableStatuses: new Set([429, 502, 503, 504]),
+  backoffBaseMs: 500,
+};
+
+function isRetryableError(reason: AiErrorReason, status: number | null, retryConfig: RetryConfig): boolean {
+  if (reason === "unreachable" || reason === "timeout") return true;
+  if (reason === "http" && status !== null && retryConfig.retryableStatuses.has(status)) return true;
+  return false;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export class HttpAiServiceClient implements AiServiceClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly retryConfig: RetryConfig;
 
-  constructor(baseUrl: string = config.ai.serviceUrl, timeoutMs = 15000) {
+  constructor(baseUrl: string = config.ai.serviceUrl, timeoutMs = 15000, retryConfig?: Partial<RetryConfig>) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.timeoutMs = timeoutMs;
+    this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...retryConfig };
   }
 
   async detectImage(
@@ -122,6 +180,32 @@ export class HttpAiServiceClient implements AiServiceClient {
       throw new AiServiceError("invalid_frame", "Empty frame buffer cannot be inferred");
     }
 
+    let lastError: AiServiceError | null = null;
+    const maxAttempts = this.retryConfig.maxRetries + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this._detectImageOnce(frame, detectorKey, confidence);
+      } catch (err) {
+        if (!(err instanceof AiServiceError)) {
+          throw new AiServiceError("unreachable", String(err));
+        }
+        lastError = err;
+        if (attempt >= maxAttempts || !isRetryableError(err.reason, err.status, this.retryConfig)) {
+          break;
+        }
+        const backoffMs = this.retryConfig.backoffBaseMs * Math.pow(2, attempt - 1);
+        await delay(backoffMs);
+      }
+    }
+    throw lastError!;
+  }
+
+  private async _detectImageOnce(
+    frame: Buffer,
+    detectorKey?: string,
+    confidence?: number,
+  ): Promise<AiImageDetectionResponse> {
     const form = new FormData();
     form.append(
       "file",
@@ -153,19 +237,41 @@ export class HttpAiServiceClient implements AiServiceClient {
       }
 
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new AiServiceError(
+            "model_unavailable",
+            `AI service has no model "${detectorKey ?? "default"}" registered`,
+            404,
+          );
+        }
         throw new AiServiceError(
           "http",
-          response.status === 404
-            ? `AI service has no model "${detectorKey ?? "default"}" registered`
-            : `AI service returned ${response.status}`,
+          `AI service returned ${response.status}`,
           response.status,
+        );
+      }
+
+      // Enforce response size limit to prevent memory exhaustion
+      const contentLength = response.headers.get("content-length");
+      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
+        throw new AiServiceError(
+          "invalid_payload",
+          `AI response exceeds maximum size (${MAX_RESPONSE_BYTES} bytes)`,
         );
       }
 
       let payload: unknown;
       try {
-        payload = await response.json();
-      } catch {
+        const text = await response.text();
+        if (text.length > MAX_RESPONSE_BYTES) {
+          throw new AiServiceError(
+            "invalid_payload",
+            `AI response exceeds maximum size (${MAX_RESPONSE_BYTES} bytes)`,
+          );
+        }
+        payload = JSON.parse(text);
+      } catch (err) {
+        if (err instanceof AiServiceError) throw err;
         throw new AiServiceError("invalid_payload", "AI service returned malformed JSON");
       }
       if (!isDetectionPayload(payload)) {
@@ -198,6 +304,34 @@ export class HttpAiServiceClient implements AiServiceClient {
       throw new AiServiceError("invalid_frame", "Camera source is required for frame capture");
     }
 
+    let lastError: AiServiceError | null = null;
+    const maxAttempts = this.retryConfig.maxRetries + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this._captureFrameOnce(source, cameraType, videoPosSeconds, timeoutMs, credentials);
+      } catch (err) {
+        if (!(err instanceof AiServiceError)) {
+          throw new AiServiceError("unreachable", String(err));
+        }
+        lastError = err;
+        if (attempt >= maxAttempts || !isRetryableError(err.reason, err.status, this.retryConfig)) {
+          break;
+        }
+        const backoffMs = this.retryConfig.backoffBaseMs * Math.pow(2, attempt - 1);
+        await delay(backoffMs);
+      }
+    }
+    throw lastError!;
+  }
+
+  private async _captureFrameOnce(
+    source: string,
+    cameraType: string,
+    videoPosSeconds: number,
+    timeoutMs: number,
+    credentials?: CaptureCredentials,
+  ): Promise<Buffer> {
     const authenticatedSource = buildAuthenticatedSourceUrl(source, cameraType, credentials);
     const url = new URL("/capture", this.baseUrl);
     url.searchParams.set("source", authenticatedSource);
