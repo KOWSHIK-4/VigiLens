@@ -23,6 +23,7 @@ import {
 } from "../src/engine/aiClient";
 import { notifyDetectorRestart } from "../src/engine/engineHooks";
 import { alertService } from "../src/services/alert.service";
+import { prisma } from "../src/config/prisma";
 
 let passed = 0;
 let failed = 0;
@@ -68,6 +69,14 @@ class FakeAiClient implements AiServiceClient {
 }
 
 async function run() {
+  // Persisting real detection rows requires the seeded demo camera to exist;
+  // provision it defensively instead of relying on external seed state.
+  await prisma.camera.upsert({
+    where: { id: "demo-camera-1" },
+    create: { id: "demo-camera-1", name: "Main Entrance", url: "rtsp://camera-stream", cameraType: "rtsp" },
+    update: {},
+  });
+
   const fake = new FakeAiClient();
   fake.boxes = [LOCATION_A, LOCATION_B, LOCATION_A, LOCATION_B, LOCATION_B];
   const engine = new EngineServiceImpl(fake);

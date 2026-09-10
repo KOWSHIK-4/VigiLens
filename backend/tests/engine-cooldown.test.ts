@@ -19,6 +19,7 @@ import {
   type AiImageDetectionResponse,
 } from "../src/engine/aiClient";
 import { alertService } from "../src/services/alert.service";
+import { prisma } from "../src/config/prisma";
 
 let passed = 0;
 let failed = 0;
@@ -61,6 +62,20 @@ class FakeAiClient implements AiServiceClient {
 }
 
 async function run() {
+  // The live engine tests persist real detections, which need the seeded
+  // demo cameras to exist. Provision them defensively so the suite does not
+  // depend on another test or a manual seed having run first.
+  await prisma.camera.upsert({
+    where: { id: "demo-camera-1" },
+    create: { id: "demo-camera-1", name: "Main Entrance", url: "rtsp://camera-stream", cameraType: "rtsp" },
+    update: {},
+  });
+  await prisma.camera.upsert({
+    where: { id: "demo-camera-2" },
+    create: { id: "demo-camera-2", name: "Parking Lot", url: "rtsp://parking-cam", cameraType: "rtsp" },
+    update: {},
+  });
+
   const fake = new FakeAiClient();
   const engine = new EngineServiceImpl(fake);
   const image = Buffer.from("fake-jpeg-frame-for-cooldown-test");

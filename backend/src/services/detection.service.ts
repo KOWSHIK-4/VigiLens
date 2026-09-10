@@ -7,7 +7,6 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
-import { toCsv } from "../utils/csv";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
@@ -328,28 +327,38 @@ export const detectionService = {
     return { success: true, id };
   },
 
-  async exportCSV(params: Partial<FindAllParams>) {
+  /**
+   * Streaming CSV export. Rows are fetched in bounded pages and yielded so
+   * the caller (controller) can write them incrementally instead of loading
+   * the whole result set into memory.
+   */
+  async *streamCSV(params: Partial<FindAllParams>, pageSize = 500) {
     const where = buildWhereClause(params);
+    let skip = 0;
 
-    const detections = await prisma.detection.findMany({
-      where,
-      include: { camera: true },
-      orderBy: { timestamp: "desc" },
-    });
-
-    const headers = ["ID", "Timestamp", "Label", "Confidence", "Status", "Camera", "Location", "Image URL"];
-    const rows = detections.map((d: { id: string; timestamp: Date; label: string; confidence: number; status: string; imageUrl: string; camera?: { name: string; location: string | null } | null }) => [
-      d.id,
-      d.timestamp.toISOString(),
-      d.label,
-      d.confidence.toString(),
-      d.status,
-      d.camera?.name || "",
-      d.camera?.location || "",
-      d.imageUrl,
-    ]);
-
-    return toCsv(headers, rows);
+    for (;;) {
+      const page = await prisma.detection.findMany({
+        where,
+        include: { camera: true },
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+        take: pageSize,
+        skip,
+      });
+      if (page.length === 0) return;
+      for (const d of page) {
+        yield [
+          d.id,
+          d.timestamp.toISOString(),
+          d.label,
+          d.confidence.toString(),
+          d.status,
+          d.camera?.name || "",
+          d.camera?.location || "",
+          d.imageUrl,
+        ];
+      }
+      skip += page.length;
+    }
   },
 
   async getStats() {

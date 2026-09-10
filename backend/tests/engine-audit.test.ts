@@ -12,7 +12,6 @@
 import { CooldownAlertStage, AlertCooldownRegistry } from "../src/engine/alerts";
 import { DetectionPersistenceStage } from "../src/engine/engineService";
 import { alertService } from "../src/services/alert.service";
-import { detectionService } from "../src/services/detection.service";
 import { prisma } from "../src/config/prisma";
 import type { PipelineContext, NormalizedDetection } from "../src/engine/types";
 
@@ -30,6 +29,13 @@ function fail(name: string, details?: string) {
 }
 
 const CREATED_IDS: string[] = [];
+
+/**
+ * Dedicated fixture camera for this test. It exercises real persistence
+ * (which needs a valid camera foreign key) without touching the seeded
+ * `demo-camera-*` fixtures that other live tests depend on.
+ */
+const FIXTURE_CAMERA_ID = "audit-fixture-camera";
 
 function ctx(): PipelineContext {
   return {
@@ -100,20 +106,40 @@ async function findAudit(
 async function run() {
   try {
     // --- DetectionPersistenceStage audit ---
-    const realCreate = detectionService.create;
-    detectionService.create = (async () => ({ id: "engine-det-audit" })) as typeof detectionService.create;
+    // The stage persists through the real batch `createMany` path (detection
+    // row + audit row in one transaction), so we need a real camera row to
+    // satisfy the foreign key. No alert rows are created by this stage.
+    await prisma.camera.upsert({
+      where: { id: FIXTURE_CAMERA_ID },
+      create: {
+        id: FIXTURE_CAMERA_ID,
+        name: "Audit Fixture Camera",
+        url: "/dev/null",
+        cameraType: "usb",
+      },
+      update: {},
+    });
     const stage = new DetectionPersistenceStage();
+    let persistedId: string | null = null;
     try {
-      await stage.persist([detection("engine-det-audit")], ctx());
-      const row = await findAudit("detection_created", "engine-det-audit");
-      if (row) {
+      const fixtureDetection = { ...detection("engine-det-audit"), cameraId: FIXTURE_CAMERA_ID };
+      const fixtureCtx = { ...ctx(), cameraId: FIXTURE_CAMERA_ID };
+      const persisted = await stage.persist([fixtureDetection], fixtureCtx);
+      persistedId = persisted[0]?.id ?? null;
+      const row = persistedId
+        ? await findAudit("detection_created", persistedId)
+        : null;
+      if (row && persistedId) {
         ok("DetectionPersistenceStage writes detection_created audit", `action=${row.action} module=${row.module}`);
         await prisma.auditLog.delete({ where: { id: row.id } });
       } else {
         fail("DetectionPersistenceStage writes detection_created audit", "no audit row found");
       }
     } finally {
-      detectionService.create = realCreate;
+      if (persistedId) {
+        await prisma.detection.delete({ where: { id: persistedId } }).catch(() => undefined);
+      }
+      await prisma.camera.deleteMany({ where: { id: FIXTURE_CAMERA_ID } }).catch(() => undefined);
     }
 
     // --- CooldownAlertStage audit ---

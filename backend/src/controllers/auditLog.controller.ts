@@ -3,6 +3,7 @@ import type { AuthRequest } from "../types";
 import type { AuditLogAction } from "@prisma/client";
 import { auditLogService } from "../services/auditLog.service";
 import { success, paginated, error } from "../utils/apiResponse";
+import { sendCsvStream } from "../utils/csvStream";
 
 export const auditLogController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -44,23 +45,24 @@ export const auditLogController = {
 
   async exportCSV(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const csv = await auditLogService.exportCSV({
-        page: 1,
-        limit: 10000,
-        search: req.query.search as string | undefined,
-        userId: req.query.userId as string | undefined,
-        action: req.query.action as AuditLogAction | undefined,
-        module: req.query.module as string | undefined,
-        status: req.query.status as "success" | "failed" | undefined,
-        dateFrom: req.query.dateFrom as string | undefined,
-        dateTo: req.query.dateTo as string | undefined,
-      });
-
-      res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=audit-logs.csv");
-      res.send(csv);
+      await sendCsvStream(
+        res,
+        ["ID", "Timestamp", "User", "Email", "Action", "Module", "Description", "IP Address", "Status"],
+        auditLogService.streamCSV({
+          page: 1,
+          limit: 10000,
+          search: req.query.search as string | undefined,
+          userId: req.query.userId as string | undefined,
+          action: req.query.action as AuditLogAction | undefined,
+          module: req.query.module as string | undefined,
+          status: req.query.status as "success" | "failed" | undefined,
+          dateFrom: req.query.dateFrom as string | undefined,
+          dateTo: req.query.dateTo as string | undefined,
+        }),
+      );
     } catch (err) {
-      next(err);
+      if (!res.headersSent) next(err);
     }
   },
 

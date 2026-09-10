@@ -6,6 +6,7 @@ import { metricsService } from "../services/metrics.service";
 import { success, paginated } from "../utils/apiResponse";
 import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
+import { sendCsvStream } from "../utils/csvStream";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -110,21 +111,22 @@ export const detectionController = {
   async exportCSV(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as DetectionQueryInput;
-      const csv = await detectionService.exportCSV({
-        search: q.search,
-        status: q.status,
-        cameraId: q.cameraId,
-        dateFrom: q.dateFrom,
-        dateTo: q.dateTo,
-        confidenceMin: q.confidenceMin,
-        confidenceMax: q.confidenceMax,
-      });
-
-      res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename=detections-${Date.now()}.csv`);
-      res.send(csv);
+      await sendCsvStream(
+        res,
+        ["ID", "Timestamp", "Label", "Confidence", "Status", "Camera", "Location", "Image URL"],
+        detectionService.streamCSV({
+          search: q.search,
+          status: q.status,
+          cameraId: q.cameraId,
+          dateFrom: q.dateFrom,
+          dateTo: q.dateTo,
+          confidenceMin: q.confidenceMin,
+          confidenceMax: q.confidenceMax,
+        }),
+      );
     } catch (err) {
-      next(err);
+      if (!res.headersSent) next(err);
     }
   },
 

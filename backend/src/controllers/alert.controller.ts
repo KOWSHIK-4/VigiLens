@@ -2,6 +2,7 @@ import type { Response, NextFunction } from "express";
 import type { AlertQueryInput, AuthRequest } from "../types";
 import { alertService } from "../services/alert.service";
 import { success, paginated } from "../utils/apiResponse";
+import { sendCsvStream } from "../utils/csvStream";
 
 export const alertController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -17,13 +18,14 @@ export const alertController = {
   async exportCsv(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as AlertQueryInput;
-      const csv = await alertService.exportCSV(q);
-
-      res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename=alerts-${Date.now()}.csv`);
-      res.send(csv);
+      await sendCsvStream(
+        res,
+        ["ID", "Severity", "Title", "Message", "Camera", "Location", "Timestamp", "Read"],
+        alertService.streamCSV(q),
+      );
     } catch (err) {
-      next(err);
+      if (!res.headersSent) next(err);
     }
   },
 

@@ -1,6 +1,5 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
-import { toCsv } from "../utils/csv";
 import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
@@ -79,27 +78,33 @@ export const alertService = {
     return { data, total };
   },
 
-  async exportCSV(params: AlertQueryInput) {
+  async *streamCSV(params: AlertQueryInput, pageSize = 500) {
     const where = buildAlertWhere(params);
-    const alerts = await prisma.alert.findMany({
-      where,
-      include: { detection: { include: { camera: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    let skip = 0;
 
-    return toCsv(
-      ["ID", "Severity", "Title", "Message", "Camera", "Location", "Timestamp", "Read"],
-      alerts.map((a) => [
-        a.id,
-        a.severity,
-        a.title,
-        a.message,
-        a.detection?.camera?.name ?? a.detection?.cameraId ?? "",
-        a.detection?.camera?.location ?? "",
-        a.createdAt.toISOString(),
-        a.isRead ? "Read" : "Unread",
-      ]),
-    );
+    for (;;) {
+      const alerts = await prisma.alert.findMany({
+        where,
+        include: { detection: { include: { camera: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: pageSize,
+        skip,
+      });
+      if (alerts.length === 0) return;
+      for (const a of alerts) {
+        yield [
+          a.id,
+          a.severity,
+          a.title,
+          a.message,
+          a.detection?.camera?.name ?? a.detection?.cameraId ?? "",
+          a.detection?.camera?.location ?? "",
+          a.createdAt.toISOString(),
+          a.isRead ? "Read" : "Unread",
+        ];
+      }
+      skip += alerts.length;
+    }
   },
 
   async markAsRead(id: string) {

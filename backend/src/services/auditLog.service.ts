@@ -1,7 +1,6 @@
 import { prisma } from "../config/prisma";
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
 import type { AuditLogQueryInput } from "../types";
-import { toCsv } from "../utils/csv";
 
 interface CreateAuditLogInput {
   userId?: string;
@@ -96,7 +95,11 @@ export const auditLogService = {
     return prisma.auditLog.findUnique({ where: { id } });
   },
 
-  async exportCSV(params: FindAllParams) {
+  /**
+   * Streaming CSV export. Walks the full filter scope in bounded pages so the
+   * controller can write incrementally instead of buffering every row.
+   */
+  async *streamCSV(params: FindAllParams, pageSize = 500) {
     const { search, userId, action, module, status, dateFrom, dateTo } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
@@ -128,25 +131,30 @@ export const auditLogService = {
       where.timestamp = timestampFilter;
     }
 
-    const logs = await prisma.auditLog.findMany({
-      where,
-      orderBy: { timestamp: "desc" },
-    });
-
-    const headers = ["ID", "Timestamp", "User", "Email", "Action", "Module", "Description", "IP Address", "Status"];
-    const rows = logs.map((log) => [
-      log.id,
-      log.timestamp.toISOString(),
-      log.username,
-      log.email,
-      log.action,
-      log.module,
-      log.description,
-      log.ipAddress,
-      log.status,
-    ]);
-
-    return toCsv(headers, rows);
+    let skip = 0;
+    for (;;) {
+      const logs = await prisma.auditLog.findMany({
+        where,
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+        take: pageSize,
+        skip,
+      });
+      if (logs.length === 0) return;
+      for (const log of logs) {
+        yield [
+          log.id,
+          log.timestamp.toISOString(),
+          log.username,
+          log.email,
+          log.action,
+          log.module,
+          log.description,
+          log.ipAddress,
+          log.status,
+        ];
+      }
+      skip += logs.length;
+    }
   },
 
   async getStats() {
