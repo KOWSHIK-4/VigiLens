@@ -33,9 +33,11 @@ Honest list of what VigiLens does and does not do in its current form.
   overridden in any real deployment via `INTERNAL_API_KEY` (backend) and
   `BACKEND_INTERNAL_KEY` (AI service). In production (`NODE_ENV=production`),
   the server refuses to start if insecure defaults are detected.
-- The AI service's webcam stats endpoint (`/detect/webcam/stats`) supports
-  optional header-based auth via `AI_STATS_REQUIRE_AUTH=true`. Disabled by
-  default for development convenience.
+- The AI service's webcam stream and stats endpoints (`/detect/webcam`,
+  `/detect/webcam/stats`) require `X-Internal-Key` auth in production *and*
+  whenever a real (non-default) `BACKEND_INTERNAL_KEY` is configured. Only a
+  development deployment still using the bundled default key keeps them open;
+  set `AI_STATS_REQUIRE_AUTH=true` to force the check in development too.
 - The AI service's CORS origins are configurable via `CORS_ORIGINS` or
   `CORS_ORIGIN` env var. In production, if no origins are configured the
   service defaults to same-origin only (no cross-origin requests).

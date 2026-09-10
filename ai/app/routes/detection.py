@@ -11,10 +11,10 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Request
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.config import settings
+from app.config import DEFAULT_INTERNAL_KEY, settings
 from app.detectors.yolo import InferenceError
 from app.services.capture import usb_device_index
 from app.services.detector import detector_service
@@ -293,16 +293,24 @@ RECONNECT_DELAY_SECONDS = 1.0
 def _verify_internal_key(request: Request) -> None:
     """Verify the X-Internal-Key header matches the shared secret.
 
-    In production the check is always enforced. In development it can be
-    disabled by setting AI_STATS_REQUIRE_AUTH=false.
+    Auth is required when any of these hold:
+    * the environment is production, or
+    * the shared secret is a real (non-bundled-default) value, or
+    * ``AI_STATS_REQUIRE_AUTH`` is set explicitly (true/1).
+
+    The only anonymous path is a development environment still using the
+    bundled insecure default key without the explicit flag. A deployment that
+    sets a real ``BACKEND_INTERNAL_KEY`` therefore stays protected even if
+    ``NODE_ENV`` is never set and the boolean flag is not flipped.
     """
     required = settings.backend_internal_key
     if not required:
         return
     node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
-    if node_env != "production":
-        if os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() not in ("1", "true"):
-            return
+    explicit_require = os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() in ("1", "true")
+    using_default_key = required == DEFAULT_INTERNAL_KEY
+    if node_env != "production" and using_default_key and not explicit_require:
+        return
     provided = request.headers.get("x-internal-key", "")
     if not hmac.compare_digest(provided.encode(), required.encode()):
         raise HTTPException(status_code=401, detail="Invalid or missing internal key")

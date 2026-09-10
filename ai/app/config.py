@@ -9,6 +9,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _INSECURE_KEY = "dev-internal-key-change-in-production"
+# Public alias used by route-level auth guards to distinguish a real shared
+# secret from the bundled development default.
+DEFAULT_INTERNAL_KEY = _INSECURE_KEY
 
 
 class Settings:
