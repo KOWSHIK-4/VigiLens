@@ -5,6 +5,7 @@ interface PeriodParams {
   from?: string;
   to?: string;
   period?: "7" | "30" | "90";
+  tz?: string;
 }
 
 export interface OverviewResult {
@@ -98,17 +99,80 @@ function cacheSet(key: string, data: CacheData, ttl = 60_000): void {
  * Stable cache-range component for a params object. `period` wins;
  * otherwise the explicit from/to timestamps form the key. Without this,
  * two requests with different `from` values would share one cached
- * result computed for whichever arrived first.
+ * result computed for whichever arrived first. A `tz` (when present) is
+ * folded into the key so zone-specific windows do not share a cache entry.
  */
 export function rangeKeyFor(params: PeriodParams): string {
-  if (params.period) return `p${params.period}`;
+  const tzSuffix = params.tz ? `|tz:${params.tz}` : "";
+  if (params.period) return `p${params.period}${tzSuffix}`;
   const from = params.from ? new Date(params.from).toISOString() : "all";
   const to = params.to ? new Date(params.to).toISOString() : "all";
-  return `${from}..${to}`;
+  return `${from}..${to}${tzSuffix}`;
 }
 
-function getDateRange(days: number): { from: Date; to: Date } {
+/** True when the string is a time zone the runtime can resolve. */
+export function validTimezone(tz?: string): boolean {
+  if (tz === undefined) return true;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Returns `tz` when valid, otherwise undefined so callbacks never throw. */
+function resolveTimezone(tz?: string): string | undefined {
+  return validTimezone(tz) ? tz : undefined;
+}
+
+function zonedParts(date: Date, tz: string): Record<string, number> {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const out: Record<string, number> = {};
+  for (const part of parts) {
+    if (part.type !== "literal") out[part.type] = Number(part.value);
+  }
+  return out;
+}
+
+/** Offset in milliseconds of `tz` at the given absolute instant. */
+function tzOffsetMs(date: Date, tz: string): number {
+  const p = zonedParts(date, tz);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return asUtc - date.getTime();
+}
+
+/**
+ * Absolute instant of the start of the local calendar day containing `date`
+ * in `tz` (DST-aware). Used so "today", "last 7/30/90 days" and explicit
+ * `to` bounds align with the reporting user's clock rather than the server's.
+ */
+export function startOfDayInTz(date: Date, tz: string): Date {
+  const p = zonedParts(date, tz);
+  const localMidnightUtc = Date.UTC(p.year, p.month - 1, p.day);
+  return new Date(localMidnightUtc - tzOffsetMs(new Date(localMidnightUtc), tz));
+}
+
+/** Instant one millisecond before the start of the next local day in `tz`. */
+export function endOfDayInTz(date: Date, tz: string): Date {
+  return new Date(startOfDayInTz(date, tz).getTime() + 86400000 - 1);
+}
+
+function getDateRange(days: number, tz?: string): { from: Date; to: Date } {
   const to = new Date();
+  if (tz) {
+    const from = startOfDayInTz(new Date(to.getTime() - days * 86400000), tz);
+    return { from, to };
+  }
   const from = new Date(to);
   from.setDate(from.getDate() - days);
   from.setHours(0, 0, 0, 0);
@@ -118,17 +182,27 @@ function getDateRange(days: number): { from: Date; to: Date } {
 /**
  * Resolves the period/from/to params into a timestamp filter. The `period`
  * wins; otherwise explicit `from`/`to` bounds are honoured, with `to` clamped
- * to the end of its day (matching the detection list filter). When no filter
- * applies the helpers return undefined so callers keep their all-time scope.
+ * to the end of its day (in the requested time zone when one is given, else
+ * server-local, matching the detection list filter). When no filter applies
+ * the helpers return undefined so callers keep their all-time scope.
  */
 function periodDateFilter(params: PeriodParams): { gte?: Date; lte?: Date } | undefined {
+  const tz = resolveTimezone(params.tz);
   if (params.period) {
-    const { from, to } = getDateRange(parseInt(params.period));
+    const { from, to } = getDateRange(parseInt(params.period), tz);
     return { gte: from, lte: to };
   }
   const gte = params.from ? new Date(params.from) : undefined;
-  const lte = params.to ? new Date(params.to) : undefined;
-  if (lte) lte.setHours(23, 59, 59, 999);
+  const rawLte = params.to ? new Date(params.to) : undefined;
+  let lte: Date | undefined;
+  if (rawLte) {
+    if (tz) {
+      lte = endOfDayInTz(rawLte, tz);
+    } else {
+      rawLte.setHours(23, 59, 59, 999);
+      lte = rawLte;
+    }
+  }
   if (gte || lte) return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
   return undefined;
 }
@@ -163,8 +237,14 @@ export const analyticsService = {
     if (cached) return cached;
 
     const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
+    const tz = resolveTimezone(params.tz);
+    const todayStart = tz
+      ? startOfDayInTz(now, tz)
+      : (() => {
+          const d = new Date(now);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
     const filter = periodDateFilter(params);
     const scopeWhere = filter ? { timestamp: filter } : undefined;
     const windowDays = windowDaysFor(params);
@@ -254,19 +334,24 @@ export const analyticsService = {
     if (cached) return cached;
 
     const where = dateWhereSql(periodDateFilter(params));
+    // When a time zone is requested, bucket calendar days in that zone
+    // instead of the database's server time zone.
+    const dayExpr = params.tz
+      ? Prisma.sql`DATE(timestamp AT TIME ZONE ${params.tz})`
+      : Prisma.sql`DATE(timestamp)`;
 
     const rows = await prisma.$queryRaw<
       { date: string; count: number; critical: number; warning: number; info: number }[]
     >`
       SELECT
-        DATE(timestamp) as date,
+        ${dayExpr} as date,
         COUNT(*)::int as count,
         COUNT(*) FILTER (WHERE status = 'critical')::int as critical,
         COUNT(*) FILTER (WHERE status = 'warning')::int as warning,
         COUNT(*) FILTER (WHERE status = 'info')::int as info
       FROM detections
       ${where}
-      GROUP BY DATE(timestamp)
+      GROUP BY ${dayExpr}
       ORDER BY date ASC
     `;
 
@@ -359,12 +444,17 @@ export const analyticsService = {
     if (cached) return cached;
 
     const where = dateWhereSql(periodDateFilter(params));
+    // Hour-of-day distribution in the requested zone (e.g. DST-aware local
+    // time) rather than the database server's time zone.
+    const hourExpr = params.tz
+      ? Prisma.sql`EXTRACT(HOUR FROM timestamp AT TIME ZONE ${params.tz})::int`
+      : Prisma.sql`EXTRACT(HOUR FROM timestamp)::int`;
 
     const rows = await prisma.$queryRaw<{ hour: number; count: number }[]>`
-      SELECT EXTRACT(HOUR FROM timestamp)::int as hour, COUNT(*)::int as count
+      SELECT ${hourExpr} as hour, COUNT(*)::int as count
       FROM detections
       ${where}
-      GROUP BY EXTRACT(HOUR FROM timestamp)
+      GROUP BY ${hourExpr}
       ORDER BY hour ASC
     `;
 

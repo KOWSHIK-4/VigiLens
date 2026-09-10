@@ -45,10 +45,23 @@ export const dateStringSchema = z
   .string()
   .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date");
 
+/** An IANA time zone name the runtime can actually resolve. */
+export const timeZoneSchema = z
+  .string()
+  .refine((v) => {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: v });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "must be a valid IANA time zone");
+
 export const analyticsQuerySchema = z.object({
   period: z.enum(["7", "30", "90"]).optional(),
   from: dateStringSchema.optional(),
   to: dateStringSchema.optional(),
+  tz: timeZoneSchema.optional(),
 });
 
 export type AnalyticsQueryInput = z.infer<typeof analyticsQuerySchema>;
