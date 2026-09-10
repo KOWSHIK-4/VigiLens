@@ -22,6 +22,7 @@ import { CooldownAlertStage, sharedAlertCooldownRegistry } from "./alerts";
 import { onDetectorRestart } from "./engineHooks";
 import { aiDetectorModel, isDetectorRunnable } from "./modelCatalog";
 import { AiServiceFrameCaptureStage } from "./capture";
+import { EngineMetricsStore } from "./metricsStore";
 import type {
   FrameInput,
   NormalizedDetection,
@@ -119,7 +120,7 @@ export class DetectionPersistenceStage implements PersistenceStage {
 
 export class EngineServiceImpl {
   private readonly client: AiServiceClient;
-  private readonly metricsByKey = new Map<string, PipelineMetrics>();
+  private readonly metricsStore = new EngineMetricsStore();
   /**
    * Trackers are keyed by `detectorKey:cameraId`. A detector running on two
    * cameras must not share object tracks between them — identities on one
@@ -141,7 +142,7 @@ export class EngineServiceImpl {
       if (key === undefined) {
         // Process-wide reset (e.g. test harness teardown).
         this.trackersByKey.clear();
-        this.metricsByKey.clear();
+        this.metricsStore.clear();
         return;
       }
       const prefix = `${key}:`;
@@ -150,7 +151,7 @@ export class EngineServiceImpl {
           this.trackersByKey.delete(trackerKey);
         }
       }
-      this.metricsByKey.delete(key);
+      this.metricsStore.delete(key);
       this.throughputEmaFpsByKey.delete(key);
     });
   }
@@ -252,7 +253,7 @@ export class EngineServiceImpl {
       const result = await pipeline.run(input);
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
       metricsService.recordDetection(durationMs);
-      this.recordMetrics(key, result.metrics);
+      this.recordMetrics(key, result.metrics, durationMs);
       this.recordThroughput(key, durationMs);
       lifecycleManager.markInferenceSucceeded(key);
       logger.info("Engine frame processed", {
@@ -289,61 +290,23 @@ export class EngineServiceImpl {
     this.throughputEmaFpsByKey.set(key, prev === undefined ? instantFps : prev * 0.8 + instantFps * 0.2);
   }
 
-  private recordMetrics(key: string, incoming: PipelineMetrics): void {
-    const prev = this.metricsByKey.get(key);
-    if (!prev) {
-      this.metricsByKey.set(key, { ...incoming });
-      return;
-    }
-    prev.framesProcessed = prev.framesProcessed + incoming.framesProcessed;
-    prev.framesSkipped = prev.framesSkipped + incoming.framesSkipped;
-    prev.inferenceTimeMs = incoming.inferenceTimeMs;
-    prev.preprocessingTimeMs = incoming.preprocessingTimeMs;
-    prev.postprocessingTimeMs = incoming.postprocessingTimeMs;
-    prev.trackingTimeMs = incoming.trackingTimeMs;
-    prev.totalProcessingTimeMs = incoming.totalProcessingTimeMs;
-    prev.detectionsPerFrame = incoming.detectionsPerFrame;
-    prev.lastDetectionAt = incoming.lastDetectionAt;
-    prev.lastFrameAt = incoming.lastFrameAt;
-    prev.lastSuccessfulInferenceAt = incoming.lastSuccessfulInferenceAt;
-    prev.lastError = incoming.lastError;
-    prev.lastErrorAt = incoming.lastErrorAt;
-    prev.errorCount = prev.errorCount + incoming.errorCount;
-    this.metricsByKey.set(key, prev);
+  private recordMetrics(
+    key: string,
+    incoming: PipelineMetrics,
+    durationMs: number,
+  ): void {
+    this.metricsStore.record(key, incoming, durationMs, incoming.detectionsPerFrame);
   }
 
   private recordError(key: string, message: string): void {
-    const prev = this.metricsByKey.get(key);
-    if (prev) {
-      prev.errorCount += 1;
-      prev.framesSkipped += 1;
-      prev.lastError = message;
-      prev.lastErrorAt = new Date();
-    } else {
-      this.metricsByKey.set(key, {
-        framesProcessed: 0,
-        framesSkipped: 1,
-        inferenceTimeMs: 0,
-        preprocessingTimeMs: 0,
-        postprocessingTimeMs: 0,
-        trackingTimeMs: 0,
-        totalProcessingTimeMs: 0,
-        detectionsPerFrame: 0,
-        lastDetectionAt: null,
-        lastFrameAt: new Date(),
-        lastSuccessfulInferenceAt: null,
-        lastError: message,
-        lastErrorAt: new Date(),
-        errorCount: 1,
-      });
-    }
+    this.metricsStore.recordError(key, message);
   }
 
   /** Real per-detector metrics accumulated from engine runs. */
   async getMetrics(key: string): Promise<PipelineMetrics | null> {
     const descriptor = await runtimeRegistry.describeByKey(key);
     if (!descriptor) return null;
-    return this.metricsByKey.get(key) ?? null;
+    return this.metricsStore.get(key);
   }
 
   /**
@@ -354,7 +317,8 @@ export class EngineServiceImpl {
   async getHealth(key: string) {
     const descriptor = await runtimeRegistry.describeByKey(key);
     if (!descriptor) return null;
-    const metrics = this.metricsByKey.get(key);
+    const metrics = this.metricsStore.get(key);
+    const rolling = this.metricsStore.getRolling(key);
     const lifecycle = lifecycleManager.get(key);
 
     const latencyMs = metrics && metrics.framesProcessed > 0 ? metrics.inferenceTimeMs : null;
@@ -397,6 +361,7 @@ export class EngineServiceImpl {
       aiReachable: lifecycle.aiReachable,
       lastDetectionAt: metrics?.lastDetectionAt?.toISOString() ?? null,
       lastFrameAt: metrics?.lastFrameAt?.toISOString() ?? null,
+      rolling,
     };
   }
 }
