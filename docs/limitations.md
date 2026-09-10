@@ -53,8 +53,12 @@ Honest list of what VigiLens does and does not do in its current form.
   accept an optional `tz` IANA parameter (e.g. `tz=Asia/Kolkata`) so daily
   buckets, hour-of-day timelines and "today"/period windows align with the
   reporting user's clock; without it, the database server's time zone is used.
-- Per-frame metrics are aggregated in memory (`metricsByKey`); long-running
-  processes accumulate counters until a detector restart.
+- Engine pipeline metrics are held in memory keyed by detector (see
+  `backend/src/engine/metricsStore.ts`). Cumulative counters (frames
+  processed, errors, last inference) persist until the detector is restarted,
+  while per-frame latency/detection samples roll through a fixed window
+  (`ROLLING_WINDOW_MS`, capped at `MAX_ROLLING_SAMPLES` per key) so the in-ring
+  dataset never grows without bound.
 - CSV export streams matching rows in bounded, ordered batches with write
   backpressure, so export memory stays flat regardless of result size.
 - Detection snapshots and recordings are cleaned by the `npm run prune:media`
