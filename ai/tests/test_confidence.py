@@ -1,4 +1,4 @@
-"""Tests for detector-specific confidence thresholds at inference time.
+﻿"""Tests for detector-specific confidence thresholds at inference time.
 
 Covers the `confidence` query parameter on /detect/image, /detect/video
 and /detect/webcam: out-of-range values are rejected by validation, the
@@ -6,10 +6,9 @@ default is preserved, and the override is passed down to the detector.
 """
 
 import numpy as np
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services import detector as detector_module
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -40,7 +39,7 @@ def test_webcam_rejects_out_of_range_confidence():
 def test_detect_image_passes_confidence_override(monkeypatch):
     captured: dict = {}
 
-    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None):
+    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None, processor=None):
         captured["detector"] = detector_name
         captured["confidence"] = confidence_threshold
         return [], np.zeros((10, 10, 3), dtype=np.uint8)
@@ -59,7 +58,7 @@ def test_detect_image_passes_confidence_override(monkeypatch):
 def test_detect_image_defaults_confidence(monkeypatch):
     captured: dict = {}
 
-    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None):
+    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None, processor=None):
         captured["confidence"] = confidence_threshold
         return [], np.zeros((10, 10, 3), dtype=np.uint8)
 
@@ -76,7 +75,7 @@ def test_detect_image_defaults_confidence(monkeypatch):
 def test_detect_image_passes_detector_name_with_override(monkeypatch):
     captured: dict = {}
 
-    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None):
+    def fake_detect_image(image_data, detector_name=None, confidence_threshold=None, processor=None):
         captured["detector"] = detector_name
         captured["confidence"] = confidence_threshold
         return [], np.zeros((10, 10, 3), dtype=np.uint8)

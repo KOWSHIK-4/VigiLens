@@ -41,9 +41,16 @@ function assert(cond: boolean, name: string, details?: string) {
 
 class FakeAiClient implements AiServiceClient {
   calls = 0;
+  lastProcessor: string | undefined;
 
-  async detectImage(): Promise<AiImageDetectionResponse> {
+  async detectImage(
+    _frame?: Buffer,
+    _detectorKey?: string,
+    _confidence?: number,
+    processor?: "auto" | "gpu" | "cpu",
+  ): Promise<AiImageDetectionResponse> {
     this.calls += 1;
+    this.lastProcessor = processor;
     return {
       success: true,
       count: 1,
@@ -92,6 +99,11 @@ async function run() {
     const second = await engine.processFrame("person", "demo-camera-1", image, { force: true });
 
     assert(fake.calls === 2, "both frames were inferred", `inference calls=${fake.calls}`);
+    assert(
+      fake.lastProcessor === "auto",
+      "engine forwards the configured processor hint",
+      `processor=${fake.lastProcessor}`,
+    );
     assert(
       first.detections.length === 1 && second.detections.length === 1,
       "detections persisted for both frames",

@@ -30,6 +30,31 @@ DEFAULT_INFERENCE_TIMEOUT_S = 30.0
 DEFAULT_MAX_RETRIES = 2
 RETRY_BACKOFF_BASE_S = 0.5
 
+# Accepted values for the ``processor`` scheduling hint. Backend detector
+# settings (``preferred_processor``) map 1:1 onto these.
+PROCESSOR_HINTS = {"auto", "cpu", "gpu"}
+
+try:
+    import torch as _torch
+except ImportError:  # pragma: no cover - CPU-only installs / minimal envs
+    _torch = None
+
+
+def resolve_device(processor: str | None) -> str | None:
+    """Map a processor hint to a torch device selection.
+
+    * ``cpu``      -> ``"cpu"`` (forced)
+    * ``gpu``      -> ``"cuda:0"`` when a CUDA device exists, else ``"cpu"``
+    * ``auto``/``None`` -> ``None`` so ultralytics picks its own device
+    """
+    if processor == "cpu":
+        return "cpu"
+    if processor == "gpu":
+        if _torch is not None and _torch.cuda.is_available():
+            return "cuda:0"
+        return "cpu"
+    return None
+
 
 class InferenceError(Exception):
     """Raised when model inference fails after all retries are exhausted."""
@@ -51,6 +76,8 @@ class DetectorStatus:
     consecutive_failures: int = 0
     total_inferences: int = 0
     total_failures: int = 0
+    # Device actually used for the most recent inference (e.g. "cpu").
+    device: str | None = None
 
 
 class YoloDetector(BaseDetector):
@@ -104,7 +131,19 @@ class YoloDetector(BaseDetector):
     def status(self) -> DetectorStatus:
         return self._status
 
-    def _run_inference(self, image: np.ndarray, conf: float) -> List[Detection]:
+    def _actual_device(self) -> str | None:
+        """Best-effort label of the device the model currently runs on."""
+        model_device = getattr(self._model, "device", None)
+        if model_device is None:
+            return None
+        return str(model_device).lower()
+
+    def _run_inference(
+        self,
+        image: np.ndarray,
+        conf: float,
+        processor: str | None = None,
+    ) -> List[Detection]:
         """Run YOLO inference with timeout protection.
 
         Executes model inference in a thread pool with a hard timeout to
@@ -116,9 +155,20 @@ class YoloDetector(BaseDetector):
                 reason="model_unavailable",
             )
 
+        # The processor hint is a scheduling preference, not a hard pin:
+        # ``gpu`` degrades to CPU when no CUDA device exists rather than
+        # failing the request.
+        resolved_device = resolve_device(processor)
+
         def _infer() -> List[Detection]:
             with self._infer_lock:
-                results = self._model(image, verbose=False, conf=conf)[0]
+                kwargs = {"verbose": False, "conf": conf}
+                if resolved_device is not None:
+                    kwargs["device"] = resolved_device
+                results = self._model(image, **kwargs)[0]
+            used_device = resolved_device or self._actual_device()
+            if used_device:
+                self._status.device = used_device
             detections: list[Detection] = []
             for box in results.boxes:
                 cls_id = int(box.cls[0])
@@ -159,6 +209,7 @@ class YoloDetector(BaseDetector):
         self,
         image: np.ndarray,
         confidence_threshold: float | None = None,
+        processor: str | None = None,
     ) -> List[Detection]:
         conf = confidence_threshold if confidence_threshold is not None else self._conf_threshold
 
@@ -168,11 +219,17 @@ class YoloDetector(BaseDetector):
                 reason="invalid_input",
             )
 
+        if processor is not None and processor not in PROCESSOR_HINTS:
+            raise InferenceError(
+                f"Unknown processor hint '{processor}' for detector '{self._detector_name}'",
+                reason="invalid_input",
+            )
+
         last_exc: InferenceError | None = None
         for attempt in range(1, self._max_retries + 1):
             started = time.monotonic()
             try:
-                detections = self._run_inference(image, conf)
+                detections = self._run_inference(image, conf, processor)
                 duration_ms = (time.monotonic() - started) * 1000
                 self._status.last_inference_at = time.time()
                 self._status.last_inference_duration_ms = round(duration_ms, 2)

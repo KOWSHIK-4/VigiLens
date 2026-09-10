@@ -8,7 +8,7 @@
  */
 
 import { config } from "../config";
-import type { BoundingBox } from "./types";
+import type { BoundingBox, ProcessingMode } from "./types";
 
 export type AiErrorReason =
   | "unreachable"
@@ -49,6 +49,7 @@ export interface AiServiceClient {
     frame: Buffer,
     detectorKey?: string,
     confidence?: number,
+    processor?: ProcessingMode,
   ): Promise<AiImageDetectionResponse>;
   captureFrame(
     source: string,
@@ -175,6 +176,7 @@ export class HttpAiServiceClient implements AiServiceClient {
     frame: Buffer,
     detectorKey?: string,
     confidence?: number,
+    processor?: ProcessingMode,
   ): Promise<AiImageDetectionResponse> {
     if (!frame || frame.length === 0) {
       throw new AiServiceError("invalid_frame", "Empty frame buffer cannot be inferred");
@@ -185,7 +187,7 @@ export class HttpAiServiceClient implements AiServiceClient {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        return await this._detectImageOnce(frame, detectorKey, confidence);
+        return await this._detectImageOnce(frame, detectorKey, confidence, processor);
       } catch (err) {
         if (!(err instanceof AiServiceError)) {
           throw new AiServiceError("unreachable", String(err));
@@ -205,6 +207,7 @@ export class HttpAiServiceClient implements AiServiceClient {
     frame: Buffer,
     detectorKey?: string,
     confidence?: number,
+    processor?: ProcessingMode,
   ): Promise<AiImageDetectionResponse> {
     const form = new FormData();
     form.append(
@@ -217,6 +220,9 @@ export class HttpAiServiceClient implements AiServiceClient {
     if (detectorKey) url.searchParams.set("detector", detectorKey);
     if (confidence !== undefined) {
       url.searchParams.set("confidence", String(confidence));
+    }
+    if (processor !== undefined) {
+      url.searchParams.set("processor", processor);
     }
 
     const controller = new AbortController();

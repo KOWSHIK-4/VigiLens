@@ -158,7 +158,7 @@ export const modelService = {
   },
 
   async findById(id: string) {
-    const model = await prisma.aIModel.findUnique({ where: { id } });
+    const model = await prisma.aIModel.findUnique({ where: { id }, include: { settings: true } });
     if (!model) {
       throw new ApiError(404, "Model not found");
     }
@@ -314,7 +314,12 @@ export const modelService = {
     // the registered model and the latency is measured.
     const startedAt = Date.now();
     try {
-      const result = await aiServiceClient.detectImage(frame, modelName, threshold);
+      const result = await aiServiceClient.detectImage(
+        frame,
+        modelName,
+        threshold,
+        model.settings?.preferredProcessor,
+      );
       const inferenceTimeMs = Date.now() - startedAt;
       logger.info("AI model test inference succeeded", {
         modelId: id,

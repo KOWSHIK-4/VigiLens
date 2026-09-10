@@ -145,6 +145,38 @@ describe("Engine Hardening", () => {
     expect(seenUrl?.includes("confidence=")).toBe(false);
   });
 
+  it("processor hint forwarded as query param", async () => {
+    const client = new HttpAiServiceClient("http://ai.test", 5000);
+    let seenUrl: string | null = null;
+    globalThis.fetch = async (input: unknown) => {
+      seenUrl = String(input);
+      return makeResponse({
+        success: true,
+        count: 0,
+        detections: [],
+        output_path: "/tmp/out.jpg",
+      });
+    };
+    await client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector", 0.5, "gpu");
+    expect(seenUrl?.includes("processor=gpu")).toBe(true);
+  });
+
+  it("processor query param omitted by default", async () => {
+    const client = new HttpAiServiceClient("http://ai.test", 5000);
+    let seenUrl: string | null = null;
+    globalThis.fetch = async (input: unknown) => {
+      seenUrl = String(input);
+      return makeResponse({
+        success: true,
+        count: 0,
+        detections: [],
+        output_path: "/tmp/out.jpg",
+      });
+    };
+    await client.detectImage(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), "person_detector");
+    expect(seenUrl?.includes("processor=")).toBe(false);
+  });
+
   describe("retry behavior", () => {
     it("retries transient 503 then succeeds", async () => {
       const client = new HttpAiServiceClient("http://ai.test", 5000, {

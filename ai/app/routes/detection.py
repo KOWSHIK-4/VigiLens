@@ -132,11 +132,21 @@ def _draw_overlay(
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
 
+def _processor_hint() -> Query:
+    """Shared ``processor`` query parameter (auto/cpu/gpu scheduling hint)."""
+    return Query(
+        None,
+        description="Processor scheduling hint: auto (default), cpu, gpu",
+        pattern="^(auto|gpu|cpu)$",
+    )
+
+
 @router.post("/image")
 async def detect_image(
     file: UploadFile = File(...),
     detector: str | None = None,
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
+    processor: str | None = _processor_hint(),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -151,7 +161,7 @@ async def detect_image(
         result = await loop.run_in_executor(
             None,
             functools.partial(
-                _detect_image_sync, image_data, detector, confidence
+                _detect_image_sync, image_data, detector, confidence, processor
             ),
         )
         return result
@@ -182,8 +192,11 @@ def _detect_image_sync(
     image_data: bytes,
     detector: str | None,
     confidence: float,
+    processor: str | None = None,
 ) -> dict:
-    detections, image = detector_service.detect_image(image_data, detector, confidence)
+    detections, image = detector_service.detect_image(
+        image_data, detector, confidence, processor
+    )
 
     dets_json = [
         {
@@ -217,6 +230,7 @@ async def detect_video(
     file: UploadFile = File(...),
     detector: str | None = None,
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
+    processor: str | None = _processor_hint(),
 ):
     if not file.content_type or not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
@@ -238,6 +252,7 @@ async def detect_video(
             tmp_path,
             detector,
             confidence,
+            processor,
         )
 
         return {
@@ -324,6 +339,7 @@ async def detect_webcam(
     device: str = "0",
     snapshot_enabled: bool = True,
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
+    processor: str | None = _processor_hint(),
 ):
     # The webcam stream posts detections to the backend's internal API and
     # exposes live stats; it must be guarded like the stats endpoint so a
@@ -426,7 +442,11 @@ async def detect_webcam(
 
                 consecutive_failures = 0
                 frame_no += 1
-                detections = detector_obj.detect(frame, confidence_threshold=confidence)
+                detections = detector_obj.detect(
+                    frame,
+                    confidence_threshold=confidence,
+                    processor=processor,
+                )
                 tracked = tracker.update(
                     [
                         {

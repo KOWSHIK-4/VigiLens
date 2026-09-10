@@ -47,6 +47,7 @@ class DetectorService:
                 entry["consecutive_failures"] = ds.consecutive_failures
                 entry["total_inferences"] = ds.total_inferences
                 entry["total_failures"] = ds.total_failures
+                entry["device"] = ds.device
                 if ds.last_error:
                     entry["last_error"] = ds.last_error
             result.append(entry)
@@ -67,6 +68,7 @@ class DetectorService:
                 info["last_inference_at"] = ds.last_inference_at
                 info["total_inferences"] = ds.total_inferences
                 info["total_failures"] = ds.total_failures
+                info["device"] = ds.device
                 info["consecutive_failures"] = ds.consecutive_failures
                 if ds.last_error:
                     info["last_error"] = ds.last_error
@@ -81,6 +83,7 @@ class DetectorService:
         image_data: bytes,
         detector_name: str | None = None,
         confidence_threshold: float | None = None,
+        processor: str | None = None,
     ) -> tuple[List[Detection], np.ndarray]:
         if not image_data or len(image_data) == 0:
             raise ValueError("Empty image data provided for inference")
@@ -97,7 +100,11 @@ class DetectorService:
 
         detector = self.get(detector_name)
         try:
-            detections = detector.detect(image, confidence_threshold=confidence_threshold)
+            detections = detector.detect(
+                image,
+                confidence_threshold=confidence_threshold,
+                processor=processor,
+            )
         except InferenceError:
             raise
         except Exception as exc:
@@ -112,6 +119,7 @@ class DetectorService:
         video_path: str,
         detector_name: str | None = None,
         confidence_threshold: float | None = None,
+        processor: str | None = None,
     ) -> tuple[list, str]:
         detector = self.get(detector_name)
 
@@ -147,7 +155,11 @@ class DetectorService:
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    detections = detector.detect(frame, confidence_threshold=confidence_threshold)
+                    detections = detector.detect(
+                        frame,
+                        confidence_threshold=confidence_threshold,
+                        processor=processor,
+                    )
                     annotated = detector.draw(frame, detections)
                     writer.write(annotated)
                     all_detections.append(
