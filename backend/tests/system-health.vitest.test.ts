@@ -78,6 +78,8 @@ const baseLoop: MonitorLoop = {
   lastErrorAt: null,
   lastProcessingTimeMs: 145,
   videoPosSeconds: 0,
+  runsStarted: 1,
+  runsSucceeded: 1,
 };
 
 const schedulerStatus: MonitorStatus = {
@@ -91,6 +93,9 @@ const schedulerStatus: MonitorStatus = {
   errorCount: 1,
   lastTickAt: "2026-09-08T09:59:59.000Z",
   nextTickAt: "2026-09-08T10:00:01.000Z",
+  tickCount: 100,
+  lastTickDurationMs: 14,
+  lastTickError: null,
   loops: [baseLoop],
 };
 
@@ -103,6 +108,9 @@ describe("toSchedulerSummary", () => {
     expect(summary.framesProcessed).toBe(12);
     expect(summary.detectionsCreated).toBe(3);
     expect(summary.errorCount).toBe(1);
+    expect(summary.tickCount).toBe(100);
+    expect(summary.lastTickDurationMs).toBe(14);
+    expect(summary.lastTickError).toBeNull();
     expect(summary.loops).toHaveLength(1);
   });
 
@@ -114,6 +122,8 @@ describe("toSchedulerSummary", () => {
     expect(loop.consecutiveFailures).toBe(0);
     expect(loop.lastProcessingTimeMs).toBe(145);
     expect(loop.videoPosSeconds).toBe(0);
+    expect(loop.runsStarted).toBe(1);
+    expect(loop.runsSucceeded).toBe(1);
     expect("url" in loop).toBe(false);
   });
 });
@@ -131,6 +141,8 @@ describe("toSchedulerLoopSummary", () => {
       framesProcessed: 12,
       detectionsCreated: 3,
       videoPosSeconds: 0,
+      runsStarted: 1,
+      runsSucceeded: 1,
     });
   });
 });

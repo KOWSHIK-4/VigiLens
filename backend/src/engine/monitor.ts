@@ -63,6 +63,10 @@ export interface MonitorLoop {
   lastErrorAt: string | null;
   lastProcessingTimeMs: number | null;
   videoPosSeconds: number;
+  /** Attempts since the scheduler started (or the loop was created). */
+  runsStarted: number;
+  /** Successful attempts since the scheduler started. */
+  runsSucceeded: number;
 }
 
 export interface MonitorStatus {
@@ -76,6 +80,12 @@ export interface MonitorStatus {
   errorCount: number;
   lastTickAt: string | null;
   nextTickAt: string | null;
+  /** Completed scheduler ticks since start (diagnostics). */
+  tickCount: number;
+  /** Wall-clock duration of the most recent scheduler tick. */
+  lastTickDurationMs: number | null;
+  /** Error message from the most recent failed tick, if any. */
+  lastTickError: string | null;
   loops: MonitorLoop[];
 }
 
@@ -111,6 +121,8 @@ interface LoopRuntimeState {
   lastErrorAt: Date | null;
   lastProcessingTimeMs: number | null;
   videoPosSeconds: number;
+  runsStarted: number;
+  runsSucceeded: number;
 }
 
 /** Frame source backed by the AI service `/capture` endpoint. */
@@ -179,6 +191,8 @@ function toMonitorLoop(model: {
     lastErrorAt: null,
     lastProcessingTimeMs: null,
     videoPosSeconds: 0,
+    runsStarted: 0,
+    runsSucceeded: 0,
   }));
 }
 
@@ -219,6 +233,9 @@ export class MonitorScheduler {
   private lastTickAt: Date | null = null;
   private nextTickAt: Date | null = null;
   private tickInFlight = false;
+  private tickCount = 0;
+  private lastTickDurationMs: number | null = null;
+  private lastTickError: string | null = null;
   private readonly loopStates = new Map<string, LoopRuntimeState>();
 
   constructor(options: {
@@ -245,6 +262,9 @@ export class MonitorScheduler {
     this.loopStates.clear();
     this.lastTickAt = null;
     this.nextTickAt = new Date(Date.now() + this.tickMs);
+    this.tickCount = 0;
+    this.lastTickDurationMs = null;
+    this.lastTickError = null;
     this.timer = setInterval(() => {
       void this.tick();
     }, this.tickMs);
@@ -264,7 +284,12 @@ export class MonitorScheduler {
   }
 
   async getStatus(): Promise<MonitorStatus> {
-    const loops = await this.loadLoops();
+    let loops: MonitorLoop[] = [];
+    try {
+      loops = await this.loadLoops();
+    } catch (err) {
+      this.lastTickError = err instanceof Error ? err.message : String(err);
+    }
     const currentIds = new Set(loops.map((l) => l.id));
     for (const id of [...this.loopStates.keys()]) {
       if (!currentIds.has(id)) this.loopStates.delete(id);
@@ -292,6 +317,9 @@ export class MonitorScheduler {
       errorCount: total.errorCount,
       lastTickAt: this.lastTickAt?.toISOString() ?? null,
       nextTickAt: this.nextTickAt?.toISOString() ?? null,
+      tickCount: this.tickCount,
+      lastTickDurationMs: this.lastTickDurationMs,
+      lastTickError: this.lastTickError,
       loops: merged,
     };
   }
@@ -301,16 +329,21 @@ export class MonitorScheduler {
     this.tickInFlight = true;
     this.lastTickAt = new Date();
     this.nextTickAt = new Date(Date.now() + this.tickMs);
+    const tickStarted = process.hrtime.bigint();
     try {
       const loops = await this.loadLoops();
       const due = loops.filter((loop) => this.isDue(loop));
       if (due.length > 0) {
         await Promise.all(due.map((loop) => this.runLoop(loop)));
       }
+      this.lastTickError = null;
     } catch (err) {
-      logger.error("Monitor tick failed", { error: err instanceof Error ? err.message : String(err) });
+      this.lastTickError = err instanceof Error ? err.message : String(err);
+      logger.error("Monitor tick failed", { error: this.lastTickError });
     } finally {
       this.tickInFlight = false;
+      this.tickCount += 1;
+      this.lastTickDurationMs = Math.round(Number(process.hrtime.bigint() - tickStarted) / 1e6);
     }
   }
 
@@ -349,6 +382,8 @@ export class MonitorScheduler {
         lastErrorAt: null,
         lastProcessingTimeMs: null,
         videoPosSeconds: 0,
+        runsStarted: 0,
+        runsSucceeded: 0,
       };
       this.loopStates.set(loop.id, state);
     }
@@ -363,6 +398,7 @@ export class MonitorScheduler {
     state.status = "running";
     state.lastRunAt = new Date();
     state.nextRunAt = new Date(Date.now() + state.intervalMs);
+    state.runsStarted += 1;
     const started = process.hrtime.bigint();
 
     try {
@@ -372,6 +408,7 @@ export class MonitorScheduler {
 
       state.status = "ok";
       state.lastSuccessAt = new Date();
+      state.runsSucceeded += 1;
       state.framesProcessed += 1;
       state.detectionsCreated += result.detections.length;
       state.consecutiveFailures = 0;
@@ -427,6 +464,8 @@ export class MonitorScheduler {
       lastErrorAt: state.lastErrorAt?.toISOString() ?? null,
       lastProcessingTimeMs: state.lastProcessingTimeMs,
       videoPosSeconds: state.videoPosSeconds,
+      runsStarted: state.runsStarted,
+      runsSucceeded: state.runsSucceeded,
     };
   }
 }

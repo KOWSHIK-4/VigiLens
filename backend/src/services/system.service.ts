@@ -113,6 +113,8 @@ export interface SchedulerLoopSummary {
   lastErrorAt: string | null;
   lastProcessingTimeMs: number | null;
   videoPosSeconds: number;
+  runsStarted: number;
+  runsSucceeded: number;
 }
 
 export interface MonitorSchedulerSummary {
@@ -126,6 +128,9 @@ export interface MonitorSchedulerSummary {
   errorCount: number;
   lastTickAt: string | null;
   nextTickAt: string | null;
+  tickCount: number;
+  lastTickDurationMs: number | null;
+  lastTickError: string | null;
   loops: SchedulerLoopSummary[];
 }
 
@@ -182,6 +187,8 @@ export function toSchedulerLoopSummary(loop: MonitorLoop): SchedulerLoopSummary 
     lastErrorAt: loop.lastErrorAt,
     lastProcessingTimeMs: loop.lastProcessingTimeMs,
     videoPosSeconds: loop.videoPosSeconds,
+    runsStarted: loop.runsStarted,
+    runsSucceeded: loop.runsSucceeded,
   };
 }
 
@@ -197,6 +204,9 @@ export function toSchedulerSummary(status: MonitorStatus): MonitorSchedulerSumma
     errorCount: status.errorCount,
     lastTickAt: status.lastTickAt,
     nextTickAt: status.nextTickAt,
+    tickCount: status.tickCount,
+    lastTickDurationMs: status.lastTickDurationMs,
+    lastTickError: status.lastTickError,
     loops: status.loops.map(toSchedulerLoopSummary),
   };
 }

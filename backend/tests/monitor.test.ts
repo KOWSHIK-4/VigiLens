@@ -40,6 +40,8 @@ function loop(overrides: Partial<MonitorLoop> = {}): MonitorLoop {
     lastErrorAt: null,
     lastProcessingTimeMs: null,
     videoPosSeconds: 0,
+    runsStarted: 0,
+    runsSucceeded: 0,
     ...overrides,
   };
 }
@@ -166,6 +168,19 @@ async function run() {
     } else {
       fail("nextRunAt", status.loops[0]);
     }
+    if (status.loops[0].runsStarted >= 1 && status.loops[0].runsSucceeded >= 1) {
+      ok("successful run counts runsStarted and runsSucceeded");
+    } else {
+      fail("run counters after success", status.loops[0]);
+    }
+    if (status.tickCount >= 1 && status.lastTickDurationMs !== null) {
+      ok("tick diagnostics surface tickCount and lastTickDurationMs");
+    } else {
+      fail("tick diagnostics", {
+        tickCount: status.tickCount,
+        lastTickDurationMs: status.lastTickDurationMs,
+      });
+    }
 
     scheduler.stop();
     if (!scheduler.isRunning()) ok("stop() stops the scheduler");
@@ -219,6 +234,11 @@ async function run() {
       } else {
         fail("error state details", l);
       }
+      if (l.runsStarted >= 1 && l.runsSucceeded === 0) {
+        ok("failed run counts as started but not succeeded");
+      } else {
+        fail("run counters after failure", l);
+      }
     } else {
       fail("error recorded", "no error surfaced");
     }
@@ -240,6 +260,39 @@ async function run() {
     } else {
       fail("counters after recovery", s.loops[0]);
     }
+    scheduler.stop();
+  }
+
+  {
+    const source = new FakeFrameSource();
+    const runner = new FakeRunner();
+    let loadFailure = true;
+    const scheduler = new MonitorScheduler({
+      frameSource: source,
+      runner,
+      loadLoops: async () => {
+        if (loadFailure) {
+          loadFailure = false;
+          throw new Error("load failed");
+        }
+        return [loop({ id: "loop-load" })];
+      },
+      tickMs: 20,
+    });
+    scheduler.start();
+    const recorded = await waitFor(async () => {
+      const s = await scheduler.getStatus();
+      return s.lastTickError === "load failed";
+    });
+    if (recorded) ok("tick failure surfaces lastTickError");
+    else fail("lastTickError", "not recorded");
+
+    const recovered = await waitFor(async () => {
+      const s = await scheduler.getStatus();
+      return s.tickCount >= 2 && s.lastTickError === null && s.loops[0].framesProcessed >= 1;
+    });
+    if (recovered) ok("tick error clears after loadLoops recovers");
+    else fail("tick recovery", "lastTickError not cleared");
     scheduler.stop();
   }
 
