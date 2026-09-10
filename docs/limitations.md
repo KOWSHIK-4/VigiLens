@@ -47,17 +47,27 @@ Honest list of what VigiLens does and does not do in its current form.
 
 ## Data & metrics
 
-- Detection timestamps use server time; cross-region deployments would need
-  timezone-aware reporting.
+- Detection and audit timestamps are stored as absolute instants. Analytics
+  accept an optional `tz` IANA parameter (e.g. `tz=Asia/Kolkata`) so daily
+  buckets, hour-of-day timelines and "today"/period windows align with the
+  reporting user's clock; without it, the database server's time zone is used.
 - Per-frame metrics are aggregated in memory (`metricsByKey`); long-running
   processes accumulate counters until a detector restart.
-- CSV export streams all matching rows into memory before sending — very
-  large ranges should use filters.
+- CSV export streams matching rows in bounded, ordered batches with write
+  backpressure, so export memory stays flat regardless of result size.
+- Detection snapshots and recordings are cleaned by the `npm run prune:media`
+  tool (`backend/src/scripts/pruneMedia.ts`). It honours the
+  `image_retention_days`, `video_retention_days` and `max_storage_gb` storage
+  settings, also purges expired detection rows (cascading to alerts), and only
+  ever touches `snapshots/` and `recordings/` beneath the storage root. It is
+  a CLI tool: operators must schedule it (e.g. cron) at the
+  `cleanup_interval_days` cadence — no in-process scheduler runs it yet.
 
 ## Frontend
 
 - The live camera page uses the AI service's `/detect/webcam` MJPEG stream
   and polls stats; it is a demo-grade viewer, not a low-latency WebRTC
   player.
-- Snapshot thumbnails are served from the backend media root; clean up old
-  files with external tooling.
+- Snapshot thumbnails are served from the backend media root; the
+  `npm run prune:media` tool (and its settings-backed retention/quotas) keeps
+  those files bounded.
