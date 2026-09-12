@@ -15,6 +15,7 @@ import auditLogRoutes from "./auditLog.routes";
 import settingsRoutes from "./settings.routes";
 import systemRoutes from "./system.routes";
 import monitorRoutes from "./monitor.routes";
+import realtimeRoutes from "./realtime.routes";
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use("/audit-logs", auditLogRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/system", systemRoutes);
 router.use("/monitor", monitorRoutes);
+router.use("/realtime", realtimeRoutes);
 
 export default router;

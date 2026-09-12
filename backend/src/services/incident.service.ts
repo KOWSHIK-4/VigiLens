@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
+import { publishIncidentChanged } from "./realtime.service";
 import type {
   IncidentQueryInput,
   CreateIncidentInput,
@@ -229,6 +230,8 @@ export const incidentService = {
       metadata: { alertSeverity: alert.severity, priority },
     });
 
+    publishIncidentChanged({ id: incident.id, status: incident.status, action: "created" });
+
     return prisma.incident.findUnique({
       where: { id: incident.id },
       include: incidentInclude,
@@ -315,6 +318,8 @@ export const incidentService = {
       ctx,
       metadata: { previousStatus: incident.status, nextStatus: input.status },
     });
+
+    publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed" });
 
     return updated;
   },

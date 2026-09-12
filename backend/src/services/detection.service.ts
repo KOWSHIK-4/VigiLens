@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
+import { publishAlertCreated } from "./realtime.service";
 import {
   correlationService,
   correlationMessageSuffix,
@@ -298,6 +299,8 @@ export const detectionService = {
       description: `Alert created: ${title}`,
       metadata: { alertId: alert.id, detectionId: detection.id, severity },
     });
+
+    publishAlertCreated(alert);
 
     if (input.applyAlertCooldown) {
       const key = `${input.detectorKey ?? input.label}:${input.cameraId}:${input.label}`;

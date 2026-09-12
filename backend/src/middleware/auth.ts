@@ -23,13 +23,23 @@ export async function authenticate(
   next: NextFunction,
 ) {
   const header = req.headers.authorization;
+  // EventSource cannot set the Authorization header, so the realtime stream
+  // endpoint (`/api/realtime/events`) authenticates with a short-lived
+  // ?token= query parameter instead. The fallback is intentionally limited
+  // to that single route so JWTs never travel in URLs elsewhere.
+  const isRealtimeStream =
+    req.originalUrl?.split("?")[0] === "/api/realtime/events";
+  const queryToken =
+    isRealtimeStream && typeof req.query.token === "string" && req.query.token.length > 0
+      ? req.query.token
+      : undefined;
 
-  if (!header?.startsWith("Bearer ")) {
+  if (!header?.startsWith("Bearer ") && !queryToken) {
     return apiError(res, "Authentication required", 401);
   }
 
   try {
-    const token = header.split(" ")[1];
+    const token = queryToken ?? header!.split(" ")[1];
     const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
     req.userId = decoded.userId;
     req.userRole = decoded.role;

@@ -40,6 +40,7 @@ import ModelStatusBadge from "@/components/ModelStatusBadge";
 import DetectionImagePreview from "@/components/DetectionImagePreview";
 import DetectionDetailsDrawer from "@/components/DetectionDetailsDrawer";
 import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
+import LiveEventsPanel from "@/components/LiveEventsPanel";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { formatRelativeTime } from "@/utils/format";
@@ -527,6 +528,8 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {canSeeAlerts && <LiveEventsPanel />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {canSeeAlerts && (

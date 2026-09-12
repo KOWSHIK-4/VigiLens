@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
+import { publishAlertCreated } from "./realtime.service";
 import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
@@ -57,7 +58,7 @@ function buildAlertWhere(params: Pick<AlertQueryInput, "severity" | "isRead" | "
 
 export const alertService = {
   async create(input: CreateAlertInput) {
-    return prisma.alert.create({
+    const alert = await prisma.alert.create({
       data: {
         detectionId: input.detectionId,
         severity: input.severity,
@@ -66,6 +67,8 @@ export const alertService = {
       },
       include: alertInclude,
     });
+    publishAlertCreated(alert);
+    return alert;
   },
 
   async findAll(params: AlertQueryInput) {
