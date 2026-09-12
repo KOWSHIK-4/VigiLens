@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
 import { publishAlertCreated } from "./realtime.service";
+import { webhookService } from "./webhook.service";
 import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
@@ -68,6 +69,7 @@ export const alertService = {
       include: alertInclude,
     });
     publishAlertCreated(alert);
+    void webhookService.dispatchAlertCreated(alert);
     return alert;
   },
 

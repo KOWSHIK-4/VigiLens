@@ -2,6 +2,7 @@ export {
   getSettingCategories,
   getSettingCategory,
   getSettingDefinition,
+  isHttpUrl,
   isValidSettingValue,
 } from "./defaults";
 export type {

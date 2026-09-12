@@ -9,6 +9,7 @@ import type {
 import { logAudit } from "../utils/auditLog";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
 import { publishAlertCreated } from "./realtime.service";
+import { webhookService } from "./webhook.service";
 import {
   correlationService,
   correlationMessageSuffix,
@@ -301,6 +302,7 @@ export const detectionService = {
     });
 
     publishAlertCreated(alert);
+    void webhookService.dispatchAlertCreated(alert);
 
     if (input.applyAlertCooldown) {
       const key = `${input.detectorKey ?? input.label}:${input.cameraId}:${input.label}`;

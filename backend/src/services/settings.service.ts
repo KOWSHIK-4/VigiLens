@@ -10,6 +10,7 @@ import {
   getSettingCategories,
   getSettingCategory,
   getSettingDefinition,
+  isHttpUrl,
   isValidSettingValue,
 } from "../settings";
 import type { Prisma, SystemSetting, SystemSettingCategory } from "@prisma/client";
@@ -145,6 +146,15 @@ export const settingsService = {
         throw new ApiError(400, `Unknown setting "${key}" in category "${category}"`);
       }
       if (!isValidSettingValue(def, value)) {
+        throw new ApiError(400, `Invalid value for setting "${key}"`);
+      }
+      if (
+        category === "notifications" &&
+        key === "webhook_url" &&
+        typeof value === "string" &&
+        value.length > 0 &&
+        !isHttpUrl(value)
+      ) {
         throw new ApiError(400, `Invalid value for setting "${key}"`);
       }
     }

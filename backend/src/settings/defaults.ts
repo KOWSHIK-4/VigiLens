@@ -343,6 +343,41 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         type: "string",
         defaultValue: "08:00",
       },
+      {
+        key: "webhook_enabled",
+        label: "Webhook notifications",
+        description: "Deliver alert and incident events to a webhook endpoint.",
+        type: "boolean",
+        defaultValue: false,
+      },
+      {
+        key: "webhook_url",
+        label: "Webhook URL",
+        description: "HTTP(S) endpoint that receives signed webhook events.",
+        type: "string",
+        defaultValue: "",
+      },
+      {
+        key: "webhook_secret",
+        label: "Webhook secret",
+        description: "Shared secret used to sign webhook payloads (HMAC-SHA256).",
+        type: "string",
+        defaultValue: "",
+      },
+      {
+        key: "webhook_alert_created_enabled",
+        label: "Alert webhooks",
+        description: "Send a webhook when a new alert is raised.",
+        type: "boolean",
+        defaultValue: true,
+      },
+      {
+        key: "webhook_incident_changed_enabled",
+        label: "Incident webhooks",
+        description: "Send a webhook when an incident is created or changes status.",
+        type: "boolean",
+        defaultValue: true,
+      },
     ],
   },
   {
@@ -559,6 +594,16 @@ export function getSettingDefinition(
   key: string,
 ): SettingDefinition | undefined {
   return settingsByKey.get(`${category}:${key}`);
+}
+
+export function isHttpUrl(value: string): boolean {
+  if (value.length > 500) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function isValidSettingValue(def: SettingDefinition, value: unknown): value is SettingValue {
