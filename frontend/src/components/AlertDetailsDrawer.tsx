@@ -1,7 +1,12 @@
-import { useEffect, useRef } from "react";
-import { Camera, Clock, Layers, ShieldAlert, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Camera, Clock, Layers, ShieldAlert, X, Loader2 } from "lucide-react";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatDateTime } from "@/utils/format";
+import { incidentService } from "@/services/incidents";
+import { showToast } from "@/utils/toast";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 import type { Alert, CorrelationSummary, DetectionWithCamera } from "@/types";
 
 interface AlertDetailsDrawerProps {
@@ -16,9 +21,34 @@ export default function AlertDetailsDrawer({
   onViewDetection,
 }: AlertDetailsDrawerProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = hasPermission(user, "alerts.manage");
+  const [incidentOpened, setIncidentOpened] = useState(false);
+
+  const createIncidentMutation = useMutation({
+    mutationFn: (alertId: string) => incidentService.create({ alertId }),
+    onSuccess: (incident) => {
+      setIncidentOpened(true);
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      showToast({
+        severity: "info",
+        title: "Incident opened",
+        message: `Incident ${incident.id.slice(0, 8)} created from this alert.`,
+      });
+    },
+    onError: () => {
+      showToast({
+        severity: "critical",
+        title: "Incident creation failed",
+        message: "Could not open an incident for this alert.",
+      });
+    },
+  });
 
   useEffect(() => {
     if (!alert) return;
+    setIncidentOpened(false);
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -143,6 +173,29 @@ export default function AlertDetailsDrawer({
                   >
                     <ShieldAlert className="w-4 h-4" />
                     View detection details
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    onClick={() => createIncidentMutation.mutate(alert.id)}
+                    disabled={createIncidentMutation.isPending || alert.incident?.id !== undefined}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium disabled:opacity-60"
+                    title={
+                      alert.incident?.id
+                        ? "An incident already exists for this alert"
+                        : "Create a security incident from this alert"
+                    }
+                  >
+                    {createIncidentMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Layers className="w-4 h-4" />
+                    )}
+                    {alert.incident?.id
+                      ? "Incident opened"
+                      : incidentOpened
+                        ? "Incident opened"
+                        : "Open incident"}
                   </button>
                 )}
               </div>

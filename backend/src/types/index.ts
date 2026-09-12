@@ -225,6 +225,58 @@ export const alertIdSchema = z.object({ id: z.string().uuid() });
 
 export type AlertQueryInput = z.infer<typeof alertQuerySchema>;
 
+export const incidentStatusSchema = z.enum([
+  "new",
+  "acknowledged",
+  "investigating",
+  "resolved",
+  "reopened",
+]);
+
+export const incidentQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  status: incidentStatusSchema.optional(),
+  priority: alertSeveritySchema.optional(),
+  assignedTo: z.string().uuid().optional(),
+  search: z.string().max(200).optional(),
+  sortBy: z
+    .enum(["status", "priority", "openedAt", "createdAt", "updatedAt", "title"])
+    .optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export const incidentIdSchema = z.object({ id: z.string().uuid("Invalid incident id") });
+
+export const createIncidentSchema = z.object({
+  alertId: z.string().uuid("Invalid alert id"),
+  priority: alertSeveritySchema.optional(),
+  description: z.string().max(2000).default(""),
+});
+
+export const updateIncidentStatusSchema = z.object({
+  status: incidentStatusSchema,
+});
+
+export const updateIncidentPrioritySchema = z.object({
+  priority: alertSeveritySchema,
+});
+
+export const assignIncidentSchema = z.object({
+  assigneeId: z.string().uuid("Invalid user id").nullable(),
+});
+
+export const addIncidentNoteSchema = z.object({
+  body: z.string().trim().min(1, "Note body is required").max(4000),
+});
+
+export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;
+export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
+export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;
+export type UpdateIncidentPriorityInput = z.infer<typeof updateIncidentPrioritySchema>;
+export type AssignIncidentInput = z.infer<typeof assignIncidentSchema>;
+export type AddIncidentNoteInput = z.infer<typeof addIncidentNoteSchema>;
+
 export const cameraIdSchema = z.object({ id: z.string().uuid() });
 export const detectionIdSchema = z.object({ id: z.string().uuid() });
 export const auditLogIdSchema = z.object({ id: z.string().uuid() });
@@ -447,6 +499,9 @@ export const auditLogQuerySchema = z.object({
     "detector_config_updated", "detector_cameras_updated",
     "monitor_started", "monitor_stopped",
     "alert_created", "report_generated", "settings_changed",
+    "incident_created", "incident_status_changed", "incident_assigned",
+    "incident_unassigned", "incident_note_added", "incident_reopened",
+    "incident_resolved",
   ]).optional(),
   module: z.string().optional(),
   status: z.enum(["success", "failed"]).optional(),

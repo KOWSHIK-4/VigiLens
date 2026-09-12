@@ -3,6 +3,13 @@ import { ApiError } from "../utils/errors";
 import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
+const alertInclude = {
+  detection: { include: { camera: true } },
+  incident: {
+    select: { id: true, status: true },
+  },
+} satisfies Prisma.AlertInclude;
+
 interface CreateAlertInput {
   detectionId: string;
   severity: AlertSeverity;
@@ -57,7 +64,7 @@ export const alertService = {
         title: input.title,
         message: input.message,
       },
-      include: { detection: { include: { camera: true } } },
+      include: alertInclude,
     });
   },
 
@@ -67,7 +74,7 @@ export const alertService = {
     const [data, total] = await Promise.all([
       prisma.alert.findMany({
         where,
-        include: { detection: { include: { camera: true } } },
+        include: alertInclude,
         orderBy: { createdAt: "desc" },
         skip: (params.page - 1) * params.limit,
         take: params.limit,
@@ -114,7 +121,7 @@ export const alertService = {
     return prisma.alert.update({
       where: { id },
       data: { isRead: true },
-      include: { detection: { include: { camera: true } } },
+      include: alertInclude,
     });
   },
 
@@ -139,7 +146,7 @@ export const alertService = {
 
   async getLatest(limit = 10) {
     return prisma.alert.findMany({
-      include: { detection: { include: { camera: true } } },
+      include: alertInclude,
       orderBy: { createdAt: "desc" },
       take: limit,
     });

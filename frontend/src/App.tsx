@@ -16,6 +16,7 @@ const DetectionsPage = lazy(() => import("@/pages/DetectionsPage"));
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
 const LiveCameraPage = lazy(() => import("@/pages/LiveCameraPage"));
 const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
+const IncidentsPage = lazy(() => import("@/pages/IncidentsPage"));
 const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
 const DetectorsPage = lazy(() => import("@/pages/DetectorsPage"));
@@ -128,6 +129,14 @@ const router = createBrowserRouter([
         element: (
           <LazyRoute>
             <AlertsPage />
+          </LazyRoute>
+        ),
+      },
+      {
+        path: "incidents",
+        element: (
+          <LazyRoute>
+            <IncidentsPage />
           </LazyRoute>
         ),
       },

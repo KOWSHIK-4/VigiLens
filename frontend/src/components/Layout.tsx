@@ -17,6 +17,7 @@ import {
   Activity,
   Menu,
   LogOut,
+  LifeBuoy,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { alertService } from "@/services/alerts";
@@ -224,6 +225,7 @@ export default function Layout() {
             </>
           )}
           {hasPermission(user, "alerts.read") && (
+            <>
             <Link
               to="/alerts"
               className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -242,6 +244,18 @@ export default function Layout() {
                 </span>
               )}
             </Link>
+            <Link
+              to="/incidents"
+              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                location.pathname === "/incidents"
+                  ? "bg-brand-600 text-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+            >
+              <LifeBuoy className="w-4 h-4 mr-3" />
+              Incidents
+            </Link>
+            </>
           )}
         </nav>
 

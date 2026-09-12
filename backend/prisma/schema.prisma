@@ -67,6 +67,8 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 
+  incidents Incident[]
+
   @@index([role])
   @@index([status])
   @@index([lastLogin])
@@ -194,11 +196,75 @@ model Alert {
   createdAt   DateTime      @default(now()) @map("created_at")
 
   detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+  incident  Incident?
 
   @@index([severity])
   @@index([isRead])
   @@index([createdAt])
   @@map("alerts")
+}
+
+model Incident {
+  id               String         @id @default(uuid())
+  alertId          String         @unique @map("alert_id")
+  status           IncidentStatus @default(new)
+  priority         AlertSeverity  @default(info)
+  assignedToUserId String?        @map("assigned_to_user_id")
+  assignedToName   String?        @map("assigned_to_name")
+  title            String
+  description      String         @default("")
+  openedAt         DateTime       @default(now()) @map("opened_at")
+  acknowledgedAt   DateTime?      @map("acknowledged_at")
+  investigatingAt  DateTime?      @map("investigating_at")
+  resolvedAt       DateTime?      @map("resolved_at")
+  resolvedById     String?        @map("resolved_by_id")
+  resolvedByName   String?        @map("resolved_by_name")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  alert    Alert              @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  assignedTo User?             @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  notes    IncidentNote[]
+  activity IncidentActivity[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToUserId])
+  @@index([openedAt])
+  @@index([createdAt])
+  @@map("incidents")
+}
+
+model IncidentNote {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  authorId   String   @map("author_id")
+  authorName String   @map("author_name")
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@index([createdAt])
+  @@map("incident_notes")
+}
+
+model IncidentActivity {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  action     String
+  authorId   String   @map("author_id")
+  authorName String   @map("author_name")
+  fromValue  String?  @map("from_value")
+  toValue    String?  @map("to_value")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@index([createdAt])
+  @@map("incident_activity")
 }
 
 enum ReportType {
@@ -269,11 +335,26 @@ enum AuditLogAction {
   alert_created
   report_generated
   settings_changed
+  incident_created
+  incident_status_changed
+  incident_assigned
+  incident_unassigned
+  incident_note_added
+  incident_reopened
+  incident_resolved
 }
 
 enum AuditLogStatus {
   success
   failed
+}
+
+enum IncidentStatus {
+  new
+  acknowledged
+  investigating
+  resolved
+  reopened
 }
 
 enum ModelStatus {

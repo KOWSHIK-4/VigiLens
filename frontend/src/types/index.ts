@@ -229,6 +229,82 @@ export interface Alert {
   isRead: boolean;
   createdAt: string;
   detection?: DetectionWithCamera;
+  incident?: Pick<Incident, "id" | "status"> | null;
+}
+
+export type IncidentStatus = "new" | "acknowledged" | "investigating" | "resolved" | "reopened";
+
+export interface IncidentNote {
+  id: string;
+  incidentId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface IncidentActivity {
+  id: string;
+  incidentId: string;
+  action: string;
+  authorId: string;
+  authorName: string;
+  fromValue: string | null;
+  toValue: string | null;
+  createdAt: string;
+}
+
+export interface IncidentAssignee {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface Incident {
+  id: string;
+  alertId: string;
+  status: IncidentStatus;
+  priority: "info" | "warning" | "critical";
+  assignedToUserId: string | null;
+  assignedToName: string | null;
+  title: string;
+  description: string;
+  openedAt: string;
+  acknowledgedAt: string | null;
+  investigatingAt: string | null;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  resolvedByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  alert?: Alert;
+  notes?: IncidentNote[];
+  activity?: IncidentActivity[];
+  assignedTo?: IncidentAssignee | null;
+}
+
+export interface IncidentFilters {
+  page?: number;
+  limit?: number;
+  status?: IncidentStatus;
+  priority?: "info" | "warning" | "critical";
+  assignedTo?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface IncidentSummary {
+  total: number;
+  open: number;
+  resolved: number;
+  byStatus: Record<string, number>;
+}
+
+export interface CreateIncidentInput {
+  alertId: string;
+  priority?: "info" | "warning" | "critical";
+  description?: string;
 }
 
 export interface DashboardStats {
