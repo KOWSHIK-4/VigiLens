@@ -251,6 +251,35 @@ export const correlationService = {
   },
 
   /**
+   * Persist the same correlation summary onto many detections in one read
+   * plus a single transaction of writes (instead of a findUnique + update per
+   * member). Each row keeps its existing metadata keys — only the
+   * `correlation` key is overwritten, matching `annotateDetection`.
+   */
+  async annotateMembers(detectionIds: string[], summary: EventCorrelationSummary): Promise<void> {
+    if (!summary.correlated || detectionIds.length === 0) return;
+    const rows = await prisma.detection.findMany({
+      where: { id: { in: detectionIds } },
+      select: { id: true, metadata: true },
+    });
+    if (rows.length === 0) return;
+
+    await prisma.$transaction(
+      rows.map((row) => {
+        const metadata: Record<string, unknown> =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? { ...(row.metadata as Record<string, unknown>) }
+            : {};
+        metadata.correlation = summary;
+        return prisma.detection.update({
+          where: { id: row.id },
+          data: { metadata: metadata as Prisma.InputJsonValue },
+        });
+      }),
+    );
+  },
+
+  /**
    * Correlate a batch of detections persisted by one engine frame. One bucket
    * query per (camera, detector, class) group in the frame; when the bucket
    * holds at least two detections, the current frame's rows are annotated and
@@ -295,7 +324,7 @@ export const correlationService = {
 
       const summary = summarizeCorrelation(signals, windowMs, "engine");
       if (summary.correlated) {
-        await Promise.all(members.map((m) => this.annotateDetection(m.id, summary)));
+        await this.annotateMembers(members.map((m) => m.id), summary);
       }
       for (const m of members) result.set(m.id, summary);
     }

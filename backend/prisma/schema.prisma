@@ -183,6 +183,7 @@ model Detection {
   // column and order by timestamp DESC; composites avoid a sort step.
   @@index([cameraId, timestamp(sort: Desc)])
   @@index([detectorKey, timestamp(sort: Desc)])
+  @@index([status, timestamp(sort: Desc)], map: "detections_status_timestamp_idx")
   @@map("detections")
 }
 
@@ -198,9 +199,12 @@ model Alert {
   detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
   incident  Incident?
 
+  // Alert list queries filter by is_read/severity and order by created_at DESC.
   @@index([severity])
   @@index([isRead])
   @@index([createdAt])
+  @@index([isRead, createdAt(sort: Desc)], map: "alerts_is_read_created_at_idx")
+  @@index([severity, createdAt(sort: Desc)], map: "alerts_severity_created_at_idx")
   @@map("alerts")
 }
 
@@ -232,6 +236,11 @@ model Incident {
   @@index([assignedToUserId])
   @@index([openedAt])
   @@index([createdAt])
+  // Incident list queries filter by status/priority/assignee and default to
+  // opened_at DESC ordering; composites avoid a sort step per filtered list.
+  @@index([status, openedAt(sort: Desc)], map: "incidents_status_opened_at_idx")
+  @@index([priority, openedAt(sort: Desc)], map: "incidents_priority_opened_at_idx")
+  @@index([assignedToUserId, openedAt(sort: Desc)], map: "incidents_assigned_to_user_id_opened_at_idx")
   @@map("incidents")
 }
 
@@ -247,6 +256,7 @@ model IncidentNote {
 
   @@index([incidentId])
   @@index([createdAt])
+  @@index([incidentId, createdAt], map: "incident_notes_incident_id_created_at_idx")
   @@map("incident_notes")
 }
 
@@ -264,6 +274,7 @@ model IncidentActivity {
 
   @@index([incidentId])
   @@index([createdAt])
+  @@index([incidentId, createdAt], map: "incident_activity_incident_id_created_at_idx")
   @@map("incident_activity")
 }
 
@@ -459,5 +470,9 @@ model AuditLog {
   @@index([status])
   @@index([timestamp])
   @@index([email])
+  // Audit log lists filter by action/user/status and order by timestamp DESC.
+  @@index([action, timestamp(sort: Desc)], map: "audit_logs_action_timestamp_idx")
+  @@index([userId, timestamp(sort: Desc)], map: "audit_logs_user_id_timestamp_idx")
+  @@index([status, timestamp(sort: Desc)], map: "audit_logs_status_timestamp_idx")
   @@map("audit_logs")
 }

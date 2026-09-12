@@ -20,6 +20,10 @@ interface FindAllParams extends AuditLogQueryInput {
   limit: number;
 }
 
+const STATS_CACHE_TTL_MS = 5_000;
+let cachedStats: { data: unknown; expiresAt: number } | null = null;
+let cachedCharts: { data: unknown; expiresAt: number } | null = null;
+
 export const auditLogService = {
   async create(input: CreateAuditLogInput) {
     return prisma.auditLog.create({
@@ -158,6 +162,9 @@ export const auditLogService = {
   },
 
   async getStats() {
+    if (cachedStats && cachedStats.expiresAt > Date.now()) {
+      return cachedStats.data;
+    }
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -175,15 +182,20 @@ export const auditLogService = {
       }),
     ]);
 
-    return {
+    const data = {
       totalLogs,
       todayLogs,
       failedLogs,
       activeUsers: activeUsers.length,
     };
+    cachedStats = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    return data;
   },
 
   async getChartData() {
+    if (cachedCharts && cachedCharts.expiresAt > Date.now()) {
+      return cachedCharts.data;
+    }
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -219,11 +231,13 @@ export const auditLogService = {
       `,
     ]);
 
-    return {
+    const data = {
       actionsPerDay: actionsPerDay as { date: string; count: number }[],
       moduleUsage: moduleUsage as { module: string; count: number }[],
       statusDistribution: statusDistribution as { status: string; count: number }[],
       topUsers: topUsers as { username: string; email: string; count: number }[],
     };
+    cachedCharts = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    return data;
   },
 };

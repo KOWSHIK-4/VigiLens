@@ -154,6 +154,61 @@ function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhere
   return where;
 }
 
+const STATS_CACHE_TTL_MS = 5_000;
+let cachedStats: { data: unknown; expiresAt: number } | null = null;
+
+async function computeDetectionStats() {
+  const [
+    totalDetections,
+    criticalAlerts,
+    activeCameras,
+    recentDetections,
+    detectionsOverTime,
+    alertsByType,
+  ] = await Promise.all([
+    prisma.detection.count(),
+    prisma.detection.count({ where: { status: "critical" } }),
+    prisma.camera.count({ where: { status: "online" } }),
+    prisma.detection.findMany({
+      include: { camera: true },
+      orderBy: { timestamp: "desc" },
+      take: 10,
+    }),
+    prisma.$queryRaw`
+      SELECT DATE(timestamp) as date, COUNT(*)::int as count
+      FROM detections
+      WHERE timestamp >= NOW() - INTERVAL '7 days'
+      GROUP BY DATE(timestamp)
+      ORDER BY date ASC
+    `,
+    prisma.$queryRaw`
+      SELECT label, COUNT(*)::int as count
+      FROM detections
+      WHERE timestamp >= NOW() - INTERVAL '30 days'
+      GROUP BY label
+      ORDER BY count DESC
+      LIMIT 10
+    `,
+  ]);
+
+  const avgConfidence =
+    totalDetections > 0
+      ? await prisma.detection
+          .aggregate({ _avg: { confidence: true } })
+          .then((r: { _avg: { confidence: number | null } }) => r._avg.confidence ?? 0)
+      : 0;
+
+  return {
+    totalDetections,
+    criticalAlerts,
+    activeCameras,
+    avgConfidence,
+    detectionsOverTime: detectionsOverTime as { date: string; count: number }[],
+    alertsByType: alertsByType as { label: string; count: number }[],
+    recentDetections,
+  };
+}
+
 export const detectionService = {
   /**
    * Batch-persists detections produced by one engine frame in a single
@@ -400,54 +455,11 @@ export const detectionService = {
   },
 
   async getStats() {
-    const [
-      totalDetections,
-      criticalAlerts,
-      activeCameras,
-      recentDetections,
-      detectionsOverTime,
-      alertsByType,
-    ] = await Promise.all([
-      prisma.detection.count(),
-      prisma.detection.count({ where: { status: "critical" } }),
-      prisma.camera.count({ where: { status: "online" } }),
-      prisma.detection.findMany({
-        include: { camera: true },
-        orderBy: { timestamp: "desc" },
-        take: 10,
-      }),
-      prisma.$queryRaw`
-        SELECT DATE(timestamp) as date, COUNT(*)::int as count
-        FROM detections
-        WHERE timestamp >= NOW() - INTERVAL '7 days'
-        GROUP BY DATE(timestamp)
-        ORDER BY date ASC
-      `,
-      prisma.$queryRaw`
-        SELECT label, COUNT(*)::int as count
-        FROM detections
-        WHERE timestamp >= NOW() - INTERVAL '30 days'
-        GROUP BY label
-        ORDER BY count DESC
-        LIMIT 10
-      `,
-    ]);
-
-    const avgConfidence =
-      totalDetections > 0
-        ? await prisma.detection
-            .aggregate({ _avg: { confidence: true } })
-            .then((r: { _avg: { confidence: number | null } }) => r._avg.confidence ?? 0)
-        : 0;
-
-    return {
-      totalDetections,
-      criticalAlerts,
-      activeCameras,
-      avgConfidence,
-      detectionsOverTime: detectionsOverTime as { date: string; count: number }[],
-      alertsByType: alertsByType as { label: string; count: number }[],
-      recentDetections,
-    };
+    if (cachedStats && cachedStats.expiresAt > Date.now()) {
+      return cachedStats.data as Awaited<ReturnType<typeof computeDetectionStats>>;
+    }
+    const data = await computeDetectionStats();
+    cachedStats = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    return data;
   },
 };
