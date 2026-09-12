@@ -82,6 +82,23 @@ export interface ChangePasswordInput {
   newPassword: string;
 }
 
+export interface CorrelationSummary {
+  eventId: string;
+  correlated: boolean;
+  groupKey: string;
+  count: number;
+  relatedDetectionIds: string[];
+  trackIds: string[];
+  labels: string[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+  maxConfidence: number;
+  avgConfidence: number;
+  windowMs: number;
+  source: "engine" | "api";
+  reason: string;
+}
+
 export interface Detection {
   id: string;
   timestamp: string;
@@ -99,6 +116,8 @@ export interface Detection {
   processingTimeMs?: number | null;
   modelVersion?: string | null;
   snapshotUrl?: string | null;
+  /** Event correlation summary, present when the detection is part of a correlated event. */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface DetectionWithCamera extends Detection {

@@ -8,6 +8,11 @@ import type {
 } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
+import {
+  correlationService,
+  correlationMessageSuffix,
+  type EventCorrelationSummary,
+} from "./correlation";
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
 const alertCooldownRegistry = sharedAlertCooldownRegistry;
@@ -229,6 +234,33 @@ export const detectionService = {
       include: { camera: true },
     });
 
+    // Correlate the fresh detection into an event (best-effort). A missed
+    // bucket query must never fail an already-persisted detection.
+    let correlationSummary: EventCorrelationSummary | null = null;
+    try {
+      correlationSummary = await correlationService.correlateSingle({
+        id: detection.id,
+        cameraId: detection.cameraId,
+        detectorKey: detection.detectorKey ?? undefined,
+        className: detection.className ?? undefined,
+        label: detection.label,
+        timestamp: detection.timestamp,
+        confidence: detection.confidence,
+        trackId: detection.trackId ?? undefined,
+      });
+      if (correlationSummary?.correlated) {
+        detection.metadata = {
+          ...((detection.metadata ?? {}) as Record<string, unknown>),
+          correlation: correlationSummary,
+        } as unknown as Prisma.JsonValue;
+      }
+    } catch (err) {
+      logger.warn("Event correlation skipped for detection", {
+        detectionId: detection.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     if (input.skipAlert) {
       return detection;
     }
@@ -244,11 +276,12 @@ export const detectionService = {
 
     const severity = getAlertSeverity(detection.status);
     const title = getAlertTitle(detection.label, detection.status);
-    const message = getAlertMessage(
-      detection.label,
-      detection.confidence,
-      detection.camera?.name,
-    );
+    const message =
+      getAlertMessage(
+        detection.label,
+        detection.confidence,
+        detection.camera?.name,
+      ) + correlationMessageSuffix(correlationSummary);
 
     const alert = await prisma.alert.create({
       data: {

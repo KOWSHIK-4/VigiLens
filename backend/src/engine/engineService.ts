@@ -11,6 +11,7 @@ import { ApiError } from "../utils/errors";
 import { logger } from "../config/logger";
 import { detectionService } from "../services/detection.service";
 import { metricsService } from "../services/metrics.service";
+import { correlationService } from "../services/correlation";
 import { aiServiceClient, AiServiceError, type AiServiceClient } from "./aiClient";
 import { runtimeRegistry } from "./runtimeRegistry";
 import { lifecycleManager } from "./lifecycle";
@@ -115,6 +116,38 @@ export class DetectionPersistenceStage implements PersistenceStage {
     detections.forEach((d, index) => {
       detectionsOut.push({ ...d, id: createdRows[index]!.id });
     });
+
+    // Correlate the frame's detections into events using the detector's
+    // configured alert cooldown as the correlation window. Purely additive:
+    // a correlation failure never fails a frame that already persisted.
+    try {
+      const windowMs = ctx.detector.configuration.alertCooldownMs;
+      if (windowMs > 0 && detectionsOut.length > 0) {
+        const correlations = await correlationService.annotateFrame(
+          detectionsOut.map((d) => ({
+            id: d.id as string,
+            cameraId: d.cameraId,
+            detectorKey: d.detectorKey,
+            className: d.className,
+            timestamp: d.timestamp,
+            confidence: d.confidence,
+            trackId: d.trackId ?? null,
+          })),
+          windowMs,
+        );
+        for (const d of detectionsOut) {
+          const summary = correlations.get(d.id as string);
+          if (summary) d.correlation = summary;
+        }
+      }
+    } catch (err) {
+      logger.warn("Event correlation skipped for frame", {
+        cameraId: ctx.cameraId,
+        detectorKey: ctx.detector.key,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     return detectionsOut;
   }
 }

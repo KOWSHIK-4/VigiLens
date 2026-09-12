@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Camera, Clock, ShieldAlert, X } from "lucide-react";
+import { Camera, Clock, Layers, ShieldAlert, X } from "lucide-react";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatDateTime } from "@/utils/format";
-import type { Alert, DetectionWithCamera } from "@/types";
+import type { Alert, CorrelationSummary, DetectionWithCamera } from "@/types";
 
 interface AlertDetailsDrawerProps {
   alert: Alert | null;
@@ -36,6 +36,7 @@ export default function AlertDetailsDrawer({
   const style = getSeverityStyle(alert.severity);
   const Icon = style.icon;
   const detection = alert.detection ?? null;
+  const correlation = detection?.metadata?.correlation as CorrelationSummary | undefined;
 
   return (
     <>
@@ -145,6 +146,46 @@ export default function AlertDetailsDrawer({
                   </button>
                 )}
               </div>
+
+              {correlation?.correlated && (
+                <div className="border-t border-gray-200 pt-4">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-brand-600" />
+                    Event Correlation
+                  </h3>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Event ID</span>
+                      <span className="font-mono text-xs text-gray-800">{correlation.eventId}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Related detections</span>
+                      <span className="font-medium text-gray-900">{correlation.count}</span>
+                    </div>
+                    {correlation.labels.length > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Classes</span>
+                        <span className="font-medium text-gray-900">{correlation.labels.join(", ")}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Confidence</span>
+                      <span className="font-medium text-gray-900">
+                        {`${(correlation.avgConfidence * 100).toFixed(1)}% avg · ${(correlation.maxConfidence * 100).toFixed(1)}% max`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">First seen</span>
+                      <span className="font-medium text-gray-900">{formatDateTime(correlation.firstSeenAt)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Last seen</span>
+                      <span className="font-medium text-gray-900">{formatDateTime(correlation.lastSeenAt)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 pt-1">{correlation.reason}</p>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

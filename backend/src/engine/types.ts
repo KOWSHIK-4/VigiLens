@@ -9,6 +9,8 @@
  *     -> Object Tracking -> Detection Storage -> Alert Engine
  */
 
+import type { EventCorrelationSummary } from "../services/correlation";
+
 export type DetectorType =
   | "object_detection"
   | "classification"
@@ -109,6 +111,8 @@ export interface NormalizedDetection extends TrackedDetection {
   timestamp: Date;
   normalized: NormalizedBox;
   processingTimeMs: number;
+  /** Event correlation computed by the persistence stage, if any. */
+  correlation?: EventCorrelationSummary;
 }
 
 /** A camera source the engine can capture a frame from when no bytes are provided. */

@@ -1,5 +1,5 @@
-import type { Detection } from "@/types";
-import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle, Box, Cpu, Hash } from "lucide-react";
+import type { Detection, CorrelationSummary } from "@/types";
+import { X, Download, Camera, Tag, Activity, Clock, AlertTriangle, Box, Cpu, Hash, Layers } from "lucide-react";
 import { useEffect, useRef } from "react";
 import DetectionSnapshot from "./DetectionSnapshot";
 import { downloadDetectionImage } from "@/utils/detectionImage";
@@ -43,6 +43,7 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
   if (!detection) return null;
 
   const hasSnapshot = Boolean(detection.imageUrl);
+  const correlation = detection.metadata?.correlation as CorrelationSummary | undefined;
 
   const handleDownload = async () => {
     try {
@@ -167,6 +168,58 @@ export default function DetectionDetailsDrawer({ detection, onClose, onPreview }
               />
             </div>
           </div>
+
+          {correlation?.correlated && (
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-brand-600" />
+                Event Correlation
+              </h3>
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Event ID</span>
+                  <span className="font-mono text-xs text-gray-800">{correlation.eventId}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Related detections</span>
+                  <span className="font-medium text-gray-900">{correlation.count}</span>
+                </div>
+                {correlation.labels.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Classes</span>
+                    <span className="font-medium text-gray-900">{correlation.labels.join(", ")}</span>
+                  </div>
+                )}
+                {correlation.trackIds.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Track IDs</span>
+                    <span className="font-mono text-xs text-gray-800">{correlation.trackIds.join(", ")}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Confidence</span>
+                  <span className="font-medium text-gray-900">
+                    {correlation.count > 0
+                      ? `${(correlation.avgConfidence * 100).toFixed(1)}% avg · ${(correlation.maxConfidence * 100).toFixed(1)}% max`
+                      : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Window</span>
+                  <span className="font-medium text-gray-900">{(correlation.windowMs / 1000).toFixed(0)}s</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">First seen</span>
+                  <span className="font-medium text-gray-900">{new Date(correlation.firstSeenAt).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Last seen</span>
+                  <span className="font-medium text-gray-900">{new Date(correlation.lastSeenAt).toLocaleString()}</span>
+                </div>
+                <p className="text-xs text-gray-500 pt-1">{correlation.reason}</p>
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Actions</h3>

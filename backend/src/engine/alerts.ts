@@ -10,6 +10,7 @@
 import { logger } from "../config/logger";
 import { alertService } from "../services/alert.service";
 import { logAudit } from "../utils/auditLog";
+import { correlationMessageSuffix } from "../services/correlation";
 import type { AlertSeverity } from "@prisma/client";
 import type { AlertEvaluationStage } from "./pipeline";
 import type { NormalizedDetection, PipelineContext } from "./types";
@@ -100,7 +101,9 @@ export class CooldownAlertStage implements AlertEvaluationStage {
       const severity =
         SEVERITY_RANK[derived] > SEVERITY_RANK[configured] ? derived : configured;
       const title = `${ctx.detector.name}: ${d.className}`;
-      const message = `${d.className} detected on camera ${d.cameraId} with ${(d.confidence * 100).toFixed(1)}% confidence.`;
+      const message =
+        `${d.className} detected on camera ${d.cameraId} with ${(d.confidence * 100).toFixed(1)}% confidence.` +
+        correlationMessageSuffix(d.correlation);
 
       try {
         const alert = await alertService.create({
