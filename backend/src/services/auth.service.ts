@@ -158,6 +158,9 @@ export const authService = {
 
   generateToken(userId: string, role: string): string {
     return jwt.sign({ userId, role }, config.jwt.secret, {
+      algorithm: "HS256",
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
       expiresIn: config.jwt.expiresIn as SignOptions["expiresIn"],
     });
   },

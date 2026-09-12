@@ -40,7 +40,14 @@ export async function authenticate(
 
   try {
     const token = queryToken ?? header!.split(" ")[1];
-    const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
+    const decoded = jwt.verify(token, config.jwt.secret, {
+      // Pin the algorithm and token claims so a JWT with a different (or no)
+      // algorithm header — e.g. "none" — or a foreign issuer/audience is
+      // rejected outright.
+      algorithms: ["HS256"],
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    }) as JwtPayload;
     req.userId = decoded.userId;
     req.userRole = decoded.role;
 

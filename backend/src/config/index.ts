@@ -7,6 +7,14 @@ const INSECURE_DEFAULTS = [
 
 const INSECURE_DB_PASSWORDS = ["vigilens_secret", "postgres", "password", "admin"];
 
+export function parseCorsOrigins(raw: string | undefined, fallback: string[]): string[] {
+  if (!raw || raw.trim() === "") return fallback;
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
 if (process.env.NODE_ENV === "production") {
   const failures: string[] = [];
   for (const { key, value, insecure } of INSECURE_DEFAULTS) {
@@ -48,9 +56,14 @@ export const config = {
   jwt: {
     secret: process.env.JWT_SECRET || "dev-secret-change-in-production",
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    issuer: process.env.JWT_ISSUER || "vigilens-api",
+    audience: process.env.JWT_AUDIENCE || "vigilens-frontend",
   },
   cors: {
-    origin: ["https://viglens-rho.vercel.app", "http://localhost:5173"],
+    origin: parseCorsOrigins(process.env.CORS_ORIGIN, [
+      "https://viglens-rho.vercel.app",
+      "http://localhost:5173",
+    ]),
   },
   security: {
     /** Shared secret for machine-to-machine ingestion (AI service -> backend). */

@@ -1,12 +1,12 @@
 import express from "express";
 import cors from "cors";
-import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { prisma } from "./config/prisma";
 import { logger } from "./config/logger";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestContext } from "./middleware/requestContext";
+import { securityHeaders } from "./middleware/securityHeaders";
 import routes from "./routes";
 import healthRoutes from "./routes/health.routes";
 import { modelService } from "./services/model.service";
@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(helmet());
+app.use(securityHeaders());
 
 app.use(
   cors({
@@ -50,7 +50,10 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "10mb" }));
+// JSON bodies for this API are small; image bytes are handled by multer on
+// the engine upload routes, so a cap well above the largest legit JSON payload
+// still hardens the body parser against oversized request abuse.
+app.use(express.json({ limit: "2mb" }));
 
 app.use(
   rateLimit({
