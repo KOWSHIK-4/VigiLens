@@ -293,6 +293,7 @@ export const detectionService = {
       },
       include: { camera: true },
     });
+    metricsService.recordEvent("detections.created");
 
     // Correlate the fresh detection into an event (best-effort). A missed
     // bucket query must never fail an already-persisted detection.
