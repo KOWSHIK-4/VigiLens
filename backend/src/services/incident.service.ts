@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
+import { metricsService } from "./metrics.service";
 import { publishIncidentChanged } from "./realtime.service";
 import { webhookService } from "./webhook.service";
 import type {
@@ -232,6 +233,7 @@ export const incidentService = {
     });
 
     publishIncidentChanged({ id: incident.id, status: incident.status, action: "created" });
+    metricsService.recordEvent("incidents.created");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
       status: incident.status,
@@ -326,6 +328,7 @@ export const incidentService = {
     });
 
     publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed" });
+    metricsService.recordEvent("incidents.changed");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
       status: input.status,

@@ -28,7 +28,7 @@ export function requestContext(req: Request, res: Response, next: NextFunction) 
 
     const endpoint = req.originalUrl || req.url || "";
     if (endpoint.startsWith("/api") && !endpoint.startsWith("/api/system/metrics")) {
-      metricsService.recordRequest(durationMs, statusCode);
+      metricsService.recordRequest(durationMs, statusCode, endpoint);
     }
   });
 

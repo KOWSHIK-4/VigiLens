@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
+import { metricsService } from "./metrics.service";
 import { buildPdfDocument } from "../utils/pdf";
 import { toCsv } from "../utils/csv";
 import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
@@ -222,8 +223,10 @@ export const reportService = {
           data: { status: "completed" as ReportStatus, reportUrl },
         });
         logger.info("Report generated", { reportId: report.id });
+        metricsService.recordEvent("reports.generated");
       } catch (error) {
         logger.error("Report generation failed", { reportId: report.id, error });
+        metricsService.recordEvent("reports.failed");
         await prisma.report.update({
           where: { id: report.id },
           data: { status: "failed" as ReportStatus },

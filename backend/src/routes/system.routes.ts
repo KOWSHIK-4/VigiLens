@@ -11,5 +11,6 @@ router.use(requirePermission("monitoring.read"));
 router.get("/health", systemController.getHealth);
 router.get("/monitoring", systemController.getMonitoring);
 router.get("/metrics", systemController.getMetrics);
+router.get("/logs", systemController.getLogs);
 
 export default router;

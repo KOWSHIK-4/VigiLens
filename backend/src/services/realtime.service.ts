@@ -1,4 +1,5 @@
 import { logger } from "../config/logger";
+import { metricsService } from "./metrics.service";
 import type { Response } from "express";
 
 export type RealtimeEventType = "alert" | "incident" | "detection";
@@ -44,6 +45,7 @@ function addSubscriber(sub: Subscriber) {
   }
   subscribers.set(sub.id, sub);
   startHeartbeat(sub);
+  metricsService.setGauge("realtime.subscribers", subscribers.size);
   logger.info("SSE subscriber connected", {
     subId: sub.id,
     userId: sub.userId,
@@ -60,6 +62,7 @@ export function removeSubscriber(id: string) {
     heartbeatTimers.delete(id);
   }
   subscribers.delete(id);
+  metricsService.setGauge("realtime.subscribers", subscribers.size);
   try {
     sub.res.end();
   } catch {
@@ -102,6 +105,7 @@ export function publishEvent(event: RealtimeEvent) {
     }
   }
   if (sent > 0) {
+    metricsService.recordEvent("realtime.publishes", sent);
     logger.debug("SSE event broadcast", {
       type: event.type,
       id: event.id,

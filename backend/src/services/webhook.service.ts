@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../config/logger";
+import { metricsService } from "./metrics.service";
 import { settingsService } from "./settings.service";
 import type { SettingValue } from "../settings";
 
@@ -177,7 +178,9 @@ export const webhookService = {
       title: alert.title,
       message: alert.message,
     };
-    return deliver(config, payload);
+    const result = await deliver(config, payload);
+    if (result && result.ok) metricsService.recordEvent("webhooks.dispatched");
+    return result;
   },
 
   async dispatchIncidentChanged(incident: {
@@ -204,7 +207,9 @@ export const webhookService = {
       timestamp: serializeDate(incident.timestamp ?? new Date()),
       status: incident.status,
     };
-    return deliver(config, payload);
+    const result = await deliver(config, payload);
+    if (result && result.ok) metricsService.recordEvent("webhooks.dispatched");
+    return result;
   },
 
   getStatus(): WebhookStatusSnapshot {

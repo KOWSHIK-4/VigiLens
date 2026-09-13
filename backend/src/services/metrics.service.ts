@@ -4,6 +4,7 @@ interface RequestSample {
   timestamp: number;
   durationMs: number;
   statusCode: number;
+  endpoint: string;
 }
 
 interface DetectionSample {
@@ -14,9 +15,13 @@ interface DetectionSample {
 const WINDOW_MS = 5 * 60 * 1000;
 const MAX_SAMPLES = 50_000;
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
+const TOP_ENDPOINTS = 10;
+const MAX_OPERATION_KEYS = 200;
 
 let requestSamples: RequestSample[] = [];
 let detectionSamples: DetectionSample[] = [];
+const counters = new Map<string, number>();
+const gauges = new Map<string, number>();
 const startedAt = Date.now();
 
 function prune<T extends { timestamp: number }>(samples: T[]): T[] {
@@ -46,12 +51,23 @@ function percentile(sorted: number[], p: number): number {
   return sorted[index];
 }
 
+function trimOperationMap(map: Map<string, number>): void {
+  if (map.size <= MAX_OPERATION_KEYS) return;
+  // Drop the oldest keys (Map preserves insertion order) until under the bound.
+  while (map.size > MAX_OPERATION_KEYS) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 export const metricsService = {
-  recordRequest(durationMs: number, statusCode: number) {
+  recordRequest(durationMs: number, statusCode: number, endpoint?: string) {
     requestSamples = record(requestSamples, {
       timestamp: Date.now(),
       durationMs,
       statusCode,
+      endpoint: endpoint ?? "",
     });
     requestSamples = prune(requestSamples);
   },
@@ -62,6 +78,31 @@ export const metricsService = {
       durationMs,
     });
     detectionSamples = prune(detectionSamples);
+  },
+
+  /**
+   * Count an operational event (alerts created, webhooks dispatched, SSE
+   * publishes, model runs, ...). Counters survive the sample window and only
+   * reset on process restart, which makes long-ish trends visible.
+   */
+  recordEvent(name: string, delta = 1) {
+    const next = (counters.get(name) ?? 0) + delta;
+    counters.set(name, next);
+    trimOperationMap(counters);
+  },
+
+  /** Current-value gauge, e.g. the number of live SSE subscribers. */
+  setGauge(name: string, value: number) {
+    gauges.set(name, value);
+    trimOperationMap(gauges);
+  },
+
+  /** Test hook: clears all recorded samples and counters. */
+  reset() {
+    requestSamples = [];
+    detectionSamples = [];
+    counters.clear();
+    gauges.clear();
   },
 
   getSnapshot() {
@@ -87,6 +128,20 @@ export const metricsService = {
           detectionDurations.length
         : 0;
 
+    const statusCodes: Record<string, number> = {};
+    const endpointCounts = new Map<string, number>();
+    for (const sample of requestSamples) {
+      statusCodes[String(sample.statusCode)] = (statusCodes[String(sample.statusCode)] ?? 0) + 1;
+      if (sample.endpoint) {
+        endpointCounts.set(sample.endpoint, (endpointCounts.get(sample.endpoint) ?? 0) + 1);
+      }
+    }
+
+    const topEndpoints = Array.from(endpointCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_ENDPOINTS)
+      .map(([endpoint, count]) => ({ endpoint, count }));
+
     return {
       version: appVersion,
       windowSeconds: Math.round(WINDOW_MS / 1000),
@@ -103,10 +158,16 @@ export const metricsService = {
             ? Math.round(sortedDurations[sortedDurations.length - 1] * 100) / 100
             : 0,
         slowRequestCount,
+        statusCodes,
+        topEndpoints,
       },
       detections: {
         total: detectionSamples.length,
         averageProcessingTimeMs: Math.round(averageDetection * 100) / 100,
+      },
+      operations: {
+        counters: Object.fromEntries(counters),
+        gauges: Object.fromEntries(gauges),
       },
       uptime: {
         processSeconds: Math.round(process.uptime()),

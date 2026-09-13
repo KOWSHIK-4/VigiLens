@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
+import { metricsService } from "./metrics.service";
 import { publishAlertCreated } from "./realtime.service";
 import { webhookService } from "./webhook.service";
 import {
@@ -267,6 +268,8 @@ export const detectionService = {
       })),
     });
 
+    metricsService.recordEvent("detections.created", rows.length);
+
     return rows;
   },
 
@@ -358,6 +361,7 @@ export const detectionService = {
 
     publishAlertCreated(alert);
     void webhookService.dispatchAlertCreated(alert);
+    metricsService.recordEvent("alerts.created");
 
     if (input.applyAlertCooldown) {
       const key = `${input.detectorKey ?? input.label}:${input.cameraId}:${input.label}`;

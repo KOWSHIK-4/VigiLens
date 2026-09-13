@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
+import { metricsService } from "./metrics.service";
 import { publishAlertCreated } from "./realtime.service";
 import { webhookService } from "./webhook.service";
 import type { AlertQueryInput } from "../types";
@@ -70,6 +71,7 @@ export const alertService = {
     });
     publishAlertCreated(alert);
     void webhookService.dispatchAlertCreated(alert);
+    metricsService.recordEvent("alerts.created");
     return alert;
   },
 

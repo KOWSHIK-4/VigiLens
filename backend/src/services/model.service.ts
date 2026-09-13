@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
+import { metricsService } from "./metrics.service";
 import {
   getDetectorDefinition,
   getDetectorDefinitions,
@@ -327,6 +328,7 @@ export const modelService = {
         inferenceTimeMs,
         detections: result.count,
       });
+      metricsService.recordEvent("model.tests.succeeded");
       return {
         success: true,
         modelId: model.id,
@@ -346,6 +348,7 @@ export const modelService = {
         reason,
         inferenceTimeMs,
       });
+      metricsService.recordEvent("model.tests.failed");
       return {
         success: false,
         modelId: model.id,
