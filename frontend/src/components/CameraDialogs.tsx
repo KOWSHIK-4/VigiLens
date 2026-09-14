@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cameraService } from "@/services/cameras";
 import type { Camera, CreateCameraInput, CameraType } from "@/types";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { X, Loader2, AlertTriangle } from "lucide-react";
+import { X, Loader2, AlertTriangle, ShieldCheck } from "lucide-react";
 
 interface AddCameraDialogProps {
   open: boolean;
@@ -21,10 +21,14 @@ function CameraFormFields({
   form,
   onChange,
   errors,
+  isEdit = false,
+  hasCredentials = false,
 }: {
   form: CreateCameraInput;
   onChange: (updates: Partial<CreateCameraInput>) => void;
   errors: Record<string, string>;
+  isEdit?: boolean;
+  hasCredentials?: boolean;
 }) {
   const typeInfo = urlPatterns[form.cameraType as CameraType] || urlPatterns.rtsp;
 
@@ -135,9 +139,10 @@ function CameraFormFields({
             type="text"
             value={form.username || ""}
             onChange={(e) => onChange({ username: e.target.value })}
-            className="input"
-            placeholder="admin"
+            className={`input ${errors.username ? "border-red-400 focus:ring-red-500" : ""}`}
+            placeholder={isEdit ? "Leave blank to keep current" : "admin"}
           />
+          {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
         </div>
 
         <div>
@@ -146,11 +151,19 @@ function CameraFormFields({
             type="password"
             value={form.password || ""}
             onChange={(e) => onChange({ password: e.target.value })}
-            className="input"
-            placeholder="••••••••"
+            className={`input ${errors.password ? "border-red-400 focus:ring-red-500" : ""}`}
+            placeholder={isEdit ? "•••••••• (unchanged)" : "••••••••"}
           />
+          {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
         </div>
       </div>
+
+      {isEdit && hasCredentials && (
+        <p className="text-xs text-green-600 flex items-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Credentials configured — leave the fields blank to keep them.
+        </p>
+      )}
     </>
   );
 }
@@ -171,6 +184,13 @@ function validateCameraForm(form: CreateCameraInput): Record<string, string> {
   }
   if (form.fps != null && (form.fps < 1 || form.fps > 120)) {
     errors.fps = "FPS must be between 1 and 120";
+  }
+  const username = form.username?.trim() ?? "";
+  const password = form.password ?? "";
+  if (password && !username) {
+    errors.username = "Username is required when setting a password";
+  } else if (username && !password) {
+    errors.password = "Password is required when setting a username";
   }
   return errors;
 }
@@ -266,7 +286,7 @@ export function EditCameraDialog({ open, onClose, camera }: EditCameraDialogProp
   const [form, setForm] = useState<CreateCameraInput>({
     name: camera.name, url: camera.url, cameraType: camera.cameraType,
     location: camera.location || "", resolution: camera.resolution || "",
-    fps: camera.fps, username: camera.username || "", password: "",
+    fps: camera.fps, username: "", password: "",
     sourceURL: camera.sourceURL,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -288,7 +308,7 @@ export function EditCameraDialog({ open, onClose, camera }: EditCameraDialogProp
       setForm({
         name: camera.name, url: camera.url, cameraType: camera.cameraType,
         location: camera.location || "", resolution: camera.resolution || "",
-        fps: camera.fps, username: camera.username || "", password: "",
+        fps: camera.fps, username: "", password: "",
         sourceURL: camera.sourceURL,
       });
       setErrors({});
@@ -334,6 +354,8 @@ export function EditCameraDialog({ open, onClose, camera }: EditCameraDialogProp
               setServerError("");
             }}
             errors={errors}
+            isEdit
+            hasCredentials={camera.hasCredentials === true}
           />
 
           <div className="flex justify-end gap-3 pt-2">

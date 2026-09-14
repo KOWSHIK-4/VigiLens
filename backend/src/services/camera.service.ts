@@ -4,8 +4,18 @@ import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
 import { settingsService } from "./settings.service";
-import { aiServiceClient, AiServiceError, type AiServiceClient, type CaptureCredentials } from "../engine/aiClient";
-import type { CameraStatus, CameraType, Prisma } from "@prisma/client";
+import {
+  aiServiceClient,
+  AiServiceError,
+  type AiServiceClient,
+  type CaptureCredentials,
+} from "../engine/aiClient";
+import {
+  decryptSecret,
+  encryptSecret,
+  isEncryptedSecret,
+} from "../utils/crypto";
+import type { Camera, CameraStatus, CameraType, Prisma } from "@prisma/client";
 import type { CreateCameraInput, UpdateCameraInput } from "../types";
 
 const SNAPSHOT_TIMEOUT_MS = 10_000;
@@ -84,20 +94,6 @@ interface FindAllParams {
   sortOrder?: "asc" | "desc";
 }
 
-/**
- * Strips the stored stream password before a camera row leaves the API.
- * Credentials are write-only: the backend uses them internally when
- * building authenticated capture requests, and no client — including
- * admins — ever needs to read them back.
- */
-function redactPassword<T extends { password?: string | null }>(
-  camera: T,
-): Omit<T, "password"> {
-  const rest = { ...camera };
-  delete (rest as { password?: string | null }).password;
-  return rest;
-}
-
 export type CameraDisplayStatus =
   | "online"
   | "offline"
@@ -122,27 +118,108 @@ function deriveDisplayStatus(camera: {
   return camera.status;
 }
 
-/** Redacts credentials and enriches the row with the derived display status. */
-function toApiCamera<
-  T extends {
-    status: CameraStatus;
-    lastHealthCheck: Date | null;
-    password?: string | null;
-  },
->(camera: T) {
+type CameraApiView = Omit<
+  Camera,
+  "username" | "password" | "usernameEncrypted" | "passwordEncrypted"
+> & {
+  hasCredentials: boolean;
+  displayStatus: CameraDisplayStatus;
+};
+
+/**
+ * Redacts credentials and enriches the row with the derived display status
+ * and the `hasCredentials` flag. This is a second line of defence on top of
+ * the global Prisma scrub (`config/prisma.ts`) to guarantee credential
+ * material never rides a camera API payload.
+ */
+function toApiCamera(camera: Camera): CameraApiView {
+  const rest = { ...camera } as Partial<Camera>;
+  delete rest.username;
+  delete rest.password;
+  delete rest.usernameEncrypted;
+  delete rest.passwordEncrypted;
   return {
-    ...redactPassword(camera),
+    ...(rest as Camera),
+    hasCredentials: hasStoredCredential(camera),
     displayStatus: deriveDisplayStatus(camera),
   };
 }
 
-function credentialsOf(camera: {
+function hasStoredCredential(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  if (row.hasCredentials !== undefined) return row.hasCredentials === true;
+  return (
+    typeof row.usernameEncrypted === "string" ||
+    typeof row.passwordEncrypted === "string" ||
+    (typeof row.username === "string" && row.username.length > 0) ||
+    (typeof row.password === "string" && row.password.length > 0)
+  );
+}
+
+/** Fields needed to load and decode stored credentials (bypasses the scrub). */
+const CREDENTIAL_SELECT = {
+  username: true,
+  password: true,
+  usernameEncrypted: true,
+  passwordEncrypted: true,
+} as const;
+
+function decodeCredentials(row: {
   username?: string | null;
   password?: string | null;
+  usernameEncrypted?: string | null;
+  passwordEncrypted?: string | null;
 }): CaptureCredentials | undefined {
-  return camera.username && camera.password
-    ? { username: camera.username, password: camera.password }
-    : undefined;
+  if (isEncryptedSecret(row.usernameEncrypted) && isEncryptedSecret(row.passwordEncrypted)) {
+    try {
+      return {
+        username: decryptSecret(row.usernameEncrypted),
+        password: decryptSecret(row.passwordEncrypted),
+      };
+    } catch (err) {
+      logger.error("Unable to decrypt camera credentials", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return undefined;
+    }
+  }
+  if (row.username && row.password) {
+    return { username: row.username, password: row.password };
+  }
+  return undefined;
+}
+
+function hasLegacyPlaintextCredential(row: {
+  username?: string | null;
+  password?: string | null;
+  usernameEncrypted?: string | null;
+  passwordEncrypted?: string | null;
+}): boolean {
+  return Boolean(
+    typeof row.username === "string" &&
+      row.username.length > 0 &&
+      typeof row.password === "string" &&
+      row.password.length > 0 &&
+      !isEncryptedSecret(row.usernameEncrypted) &&
+      !isEncryptedSecret(row.passwordEncrypted),
+  );
+}
+
+/** Encrypts fresh credentials into the row, clearing any legacy plaintext. */
+async function persistCredentials(
+  id: string,
+  credentials: CaptureCredentials,
+): Promise<void> {
+  await prisma.camera.update({
+    where: { id },
+    data: {
+      usernameEncrypted: encryptSecret(credentials.username),
+      passwordEncrypted: encryptSecret(credentials.password),
+      username: null,
+      password: null,
+    },
+  });
 }
 
 /**
@@ -150,16 +227,32 @@ function credentialsOf(camera: {
  * (e.g. the monitor frame source) that only carry the camera id, so
  * credentials never have to ride on shared runtime objects that could
  * leak through API responses.
+ *
+ * Legacy rows that still hold plaintext credentials are migrated to the
+ * encrypted columns on read, then the plaintext is cleared.
  */
 export async function loadCameraCredentials(
   id: string,
 ): Promise<CaptureCredentials | null> {
   const row = await prisma.camera.findUnique({
     where: { id },
-    select: { username: true, password: true },
+    select: CREDENTIAL_SELECT,
   });
   if (!row) return null;
-  return credentialsOf(row) ?? null;
+
+  const credentials = decodeCredentials(row);
+  if (!credentials) return null;
+
+  if (hasLegacyPlaintextCredential(row)) {
+    await persistCredentials(id, credentials).catch((err) => {
+      logger.warn("Failed to migrate legacy camera credentials", {
+        cameraId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  return credentials;
 }
 
 export const cameraService = {
@@ -218,6 +311,15 @@ export const cameraService = {
   },
 
   async create(data: CreateCameraInput) {
+    const username = (data.username ?? "").trim();
+    const password = data.password ?? "";
+    const hasCredentialInput = username.length > 0 || password.length > 0;
+    if (hasCredentialInput && (!username || !password)) {
+      throw new ApiError(400, "Camera username and password must be provided together", {
+        code: "INCOMPLETE_CREDENTIALS",
+      });
+    }
+
     const camera = await prisma.camera.create({
       data: {
         name: data.name,
@@ -227,16 +329,43 @@ export const cameraService = {
         location: data.location || null,
         resolution: data.resolution || null,
         fps: data.fps || null,
-        username: data.username || null,
-        password: data.password || null,
+        usernameEncrypted: hasCredentialInput ? encryptSecret(username) : null,
+        passwordEncrypted: hasCredentialInput ? encryptSecret(password) : null,
+        username: null,
+        password: null,
       },
     });
     return toApiCamera(camera);
   },
 
   async update(id: string, data: UpdateCameraInput) {
-    const existing = await prisma.camera.findUnique({ where: { id } });
+    const existing = await prisma.camera.findUnique({
+      where: { id },
+      select: { ...CREDENTIAL_SELECT, name: true },
+    });
     if (!existing) return null;
+
+    const username = (data.username ?? "").trim();
+    const password = data.password ?? "";
+
+    const credentialUpdate: Record<string, unknown> = {};
+    if (password.length > 0) {
+      if (!username) {
+        throw new ApiError(400, "Camera username and password must be provided together", {
+          code: "INCOMPLETE_CREDENTIALS",
+        });
+      }
+      credentialUpdate.usernameEncrypted = encryptSecret(username);
+      credentialUpdate.passwordEncrypted = encryptSecret(password);
+      credentialUpdate.username = null;
+      credentialUpdate.password = null;
+    } else if (hasLegacyPlaintextCredential(existing)) {
+      // Legacy plaintext row touched by an update: promote it to encrypted.
+      credentialUpdate.usernameEncrypted = encryptSecret(existing.username as string);
+      credentialUpdate.passwordEncrypted = encryptSecret(existing.password as string);
+      credentialUpdate.username = null;
+      credentialUpdate.password = null;
+    }
 
     const camera = await prisma.camera.update({
       where: { id },
@@ -248,8 +377,7 @@ export const cameraService = {
         ...(data.location !== undefined && { location: data.location }),
         ...(data.resolution !== undefined && { resolution: data.resolution }),
         ...(data.fps !== undefined && { fps: data.fps }),
-        ...(data.username !== undefined && { username: data.username }),
-        ...(data.password !== undefined && { password: data.password }),
+        ...credentialUpdate,
       },
     });
     return toApiCamera(camera);
@@ -311,18 +439,21 @@ export const cameraService = {
     let responseTime: number | null = null;
     let message: string | null = null;
 
+    // Credentials are decrypted from the encrypted columns (or migrated from
+    // legacy plaintext on the way) so protected feeds can be authenticated.
+    const credentials = await loadCameraCredentials(id);
+
     if (camera.cameraType === "ip" && /^https?:\/\//i.test(camera.url)) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
 
         const headers: Record<string, string> = {};
-        const credentials = credentialsOf(camera);
         if (credentials) {
           // Cameras behind HTTP basic auth must be probed with the stored
           // credentials, otherwise health checks fail with 401 even though
           // the stream itself is reachable.
-          headers.Authorization = `Basic ${Buffer.from(`${camera.username}:${camera.password}`).toString("base64")}`;
+          headers.Authorization = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
         }
 
         const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD", headers });
@@ -345,7 +476,7 @@ export const cameraService = {
           camera.cameraType,
           0,
           SNAPSHOT_TIMEOUT_MS,
-          credentialsOf(camera),
+          credentials ?? undefined,
         );
         responseTime = Date.now() - start;
         isHealthy = true;
@@ -399,6 +530,7 @@ export const cameraService = {
       throw new ApiError(404, "Camera not found");
     }
 
+    const credentials = await loadCameraCredentials(id);
     const startedAt = Date.now();
     try {
       const frame = await client.captureFrame(
@@ -406,7 +538,7 @@ export const cameraService = {
         camera.cameraType,
         0,
         SNAPSHOT_TIMEOUT_MS,
-        credentialsOf(camera),
+        credentials ?? undefined,
       );
       const responseTimeMs = Date.now() - startedAt;
 

@@ -4,6 +4,7 @@ import { prisma } from "../config/prisma";
 import { runtimeRegistry } from "../engine/runtimeRegistry";
 import { engineService } from "../engine/engineService";
 import { detectionService } from "../services/detection.service";
+import { loadCameraCredentials } from "../services/camera.service";
 import { success } from "../utils/apiResponse";
 import { ApiError } from "../utils/errors";
 
@@ -175,14 +176,15 @@ export const engineController = {
 
       const force = req.body?.force === true || req.query?.force === "true";
       const startedAt = process.hrtime.bigint();
+      const credentials = await loadCameraCredentials(cameraId);
       const result = await engineService.processFrame(key, cameraId, Buffer.alloc(0), {
         force,
         source: {
           url: camera.url,
           cameraType: camera.cameraType,
           videoPosSeconds,
-          ...(camera.username && camera.password
-            ? { username: camera.username, password: camera.password }
+          ...(credentials
+            ? { username: credentials.username, password: credentials.password }
             : {}),
         },
       });

@@ -2,11 +2,17 @@ import { spawn, execSync, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createServer } from "node:net";
+import { prisma } from "../src/config/prisma";
 
 const TEST_PORT_BASE = 4921;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
 let BASE_URL = `http://localhost:${TEST_PORT}/api`;
+
+/** Fixed 32-byte dev key used only by this test process and its server. */
+const TEST_CREDENTIALS_KEY =
+  "f5a2b7c8d4e1f094a3b6c5d8e7f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8";
+process.env.CAMERA_CREDENTIALS_KEY = TEST_CREDENTIALS_KEY;
 
 let server: ChildProcess | null = null;
 let passed = 0;
@@ -88,12 +94,18 @@ async function waitForServer(timeoutMs = 20000): Promise<boolean> {
 interface CameraLike {
   id: string;
   name: string;
-  username?: string | null;
-  password?: unknown;
+  hasCredentials?: boolean;
 }
 
-function hasNoPassword(camera: unknown): boolean {
-  return typeof camera === "object" && camera !== null && !("password" in camera);
+function hasNoCredentialMaterial(camera: unknown): boolean {
+  return (
+    typeof camera === "object" &&
+    camera !== null &&
+    !("password" in camera) &&
+    !("username" in camera) &&
+    !("usernameEncrypted" in camera) &&
+    !("passwordEncrypted" in camera)
+  );
 }
 
 async function run() {
@@ -112,7 +124,12 @@ async function run() {
     {
       cwd: process.cwd(),
       stdio: "ignore",
-      env: { ...process.env, PORT: String(TEST_PORT), NODE_ENV: "test" },
+      env: {
+        ...process.env,
+        PORT: String(TEST_PORT),
+        NODE_ENV: "test",
+        CAMERA_CREDENTIALS_KEY: TEST_CREDENTIALS_KEY,
+      },
     },
   );
 
@@ -154,11 +171,11 @@ async function run() {
     if (
       created.status === 201 &&
       createdBody.data &&
-      hasNoPassword(createdBody.data) &&
-      createdBody.data.username === "stream-user"
+      hasNoCredentialMaterial(createdBody.data) &&
+      createdBody.data.hasCredentials === true
     ) {
       cameraId = createdBody.data.id;
-      ok("POST /cameras response omits the stored password");
+      ok("POST /cameras response omits credential material and reports hasCredentials");
     } else {
       fail("create camera redaction", created.body);
       return;
@@ -169,9 +186,9 @@ async function run() {
     if (
       list.status === 200 &&
       Array.isArray(listBody.data) &&
-      listBody.data.every(hasNoPassword)
+      listBody.data.every(hasNoCredentialMaterial)
     ) {
-      ok("GET /cameras list rows omit the password field");
+      ok("GET /cameras list rows omit credential material");
     } else {
       fail("camera list redaction", list.body);
     }
@@ -179,8 +196,8 @@ async function run() {
     if (cameraId) {
       const detail = await request(`/cameras/${cameraId}`, {}, token);
       const detailBody = detail.body as { data?: CameraLike };
-      if (detail.status === 200 && detailBody.data && hasNoPassword(detailBody.data)) {
-        ok("GET /cameras/:id omits the password field");
+      if (detail.status === 200 && detailBody.data && hasNoCredentialMaterial(detailBody.data)) {
+        ok("GET /cameras/:id omits credential material");
       } else {
         fail("camera detail redaction", detail.body);
       }
@@ -194,8 +211,8 @@ async function run() {
         token,
       );
       const updatedBody = updated.body as { data?: CameraLike };
-      if (updated.status === 200 && updatedBody.data && hasNoPassword(updatedBody.data)) {
-        ok("PATCH /cameras/:id response omits the password field");
+      if (updated.status === 200 && updatedBody.data && hasNoCredentialMaterial(updatedBody.data)) {
+        ok("PATCH /cameras/:id response omits credential material");
       } else {
         fail("camera update redaction", updated.body);
       }
@@ -221,9 +238,9 @@ async function run() {
       if (
         ingested.status === 201 &&
         ingestedBody.data?.camera &&
-        hasNoPassword(ingestedBody.data.camera)
+        hasNoCredentialMaterial(ingestedBody.data.camera)
       ) {
-        ok("nested camera inside an ingestion response omits the password");
+        ok("nested camera inside an ingestion response omits credential material");
       } else {
         fail("nested camera redaction (internal ingestion)", ingested.body);
       }
@@ -240,12 +257,81 @@ async function run() {
         if (
           detectionDetail.status === 200 &&
           detectionBody.data?.camera &&
-          hasNoPassword(detectionBody.data.camera)
+          hasNoCredentialMaterial(detectionBody.data.camera)
         ) {
-          ok("nested camera inside GET /detections/:id omits the password");
+          ok("nested camera inside GET /detections/:id omits credential material");
         } else {
-          fail("nested camera redaction (detection detail)", detectionDetail.body);
+          fail("nested camera redaction (detection detail)", detectionBody.data);
         }
+      }
+    }
+
+    // ── Storage assertions: nothing plaintext may live on the row ──────
+    if (cameraId) {
+      const storedRows = await prisma.$queryRaw<
+        Array<{
+          username: string | null;
+          password: string | null;
+          username_encrypted: string | null;
+          password_encrypted: string | null;
+        }>
+      >`SELECT username, password, username_encrypted, password_encrypted FROM cameras WHERE id = ${cameraId}`;
+      const stored = storedRows[0];
+      if (
+        stored &&
+        stored.username === null &&
+        stored.password === null &&
+        typeof stored.username_encrypted === "string" &&
+        stored.username_encrypted.startsWith("v1.") &&
+        typeof stored.password_encrypted === "string" &&
+        stored.password_encrypted.startsWith("v1.")
+      ) {
+        ok("database stores encrypted credentials and no plaintext columns");
+      } else {
+        fail("database storage encryption", storedRows);
+      }
+    }
+
+    // ── Legacy plaintext rows self-migrate on the next write ───────────
+    if (cameraId) {
+      await prisma.$executeRaw`UPDATE cameras SET username = 'legacy-user', password = 'legacy-pass', username_encrypted = NULL, password_encrypted = NULL WHERE id = ${cameraId}`;
+
+      const migrated = await request(
+        `/cameras/${cameraId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ name: `redaction-test-${process.pid}-migrated` }),
+        },
+        token,
+      );
+      const migratedBody = migrated.body as { data?: CameraLike };
+
+      const afterMigration = await prisma.$queryRaw<
+        Array<{
+          username: string | null;
+          password: string | null;
+          username_encrypted: string | null;
+          password_encrypted: string | null;
+        }>
+      >`SELECT username, password, username_encrypted, password_encrypted FROM cameras WHERE id = ${cameraId}`;
+      const after = afterMigration[0];
+
+      if (
+        migrated.status === 200 &&
+        migratedBody.data &&
+        hasNoCredentialMaterial(migratedBody.data) &&
+        migratedBody.data.hasCredentials === true &&
+        after &&
+        after.username === null &&
+        after.password === null &&
+        typeof after.username_encrypted === "string" &&
+        after.username_encrypted.startsWith("v1.") &&
+        typeof after.password_encrypted === "string" &&
+        after.password_encrypted.startsWith("v1.")
+      ) {
+        ok("legacy plaintext credentials migrate to encrypted at rest on update");
+      } else {
+        fail("legacy credential migration", { body: migrated.body, after });
       }
     }
   } finally {
@@ -260,4 +346,10 @@ async function run() {
 
 run().finally(() => {
   if (server) killProcessTree(server);
+  prisma
+    .$disconnect()
+    .catch(() => {})
+    .finally(() => {
+      if (failed > 0) process.exitCode = 1;
+    });
 });

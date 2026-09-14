@@ -119,6 +119,8 @@ model Camera {
   fps            Int?
   username       String?
   password       String?
+  usernameEncrypted String? @map("username_encrypted")
+  passwordEncrypted String? @map("password_encrypted")
   thumbnail      String?
   isHealthy      Boolean      @default(true) @map("is_healthy")
   lastHealthCheck DateTime?   @map("last_health_check")

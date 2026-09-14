@@ -7,9 +7,15 @@ import { PrismaClient } from "@prisma/client";
  * ever carry them back to a client.
  *
  * This query-extension deep-walks every operation result and strips the
- * password from any object shaped like a Camera row (identified by its
- * unique `cameraType` column). The signature check keeps the scrub
- * precise so unrelated models are untouched.
+ * credential material from any object shaped like a Camera row (identified
+ * by its unique `cameraType` column). Plaintext username/password are
+ * removed along with the encrypted `*Encrypted` columns, and a boolean
+ * `hasCredentials` flag is stamped onto the row so UIs can indicate that a
+ * credential is configured without ever seeing it.
+ *
+ * The signature check keeps the scrub precise so unrelated models are
+ * untouched. Dedicated credential loaders select fields without
+ * `cameraType`, so they intentionally bypass this scrub.
  */
 function looksLikeCameraRow(value: unknown): value is Record<string, unknown> {
   return (
@@ -31,7 +37,16 @@ function stripCameraPasswords(node: unknown, seen: WeakSet<object>): void {
 
   const record = node as Record<string, unknown>;
   if (looksLikeCameraRow(record)) {
+    const hasStoredCredential =
+      typeof record.usernameEncrypted === "string" ||
+      typeof record.passwordEncrypted === "string" ||
+      typeof record.username === "string" ||
+      typeof record.password === "string";
+    delete record.username;
     delete record.password;
+    delete record.usernameEncrypted;
+    delete record.passwordEncrypted;
+    record.hasCredentials = hasStoredCredential;
   }
 
   for (const key of Object.keys(record)) {

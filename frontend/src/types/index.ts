@@ -175,7 +175,8 @@ export interface Camera {
   location: string | null;
   resolution: string | null;
   fps: number | null;
-  username: string | null;
+  /** True when stream credentials are configured (never readable back). */
+  hasCredentials: boolean;
   thumbnail: string | null;
   isHealthy: boolean;
   lastHealthCheck: string | null;

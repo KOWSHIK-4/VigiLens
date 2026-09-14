@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Camera as CameraIcon,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { showToast } from "@/utils/toast";
 
@@ -423,9 +424,18 @@ function CameraCard({
 
       <div className="space-y-1 text-sm">
         {camera.location && <p className="text-gray-500 truncate">{camera.location}</p>}
-        <p className="text-gray-400">
+        <p className="text-gray-400 flex items-center gap-2">
           {typeLabels[camera.cameraType] || camera.cameraType}
           {camera.fps ? ` \u00B7 ${camera.fps} FPS` : ""}
+          {camera.hasCredentials === true && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+              title="Stream credentials configured"
+            >
+              <Lock className="w-3 h-3" />
+              Auth
+            </span>
+          )}
         </p>
         <p className="text-gray-400">
           Last seen: {new Date(camera.lastSeen).toLocaleString()}

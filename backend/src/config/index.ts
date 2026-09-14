@@ -34,6 +34,10 @@ if (process.env.NODE_ENV === "production") {
     failures.push("DATABASE_URL (not set)");
   }
 
+  if (!process.env.CAMERA_CREDENTIALS_KEY) {
+    failures.push("CAMERA_CREDENTIALS_KEY (not set)");
+  }
+
   if (failures.length > 0) {
     const msg =
       `[SECURITY] Insecure defaults detected in production: ${failures.join(", ")}. ` +
