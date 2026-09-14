@@ -3,6 +3,7 @@ services:
     image: postgres:16-alpine
     container_name: vigilens-db
     restart: unless-stopped
+    stop_grace_period: 30s
     expose:
       - "5432"
     environment:
@@ -36,6 +37,9 @@ services:
       - BACKEND_URL=http://backend:4000
       - BACKEND_INTERNAL_KEY=${INTERNAL_API_KEY:-dev-internal-key-change-in-production}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+      # Boundary hardening: gate the webcam stream / stats endpoints behind
+      # the shared internal key even though the frontend proxies them.
+      - AI_STATS_REQUIRE_AUTH=${AI_STATS_REQUIRE_AUTH:-true}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -66,13 +70,20 @@ services:
       - PORT=4000
       - DATABASE_URL=postgresql://${POSTGRES_USER:-vigilens}:${POSTGRES_PASSWORD:-vigilens_secret}@postgres:5432/${POSTGRES_DB:-vigilens}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
-      - JWT_EXPIRES_IN=7d
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - AI_SERVICE_URL=http://ai-service:8000
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-dev-internal-key-change-in-production}
-      - LOG_LEVEL=info
+      # AES-256-GCM key for camera credential encryption at rest. The backend
+      # refuses to start in production without it, so compose fails fast with
+      # a clear message instead of a boot-time FATAL.
+      - CAMERA_CREDENTIALS_KEY=${CAMERA_CREDENTIALS_KEY:?CAMERA_CREDENTIALS_KEY must be set to a 32-byte key (openssl rand -hex 32)}
+      # Optional previous key to keep decrypting rows written before a rotation.
+      - CAMERA_CREDENTIALS_KEY_LEGACY=${CAMERA_CREDENTIALS_KEY_LEGACY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - storage_data:/data/vigilens
+    stop_grace_period: 20s
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health/live >/dev/null || exit 1"]
       interval: 30s

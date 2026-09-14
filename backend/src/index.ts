@@ -111,6 +111,16 @@ async function start() {
       logger.info(`Server running on port ${config.port}`);
     });
 
+    // Turn an HTTP listen failure (EADDRINUSE, EACCES, ...) into a clean,
+    // diagnosed exit instead of Node's raw unhandled "error" crash. The
+    // process supervisor / restart policy decides whether to bring the
+    // service back, which is the correct recovery boundary.
+    server.on("error", (err) => {
+      const code = (err as NodeJS.ErrnoException).code;
+      logger.error("HTTP server listen failed", { code, message: err.message, port: config.port });
+      process.exit(1);
+    });
+
     server.keepAliveTimeout = 65 * 1000;
     server.headersTimeout = 66 * 1000;
 
@@ -122,10 +132,15 @@ async function start() {
 
       const forceExit = setTimeout(() => {
         logger.error("Forced shutdown after timeout");
+        server.closeAllConnections?.();
         process.exit(1);
       }, 10_000);
       forceExit.unref();
 
+      // Stop accepting new connections, then drop idle keep-alive sockets so
+      // the graceful drain completes promptly (Node's default keep-alive is
+      // 65s here, which exceeds the force-exit budget). Requests that are
+      // still in flight are allowed to finish before the server closes.
       server.close(async () => {
         try {
           monitorScheduler.stop();
@@ -138,6 +153,7 @@ async function start() {
           process.exit(1);
         }
       });
+      server.closeIdleConnections?.();
     };
 
     process.on("SIGTERM", () => shutdown("SIGTERM"));
