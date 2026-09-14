@@ -3,7 +3,7 @@ import { alertController } from "../controllers/alert.controller";
 import { authenticate } from "../middleware/auth";
 import { requirePermission } from "../middleware/permissions";
 import { validate } from "../middleware/validate";
-import { alertIdSchema, alertQuerySchema } from "../types";
+import { alertIdSchema, alertQuerySchema, escalateAlertSchema } from "../types";
 
 const router = Router();
 
@@ -14,6 +14,8 @@ router.get("/export", requirePermission("alerts.read"), validate(alertQuerySchem
 router.get("/unread-count", requirePermission("alerts.read"), alertController.getUnreadCount);
 router.patch("/read-all", requirePermission("alerts.manage"), alertController.markAllAsRead);
 router.patch("/:id/read", requirePermission("alerts.manage"), validate(alertIdSchema, "params"), alertController.markAsRead);
+router.patch("/:id/acknowledge", requirePermission("alerts.manage"), validate(alertIdSchema, "params"), alertController.acknowledge);
+router.patch("/:id/escalate", requirePermission("alerts.manage"), validate(alertIdSchema, "params"), validate(escalateAlertSchema, "body"), alertController.escalate);
 router.delete("/:id", requirePermission("alerts.manage"), validate(alertIdSchema, "params"), alertController.deleteAlert);
 
 export default router;

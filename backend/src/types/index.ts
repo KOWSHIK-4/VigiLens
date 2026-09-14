@@ -223,7 +223,12 @@ export const alertQuerySchema = z.object({
 
 export const alertIdSchema = z.object({ id: z.string().uuid() });
 
+export const escalateAlertSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+
 export type AlertQueryInput = z.infer<typeof alertQuerySchema>;
+export type EscalateAlertInput = z.infer<typeof escalateAlertSchema>;
 
 export const incidentStatusSchema = z.enum([
   "new",
@@ -498,7 +503,7 @@ export const auditLogQuerySchema = z.object({
     "detector_enabled", "detector_disabled",
     "detector_config_updated", "detector_cameras_updated",
     "monitor_started", "monitor_stopped",
-    "alert_created", "report_generated", "settings_changed",
+    "alert_created", "alert_acknowledged", "alert_escalated", "report_generated", "settings_changed",
     "incident_created", "incident_status_changed", "incident_assigned",
     "incident_unassigned", "incident_note_added", "incident_reopened",
     "incident_resolved",

@@ -190,13 +190,20 @@ model Detection {
 }
 
 model Alert {
-  id          String        @id @default(uuid())
-  detectionId String        @unique @map("detection_id")
-  severity    AlertSeverity @default(info)
-  title       String
-  message     String
-  isRead      Boolean       @default(false) @map("is_read")
-  createdAt   DateTime      @default(now()) @map("created_at")
+  id                String        @id @default(uuid())
+  detectionId       String        @unique @map("detection_id")
+  severity          AlertSeverity @default(info)
+  title             String
+  message           String
+  isRead            Boolean       @default(false) @map("is_read")
+  acknowledgedAt    DateTime?     @map("acknowledged_at")
+  acknowledgedById  String?       @map("acknowledged_by_id")
+  acknowledgedByName String?      @map("acknowledged_by_name")
+  escalatedAt       DateTime?     @map("escalated_at")
+  escalatedById     String?       @map("escalated_by_id")
+  escalatedByName   String?       @map("escalated_by_name")
+  escalationNote    String?       @map("escalation_note")
+  createdAt         DateTime      @default(now()) @map("created_at")
 
   detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
   incident  Incident?
@@ -207,6 +214,8 @@ model Alert {
   @@index([createdAt])
   @@index([isRead, createdAt(sort: Desc)], map: "alerts_is_read_created_at_idx")
   @@index([severity, createdAt(sort: Desc)], map: "alerts_severity_created_at_idx")
+  @@index([acknowledgedAt])
+  @@index([escalatedAt])
   @@map("alerts")
 }
 
@@ -346,6 +355,8 @@ enum AuditLogAction {
   monitor_started
   monitor_stopped
   alert_created
+  alert_acknowledged
+  alert_escalated
   report_generated
   settings_changed
   incident_created

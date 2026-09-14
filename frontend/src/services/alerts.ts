@@ -25,6 +25,21 @@ export const alertService = {
     return data.data;
   },
 
+  async acknowledge(id: string) {
+    const { data } = await api.patch<{ success: boolean; data: Alert }>(
+      `/alerts/${id}/acknowledge`,
+    );
+    return data.data;
+  },
+
+  async escalate(id: string, note?: string) {
+    const { data } = await api.patch<{ success: boolean; data: Alert }>(
+      `/alerts/${id}/escalate`,
+      note ? { note } : {},
+    );
+    return data.data;
+  },
+
   async markAllAsRead() {
     const { data } = await api.patch<{
       success: boolean;

@@ -228,6 +228,13 @@ export interface Alert {
   title: string;
   message: string;
   isRead: boolean;
+  acknowledgedAt: string | null;
+  acknowledgedById: string | null;
+  acknowledgedByName: string | null;
+  escalatedAt: string | null;
+  escalatedById: string | null;
+  escalatedByName: string | null;
+  escalationNote: string | null;
   createdAt: string;
   detection?: DetectionWithCamera;
   incident?: Pick<Incident, "id" | "status"> | null;

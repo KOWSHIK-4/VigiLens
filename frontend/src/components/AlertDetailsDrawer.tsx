@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, Clock, Layers, ShieldAlert, X, Loader2 } from "lucide-react";
+import { Camera, Clock, Layers, ShieldAlert, X, Loader2, CheckCircle2, ArrowUpCircle } from "lucide-react";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatDateTime } from "@/utils/format";
 import { incidentService } from "@/services/incidents";
@@ -144,6 +144,42 @@ export default function AlertDetailsDrawer({
               />
             )}
           </div>
+
+          {(alert.acknowledgedAt || alert.escalatedAt) && (
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">
+                Workflow
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                {alert.acknowledgedAt && (
+                  <DetailItem
+                    icon={<CheckCircle2 className="w-4 h-4 text-amber-600" />}
+                    label="Acknowledged"
+                    value={`${alert.acknowledgedByName ?? "Unknown"} · ${formatDateTime(
+                      alert.acknowledgedAt,
+                    )}`}
+                    full
+                  />
+                )}
+                {alert.escalatedAt && (
+                  <DetailItem
+                    icon={<ArrowUpCircle className="w-4 h-4 text-red-600" />}
+                    label="Escalated"
+                    value={
+                      alert.escalationNote
+                        ? `${alert.escalatedByName ?? "Unknown"} · ${formatDateTime(
+                            alert.escalatedAt,
+                          )} — ${alert.escalationNote}`
+                        : `${alert.escalatedByName ?? "Unknown"} · ${formatDateTime(
+                            alert.escalatedAt,
+                          )}`
+                    }
+                    full
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {detection && (
             <>

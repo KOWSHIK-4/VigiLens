@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCheck,
+  CheckCircle2,
+  ArrowUpCircle,
   Trash2,
   Search,
   ChevronLeft,
@@ -57,6 +59,9 @@ export default function AlertsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [escalationTarget, setEscalationTarget] = useState<Alert | null>(null);
+  const [escalationNote, setEscalationNote] = useState("");
+  const [escalationError, setEscalationError] = useState("");
   const [exporting, setExporting] = useState(false);
   const limit = 20;
 
@@ -105,6 +110,46 @@ export default function AlertsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       queryClient.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
+    },
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (id: string) => alertService.acknowledge(id),
+    onSuccess: (alert: Alert) => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
+      showToast({
+        severity: "info",
+        title: "Alert acknowledged",
+        message: `"${alert.title}" has been acknowledged.`,
+      });
+    },
+    onError: () => {
+      showToast({
+        severity: "critical",
+        title: "Failed to acknowledge",
+        message: "Could not acknowledge the alert. Please try again.",
+      });
+    },
+  });
+
+  const escalateMutation = useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      alertService.escalate(id, note),
+    onSuccess: (alert: Alert) => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
+      setEscalationTarget(null);
+      setEscalationNote("");
+      setEscalationError("");
+      showToast({
+        severity: "info",
+        title: "Alert escalated",
+        message: `"${alert.title}" has been escalated.`,
+      });
+    },
+    onError: () => {
+      setEscalationError("Failed to escalate the alert. Please try again.");
     },
   });
 
@@ -424,6 +469,30 @@ export default function AlertsPage() {
                       {!alert.isRead && (
                         <span className="w-2 h-2 rounded-full bg-brand-500" />
                       )}
+                      {alert.acknowledgedAt && (
+                        <span
+                          className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200"
+                          title={`Acknowledged by ${
+                            alert.acknowledgedByName ?? "Unknown"
+                          } at ${new Date(alert.acknowledgedAt).toLocaleString()}`}
+                        >
+                          Acknowledged
+                        </span>
+                      )}
+                      {alert.escalatedAt && (
+                        <span
+                          className="text-xs font-medium px-2 py-0.5 rounded-full border bg-red-50 text-red-700 border-red-200"
+                          title={
+                            alert.escalationNote
+                              ? `Escalated by ${alert.escalatedByName ?? "Unknown"}: ${alert.escalationNote}`
+                              : `Escalated by ${alert.escalatedByName ?? "Unknown"} at ${new Date(
+                                  alert.escalatedAt,
+                                ).toLocaleString()}`
+                          }
+                        >
+                          Escalated
+                        </span>
+                      )}
                       <span
                         className="text-xs text-gray-400"
                         title={new Date(alert.createdAt).toLocaleString()}
@@ -464,6 +533,32 @@ export default function AlertsPage() {
                         title="Mark as read"
                       >
                         <CheckCheck className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canManage && !alert.acknowledgedAt && (
+                      <button
+                        onClick={() => acknowledgeMutation.mutate(alert.id)}
+                        disabled={acknowledgeMutation.isPending}
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Acknowledge alert"
+                        aria-label={`Acknowledge ${alert.title}`}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canManage && !alert.escalatedAt && (
+                      <button
+                        onClick={() => {
+                          setEscalationError("");
+                          setEscalationNote("");
+                          setEscalationTarget(alert);
+                        }}
+                        disabled={escalateMutation.isPending}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Escalate alert"
+                        aria-label={`Escalate ${alert.title}`}
+                      >
+                        <ArrowUpCircle className="w-4 h-4" />
                       </button>
                     )}
                     {canManage && (
@@ -560,6 +655,82 @@ export default function AlertsPage() {
           setDeleteError("");
         }}
       />
+
+      {escalationTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-40"
+            onClick={() => setEscalationTarget(null)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Escalate Alert</h3>
+              <button
+                onClick={() => setEscalationTarget(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                aria-label="Close escalation dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mt-4">
+              <p className="text-sm text-gray-600">
+                Escalating{" "}
+                <span className="font-semibold text-gray-800">
+                  {escalationTarget.title}
+                </span>{" "}
+                flags the alert for higher priority handling.
+              </p>
+              <label
+                htmlFor="escalation-note"
+                className="block text-sm font-medium text-gray-700 mt-4"
+              >
+                Escalation note (optional)
+              </label>
+              <textarea
+                id="escalation-note"
+                value={escalationNote}
+                onChange={(e) => setEscalationNote(e.target.value.slice(0, 500))}
+                rows={3}
+                maxLength={500}
+                placeholder="Why is this alert being escalated?"
+                className="input mt-1 w-full resize-none"
+              />
+              <p className="text-right text-xs text-gray-400 mt-1">
+                {escalationNote.length}/500
+              </p>
+              {escalationError ? (
+                <p className="text-sm text-red-600 mt-2">{escalationError}</p>
+              ) : null}
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setEscalationTarget(null)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  escalateMutation.mutate({
+                    id: escalationTarget.id,
+                    note: escalationNote.trim() || undefined,
+                  })
+                }
+                disabled={escalateMutation.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                {escalateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ArrowUpCircle className="w-4 h-4" />
+                )}
+                Escalate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

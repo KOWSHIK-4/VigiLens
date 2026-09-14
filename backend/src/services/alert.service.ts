@@ -132,6 +132,42 @@ export const alertService = {
     });
   },
 
+  async acknowledge(id: string, actor: { id: string; name: string }) {
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) throw new ApiError(404, "Alert not found");
+
+    return prisma.alert.update({
+      where: { id },
+      data: {
+        isRead: true,
+        acknowledgedAt: new Date(),
+        acknowledgedById: actor.id,
+        acknowledgedByName: actor.name,
+      },
+      include: alertInclude,
+    });
+  },
+
+  async escalate(id: string, actor: { id: string; name: string }, note?: string) {
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) throw new ApiError(404, "Alert not found");
+
+    return prisma.alert.update({
+      where: { id },
+      data: {
+        isRead: true,
+        acknowledgedAt: alert.acknowledgedAt ?? new Date(),
+        acknowledgedById: alert.acknowledgedById ?? actor.id,
+        acknowledgedByName: alert.acknowledgedByName ?? actor.name,
+        escalatedAt: new Date(),
+        escalatedById: actor.id,
+        escalatedByName: actor.name,
+        escalationNote: note ?? null,
+      },
+      include: alertInclude,
+    });
+  },
+
   async markAllAsRead() {
     await prisma.alert.updateMany({
       where: { isRead: false },

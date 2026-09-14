@@ -221,6 +221,59 @@ async function run() {
   if (res.status === 200) ok("marking the seeded alert as read succeeds");
   else fail("markAsRead happy path", res);
 
+  // --- Acknowledge / escalate workflow ---
+  res = await request(`/alerts/${randomUuid}/acknowledge`, { method: "PATCH" }, token);
+  if (res.status === 404) ok("acknowledging an unknown alert returns 404");
+  else fail("acknowledge 404", res);
+
+  res = await request(`/alerts/${randomUuid}/escalate`, { method: "PATCH", body: JSON.stringify({}) }, token);
+  if (res.status === 404) ok("escalating an unknown alert returns 404");
+  else fail("escalate 404", res);
+
+  res = await request(`/alerts/${alertCritical.id}/escalate`, {
+    method: "PATCH",
+    body: JSON.stringify({ note: "x".repeat(501) }),
+  }, token);
+  if (res.status === 400) ok("escalate rejects a note longer than 500 chars");
+  else fail("escalate note validation", res);
+
+  res = await request(`/alerts/${alertCritical.id}/escalate`, {
+    method: "PATCH",
+    body: JSON.stringify({ note: "Needs immediate physical inspection" }),
+  }, token);
+  const escalated = res.body as
+    | { data?: { isRead: boolean; acknowledgedAt: string | null; acknowledgedByName: string | null; escalatedAt: string | null; escalatedByName: string | null; escalationNote: string | null } }
+    | null;
+  if (
+    res.status === 200 &&
+    escalated?.data?.escalatedAt &&
+    escalated.data.escalatedByName === "Admin User" &&
+    escalated.data.escalationNote === "Needs immediate physical inspection" &&
+    escalated.data.isRead === true &&
+    escalated.data.acknowledgedAt &&
+    escalated.data.acknowledgedByName === "Admin User"
+  ) {
+    ok("escalate records the actor and note and implies acknowledgement");
+  } else {
+    fail("escalate happy path", res);
+  }
+
+  res = await request(`/alerts/${alertWarning.id}/acknowledge`, { method: "PATCH" }, token);
+  const acked = res.body as
+    | { data?: { isRead: boolean; acknowledgedAt: string | null; acknowledgedByName: string | null; escalatedAt: string | null } }
+    | null;
+  if (
+    res.status === 200 &&
+    acked?.data?.acknowledgedAt &&
+    acked.data.acknowledgedByName === "Admin User" &&
+    acked.data.isRead === true &&
+    acked.data.escalatedAt === null
+  ) {
+    ok("acknowledge marks the alert read with actor attribution");
+  } else {
+    fail("acknowledge happy path", res);
+  }
+
   res = await request(`/alerts/${alertWarning.id}`, { method: "DELETE" }, token);
   if (res.status === 200) ok("deleting the seeded alert succeeds");
   else fail("delete happy path", res);
