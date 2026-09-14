@@ -4,15 +4,18 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Download,
   Flag,
   Loader2,
   Search,
   ShieldAlert,
   User,
+  UserCheck,
   X,
 } from "lucide-react";
 import { incidentService } from "@/services/incidents";
 import { showToast } from "@/utils/toast";
+import { downloadBlob } from "@/utils/csv";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatRelativeTime } from "@/utils/format";
 import IncidentDetailsDrawer from "@/components/IncidentDetailsDrawer";
@@ -61,6 +64,9 @@ export default function IncidentsPage() {
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [search, setSearch] = useState("");
+  const [mine, setMine] = useState(false);
+  const [unassigned, setUnassigned] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const limit = 20;
@@ -71,9 +77,11 @@ export default function IncidentsPage() {
       limit,
       status: (status || undefined) as IncidentStatus | undefined,
       priority: (priority || undefined) as "info" | "warning" | "critical" | undefined,
+      mine: mine || undefined,
+      unassigned: unassigned || undefined,
       search: search || undefined,
     }),
-    [page, limit, status, priority, search],
+    [page, limit, status, priority, mine, unassigned, search],
   );
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -102,14 +110,33 @@ export default function IncidentsPage() {
   const incidents = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 0;
-  const hasActiveFilters = Boolean(status || priority || search);
+  const hasActiveFilters = Boolean(status || priority || search || mine || unassigned);
   const summary = summaryData;
 
   const clearFilters = () => {
     setStatus("");
     setPriority("");
     setSearch("");
+    setMine(false);
+    setUnassigned(false);
     setPage(1);
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const blob = await incidentService.exportCSV(queryFilters());
+      downloadBlob(blob, `incidents-${Date.now()}.csv`);
+    } catch (err) {
+      console.error("Failed to export incidents:", err);
+      showToast({
+        severity: "critical",
+        title: "Export failed",
+        message: "Could not generate the CSV export. Please try again.",
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -137,16 +164,26 @@ export default function IncidentsPage() {
                 Security incident workflow from alert to resolution
               </p>
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-              />
-              <Activity className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`} />
-              Auto-refresh
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <Activity className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`} />
+                Auto-refresh
+              </label>
+              <button
+                onClick={handleExportCSV}
+                disabled={exporting}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+            </div>
           </div>
 
           {summary && (
@@ -172,6 +209,41 @@ export default function IncidentsPage() {
                 }}
                 className="input pl-10"
               />
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  setMine((v) => !v);
+                  setUnassigned(false);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  mine
+                    ? "bg-brand-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+                title="Show only incidents assigned to you"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                Assigned to me
+              </button>
+              <button
+                onClick={() => {
+                  setUnassigned((v) => !v);
+                  setMine(false);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  unassigned
+                    ? "bg-brand-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+                title="Show only unassigned incidents for triage"
+              >
+                <User className="w-3.5 h-3.5" />
+                Unassigned
+              </button>
             </div>
 
             <div className="flex gap-2 flex-wrap">

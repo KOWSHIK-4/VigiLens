@@ -244,6 +244,8 @@ export const incidentQuerySchema = z.object({
   status: incidentStatusSchema.optional(),
   priority: alertSeveritySchema.optional(),
   assignedTo: z.string().uuid().optional(),
+  mine: z.enum(["true", "false"]).optional(),
+  unassigned: z.enum(["true", "false"]).optional(),
   search: z.string().max(200).optional(),
   sortBy: z
     .enum(["status", "priority", "openedAt", "createdAt", "updatedAt", "title"])

@@ -576,6 +576,50 @@ async function run() {
     fail("incident audit trail", [...auditActions]);
   }
 
+  // --- Investigation workflow: mine / unassigned filters + CSV export ---
+  res = await request("/incidents?mine=maybe", {}, adminToken);
+  assertStatus(res.status, 400, "mine=maybe is rejected with 400", "mine filter validation");
+
+  res = await request("/auth/me", {}, adminToken);
+  const meBody = res.body as { data?: { id?: string } } | null;
+  const adminId = res.status === 200 ? meBody?.data?.id : undefined;
+  if (!adminId) {
+    fail("auth/me for mine filter", res);
+  } else {
+    res = await request(`/incidents/${incidentBId}/assign`, {
+      method: "PATCH",
+      body: JSON.stringify({ assigneeId: adminId }),
+    }, adminToken);
+    assertStatus(res.status, 200, "assigning an incident to the acting admin", "mine assign");
+
+    res = await request("/incidents?mine=true&limit=50", {}, adminToken);
+    const mineList = res.body as { data?: Array<{ id: string }> } | null;
+    if (
+      res.status === 200 &&
+      mineList?.data?.some((i) => i.id === incidentBId) &&
+      !mineList.data.some((i) => i.id === incidentAId)
+    ) {
+      ok("mine=true filters to incidents assigned to the requesting user");
+    } else {
+      fail("mine filter", res);
+    }
+
+    res = await request("/incidents?unassigned=true&limit=50", {}, adminToken);
+    const unassignedList = res.body as { data?: Array<{ id: string }> } | null;
+    if (
+      res.status === 200 &&
+      unassignedList?.data?.some((i) => i.id === incidentAId) &&
+      !unassignedList.data.some((i) => i.id === incidentBId)
+    ) {
+      ok("unassigned=true filters to incidents with no assignee");
+    } else {
+      fail("unassigned filter", res);
+    }
+  }
+
+  res = await request("/incidents/export?limit=100", {}, adminToken);
+  assertStatus(res.status, 200, "GET /incidents/export returns CSV content", "incident CSV export");
+
   console.log(`\nIncident API tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
 

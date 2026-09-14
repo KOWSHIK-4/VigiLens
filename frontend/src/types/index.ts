@@ -297,6 +297,8 @@ export interface IncidentFilters {
   status?: IncidentStatus;
   priority?: "info" | "warning" | "critical";
   assignedTo?: string;
+  mine?: boolean;
+  unassigned?: boolean;
   search?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";

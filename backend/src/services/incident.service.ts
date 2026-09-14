@@ -76,7 +76,10 @@ const incidentInclude = {
   },
 } satisfies Prisma.IncidentInclude;
 
-function buildWhere(params: Pick<IncidentQueryInput, "status" | "priority" | "assignedTo" | "search">): Prisma.IncidentWhereInput {
+function buildWhere(
+  params: Pick<IncidentQueryInput, "status" | "priority" | "assignedTo" | "mine" | "unassigned" | "search">,
+  userId?: string,
+): Prisma.IncidentWhereInput {
   const where: Prisma.IncidentWhereInput = {};
 
   if (params.status) {
@@ -89,6 +92,14 @@ function buildWhere(params: Pick<IncidentQueryInput, "status" | "priority" | "as
 
   if (params.assignedTo) {
     where.assignedToUserId = params.assignedTo;
+  }
+
+  if (params.mine === "true" && userId) {
+    where.assignedToUserId = userId;
+  }
+
+  if (params.unassigned === "true") {
+    where.assignedToUserId = null;
   }
 
   if (params.search) {
@@ -246,8 +257,8 @@ export const incidentService = {
     });
   },
 
-  async findAll(params: IncidentQueryInput) {
-    const where = buildWhere(params);
+  async findAll(params: IncidentQueryInput, userId?: string) {
+    const where = buildWhere(params, userId);
 
     const [data, total] = await Promise.all([
       prisma.incident.findMany({
@@ -261,6 +272,46 @@ export const incidentService = {
     ]);
 
     return { data, total };
+  },
+
+  async *streamCSV(params: IncidentQueryInput, userId?: string, pageSize = 500) {
+    const where = buildWhere(params, userId);
+    let skip = 0;
+
+    for (;;) {
+      const incidents = await prisma.incident.findMany({
+        where,
+        include: {
+          alert: {
+            include: {
+              detection: {
+                include: {
+                  camera: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ openedAt: "desc" }, { id: "desc" }],
+        take: pageSize,
+        skip,
+      });
+      if (incidents.length === 0) return;
+      for (const i of incidents) {
+        yield [
+          i.id,
+          i.status,
+          i.priority,
+          i.title,
+          i.alert?.detection?.camera?.name ?? i.alert?.detection?.cameraId ?? "",
+          i.assignedToName ?? "",
+          i.openedAt.toISOString(),
+          i.resolvedAt?.toISOString() ?? "",
+          i.description,
+        ];
+      }
+      skip += incidents.length;
+    }
   },
 
   async findById(id: string) {

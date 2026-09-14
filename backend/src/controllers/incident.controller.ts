@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { incidentService } from "../services/incident.service";
 import { success, paginated } from "../utils/apiResponse";
+import { sendCsvStream } from "../utils/csvStream";
 
 function actorFrom(req: AuthRequest) {
   return {
@@ -23,10 +24,27 @@ export const incidentController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as IncidentQueryInput;
-      const result = await incidentService.findAll(q);
+      const result = await incidentService.findAll(q, req.userId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
+    }
+  },
+
+  async exportCsv(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const q = req.query as unknown as IncidentQueryInput;
+      res.setHeader("Content-Disposition", `attachment; filename=incidents-${Date.now()}.csv`);
+      await sendCsvStream(
+        res,
+        [
+          "ID", "Status", "Priority", "Title", "Source Camera", "Assignee",
+          "Opened At", "Resolved At", "Description",
+        ],
+        incidentService.streamCSV(q, req.userId),
+      );
+    } catch (err) {
+      if (!res.headersSent) next(err);
     }
   },
 

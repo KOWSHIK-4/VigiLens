@@ -69,4 +69,12 @@ export const incidentService = {
     );
     return data.data;
   },
+
+  async exportCSV(params?: IncidentFilters): Promise<Blob> {
+    const { data } = await api.get("/incidents/export", {
+      params,
+      responseType: "blob",
+    });
+    return data;
+  },
 };
