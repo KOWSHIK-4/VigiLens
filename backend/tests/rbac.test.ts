@@ -524,7 +524,7 @@ async function run() {
     "/auth/change-password",
     {
       method: "POST",
-      body: JSON.stringify({ currentPassword: "totallywrong", newPassword: "finalpass99" }),
+      body: JSON.stringify({ currentPassword: "totallywrong", newPassword: "FinalPass99!" }),
     },
     forcedToken,
   );
@@ -538,7 +538,7 @@ async function run() {
     "/auth/change-password",
     {
       method: "POST",
-      body: JSON.stringify({ currentPassword: "newpass1234", newPassword: "finalpass99" }),
+      body: JSON.stringify({ currentPassword: "newpass1234", newPassword: "FinalPass99!" }),
     },
     forcedToken,
   );

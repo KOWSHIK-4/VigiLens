@@ -9,8 +9,9 @@ const router = Router();
 
 /**
  * Credential endpoints get a much stricter bucket than the global API
- * limit: it paces online guessing while the per-account lockout (5
- * failed attempts) stops targeted brute force.
+ * limit: it paces online guessing while the per-account lockout (threshold
+ * configured under Security settings -> max_login_attempts) stops targeted
+ * brute force.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

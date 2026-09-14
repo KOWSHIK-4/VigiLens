@@ -3,9 +3,69 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { prisma } from "../config/prisma";
 import { config } from "../config";
 import { permissionService } from "./permission.service";
+import { settingsService } from "./settings.service";
+import { ApiError } from "../utils/errors";
 import type { RegisterInput, LoginInput, ChangePasswordInput } from "../types";
 
-const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+export interface SecurityPolicy {
+  maxLoginAttempts: number;
+  lockoutDurationMinutes: number;
+  passwordMinLength: number;
+  requirePasswordComplexity: boolean;
+  jwtExpirationHours?: number;
+}
+
+const PASSWORD_COMPLEXITY_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+
+/**
+ * Reads the auth-relevant security settings (cached by the settings service,
+ * 60s TTL). Values fall back to the sanitized defaults from `settings/defaults`
+ * when a deployment has not overridden them.
+ */
+async function loadSecurityPolicy(): Promise<SecurityPolicy> {
+  const [
+    maxLoginAttempts,
+    lockoutDurationMinutes,
+    passwordMinLength,
+    requirePasswordComplexity,
+    jwtExpirationHours,
+  ] = await Promise.all([
+    settingsService.getValue("security", "max_login_attempts"),
+    settingsService.getValue("security", "lockout_duration_minutes"),
+    settingsService.getValue("security", "password_min_length"),
+    settingsService.getValue("security", "password_require_complexity"),
+    settingsService.getValue("security", "jwt_expiration_hours"),
+  ]);
+  return {
+    maxLoginAttempts: typeof maxLoginAttempts === "number" ? maxLoginAttempts : 5,
+    lockoutDurationMinutes:
+      typeof lockoutDurationMinutes === "number" ? lockoutDurationMinutes : 15,
+    passwordMinLength: typeof passwordMinLength === "number" ? passwordMinLength : 8,
+    requirePasswordComplexity: requirePasswordComplexity !== false,
+    jwtExpirationHours:
+      typeof jwtExpirationHours === "number" && jwtExpirationHours > 0
+        ? jwtExpirationHours
+        : undefined,
+  };
+}
+
+function enforcePasswordPolicy(
+  password: string,
+  policy: Pick<SecurityPolicy, "passwordMinLength" | "requirePasswordComplexity">,
+) {
+  if (password.length < policy.passwordMinLength) {
+    throw new ApiError(
+      400,
+      `Password must be at least ${policy.passwordMinLength} characters long`,
+    );
+  }
+  if (policy.requirePasswordComplexity && !PASSWORD_COMPLEXITY_PATTERN.test(password)) {
+    throw new ApiError(
+      400,
+      "Password must include uppercase and lowercase letters, a number and a symbol",
+    );
+  }
+}
 
 export const authService = {
   async register(input: RegisterInput) {
@@ -16,6 +76,9 @@ export const authService = {
     if (existing) {
       throw new Error("Email already in use");
     }
+
+    const policy = await loadSecurityPolicy();
+    enforcePasswordPolicy(input.password, policy);
 
     const password = await bcrypt.hash(input.password, 12);
 
@@ -30,7 +93,7 @@ export const authService = {
 
     const permissions = await permissionService.getPermissionsForRole(user.role);
 
-    const token = this.generateToken(user.id, user.role);
+    const token = this.generateToken(user.id, user.role, policy.jwtExpirationHours);
 
     return { user: this.publicUser(user, permissions), token };
   },
@@ -48,15 +111,30 @@ export const authService = {
       throw new Error("Account disabled. Contact your administrator");
     }
 
+    const policy = await loadSecurityPolicy();
+
+    // Lockouts are temporary (policy-configured). If the lock window has
+    // elapsed, clear it so the user is not stranded until an admin intervenes.
+    if (user.isLocked && user.lockedAt) {
+      const lockMillis = policy.lockoutDurationMinutes * 60_000;
+      if (Date.now() - user.lockedAt.getTime() > lockMillis) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { isLocked: false, lockedAt: null, failedLoginAttempts: 0 },
+        });
+        user.isLocked = false;
+      }
+    }
+
     if (user.isLocked) {
-      throw new Error("Account locked. Contact your administrator");
+      throw new Error("Account temporarily locked. Try again later.");
     }
 
     const valid = await bcrypt.compare(input.password, user.password);
 
     if (!valid) {
       const failedLoginAttempts = user.failedLoginAttempts + 1;
-      const shouldLock = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+      const shouldLock = failedLoginAttempts >= policy.maxLoginAttempts;
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -79,7 +157,7 @@ export const authService = {
     });
 
     const permissions = await permissionService.getPermissionsForRole(user.role);
-    const token = this.generateToken(user.id, user.role);
+    const token = this.generateToken(user.id, user.role, policy.jwtExpirationHours);
 
     return { user: this.publicUser(user, permissions), token };
   },
@@ -109,6 +187,12 @@ export const authService = {
     const valid = await bcrypt.compare(input.currentPassword, user.password);
     if (!valid) {
       throw new Error("Current password is incorrect");
+    }
+
+    const policy = await loadSecurityPolicy();
+    enforcePasswordPolicy(input.newPassword, policy);
+    if (input.currentPassword === input.newPassword) {
+      throw new ApiError(400, "New password must be different from the current password");
     }
 
     const hashedPassword = await bcrypt.hash(input.newPassword, 12);
@@ -156,12 +240,14 @@ export const authService = {
     };
   },
 
-  generateToken(userId: string, role: string): string {
+  generateToken(userId: string, role: string, expirationHours?: number): string {
+    const expiresIn =
+      expirationHours !== undefined ? `${expirationHours}h` : config.jwt.expiresIn;
     return jwt.sign({ userId, role }, config.jwt.secret, {
       algorithm: "HS256",
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
-      expiresIn: config.jwt.expiresIn as SignOptions["expiresIn"],
+      expiresIn: expiresIn as SignOptions["expiresIn"],
     });
   },
 };

@@ -100,6 +100,31 @@ export const settingsService = {
     if (created > 0) {
       logger.info("Seeded default system settings", { count: created });
     }
+
+    // Seed rows that were never explicitly modified (updatedBy null) are
+    // expected to track the current definition defaults. Rewrite any that
+    // drifted (e.g. a default value changed in code) so existing
+    // deployments inherit the behavior the current code documents instead of
+    // being stuck with a stale value from an earlier release.
+    const seedRows = await prisma.systemSetting.findMany({
+      where: { updatedBy: null },
+    });
+    let normalized = 0;
+    for (const row of seedRows) {
+      const def = getSettingDefinition(row.category, row.key);
+      if (!def) continue;
+      const stored = row.value as SettingValue;
+      if (stored !== def.defaultValue) {
+        await prisma.systemSetting.update({
+          where: { category_key: { category: row.category, key: row.key } },
+          data: { value: def.defaultValue as Prisma.InputJsonValue },
+        });
+        normalized += 1;
+      }
+    }
+    if (normalized > 0) {
+      logger.info("Normalized drifted default settings", { count: normalized });
+    }
     return created;
   },
 

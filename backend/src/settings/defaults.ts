@@ -198,9 +198,9 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
       {
         key: "jwt_require_https",
         label: "Require HTTPS for login",
-        description: "Reject login attempts over plain HTTP when enabled.",
+        description: "Reject login and registration over plain HTTP when enabled. Enable once your deployment serves HTTPS.",
         type: "boolean",
-        defaultValue: true,
+        defaultValue: false,
       },
     ],
   },

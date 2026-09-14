@@ -69,7 +69,7 @@ export async function authenticate(
       return apiError(res, "Account disabled. Contact your administrator", 403);
     }
     if (user.isLocked) {
-      return apiError(res, "Account locked. Contact your administrator", 403);
+      return apiError(res, "Account temporarily locked. Try again later.", 403);
     }
     if (
       user.mustChangePassword &&

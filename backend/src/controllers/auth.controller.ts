@@ -1,7 +1,9 @@
 import type { Response, NextFunction } from "express";
 import { authService } from "../services/auth.service";
+import { settingsService } from "../services/settings.service";
 import { success, error } from "../utils/apiResponse";
 import type { AuthRequest, ChangePasswordInput } from "../types";
+import { config } from "../config";
 import { logger } from "../config/logger";
 import { logAudit } from "../utils/auditLog";
 
@@ -12,9 +14,29 @@ function getClientInfo(req: AuthRequest) {
   };
 }
 
+/**
+ * Determines whether credentials would travel over cleartext. An explicit
+ * ``X-Forwarded-Proto`` of ``http`` is authoritative (the proxy chain says the
+ * client spoke plain HTTP); without any proxy header only a production server
+ * is treated as exposed, so local development and tests are never blocked.
+ */
+function isCleartextRequest(req: AuthRequest): boolean {
+  if (req.secure) return false;
+  const forwarded = (req.headers["x-forwarded-proto"] as string | undefined) ?? "";
+  const proto = forwarded.split(",")[0].trim().toLowerCase();
+  if (proto) return proto === "http";
+  return config.nodeEnv === "production";
+}
+
 export const authController = {
   async register(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const requireHttps = await settingsService.getValue("security", "jwt_require_https");
+      if (requireHttps === true && isCleartextRequest(req)) {
+        return error(res, "HTTPS connection required for registration", 403, {
+          code: "HTTPS_REQUIRED",
+        });
+      }
       const result = await authService.register(req.body);
       const info = getClientInfo(req);
       await logAudit({
@@ -45,6 +67,12 @@ export const authController = {
 
   async login(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const requireHttps = await settingsService.getValue("security", "jwt_require_https");
+      if (requireHttps === true && isCleartextRequest(req)) {
+        return error(res, "HTTPS connection required for login", 403, {
+          code: "HTTPS_REQUIRED",
+        });
+      }
       const result = await authService.login(req.body);
       const info = getClientInfo(req);
       await logAudit({
@@ -77,7 +105,7 @@ export const authController = {
       }
       if (
         err instanceof Error &&
-        err.message === "Account locked. Contact your administrator"
+        err.message === "Account temporarily locked. Try again later."
       ) {
         return error(res, err.message, 403);
       }
