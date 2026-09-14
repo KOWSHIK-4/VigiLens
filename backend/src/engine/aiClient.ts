@@ -172,6 +172,17 @@ export class HttpAiServiceClient implements AiServiceClient {
     this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...retryConfig };
   }
 
+  /**
+   * Shared-secret header that the AI service requires on every
+   * machine-to-machine endpoint (capture and detection). Matches the backend
+   * INTERNAL_API_KEY so the boundary stays closed to anonymous callers.
+   */
+  private internalKeyHeaders(): Record<string, string> {
+    return config.security.internalApiKey
+      ? { "X-Internal-Key": config.security.internalApiKey }
+      : {};
+  }
+
   async detectImage(
     frame: Buffer,
     detectorKey?: string,
@@ -232,6 +243,7 @@ export class HttpAiServiceClient implements AiServiceClient {
       try {
         response = await fetch(url, {
           method: "POST",
+          headers: this.internalKeyHeaders(),
           body: form,
           signal: controller.signal,
         });
@@ -349,7 +361,10 @@ export class HttpAiServiceClient implements AiServiceClient {
     try {
       let response: Response;
       try {
-        response = await fetch(url, { signal: controller.signal });
+        response = await fetch(url, {
+          headers: this.internalKeyHeaders(),
+          signal: controller.signal,
+        });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           throw new AiServiceError("timeout", `AI service timed out after ${timeoutMs}ms capturing a frame`);

@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -55,16 +56,25 @@ if _app_origin and _app_origin not in _cors_origins:
     _cors_origins.append(_app_origin)
 
 _node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
+_is_production = _node_env == "production"
+
+# A wildcard origin combined with credentials is both rejected by browsers and
+# defeats the point of CORS. In production it is always removed; the service
+# may also only start with an explicit origin allow-list.
+if _is_production and "*" in _cors_origins:
+    logger.warning("Removing wildcard '*' from CORS_ORIGINS in production")
+    _cors_origins = [o for o in _cors_origins if o != "*"]
+
 if not _cors_origins:
-    if _node_env == "production":
+    if _is_production:
         logger.critical(
-            "No CORS origins configured in production. Set CORS_ORIGINS or "
-            "CORS_ORIGIN environment variable. Falling back to same-origin only."
+            "FATAL: No explicit CORS origin configured in production. Set "
+            "CORS_ORIGINS or CORS_ORIGIN (e.g. https://your-domain.com). "
+            "The server will not start without an explicit allow-list."
         )
-        _cors_origins = []
-    else:
-        logger.warning("No CORS origins configured — allowing all origins (development only)")
-        _cors_origins = ["*"]
+        sys.exit(1)
+    logger.warning("No CORS origins configured — allowing all origins (development only)")
+    _cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

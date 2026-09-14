@@ -89,3 +89,54 @@ def test_capture_route_returns_jpeg(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
     assert response.content.startswith(b"\xff\xd8")
+
+
+def test_capture_requires_internal_key_when_auth_forced(monkeypatch):
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    response = client.get(
+        "/capture",
+        params={"source": "/dev/video0", "type": "usb"},
+    )
+    assert response.status_code == 401
+
+
+def test_capture_accepts_internal_key_when_auth_forced(monkeypatch):
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    frame = np.zeros((16, 16, 3), dtype=np.uint8)
+
+    def good_open(source, camera_type, timeout_ms):
+        return FakeCapture(opened=True, frame=frame)
+
+    monkeypatch.setattr(capture_service, "open_capture", good_open)
+
+    response = client.get(
+        "/capture",
+        params={"source": "rtsp://example.test/live", "type": "rtsp"},
+        headers={"X-Internal-Key": "dev-internal-key-change-in-production"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
+
+def test_capture_requires_internal_key_for_real_key_without_env_flag(monkeypatch):
+    # A deployment that sets a real shared secret must not expose the capture
+    # proxy even when no NODE_ENV and no explicit flag are configured.
+    monkeypatch.delenv("AI_REQUIRE_AUTH", raising=False)
+    monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
+    monkeypatch.delenv("NODE_ENV", raising=False)
+    monkeypatch.setattr("app.config.settings.backend_internal_key", "real-secret-7f3a")
+
+    rejected = client.get(
+        "/capture",
+        params={"source": "/dev/video0", "type": "usb"},
+    )
+    assert rejected.status_code == 401
+
+    accepted = client.get(
+        "/capture",
+        params={"source": "/dev/video0", "type": "usb"},
+        headers={"X-Internal-Key": "real-secret-7f3a"},
+    )
+    # Autouse fixture keeps real cameras closed: a valid key must get past the
+    # guard and reach the capture worker (which reports the camera as closed).
+    assert accepted.status_code == 502

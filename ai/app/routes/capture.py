@@ -1,18 +1,27 @@
 import asyncio
 import functools
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.config import settings
+from app.security import verify_internal_key
 from app.services.capture import SUPPORTED_CAMERA_TYPES, CaptureError, capture_frame
 
-router = APIRouter(tags=["capture"])
+# Frame capture pulls a stream by URL, so the endpoint doubles as a potential
+# network open proxy. Only the backend engine is allowed to call it: every
+# request must carry the shared internal key.
+router = APIRouter(tags=["capture"], dependencies=[Depends(verify_internal_key)])
+
+#: Upper bounds on the query string so a misconfigured or hostile client
+#: cannot drive an unbounded look-up or hand the worker an oversized string.
+_MAX_SOURCE_LENGTH = 4096
+_MAX_TYPE_LENGTH = 32
 
 
 @router.get("/capture")
 async def capture(
-    source: str = Query(..., description="Camera source url, device path or video file path"),
-    type: str = Query("rtsp", description="usb | rtsp | ip | video_file"),
+    source: str = Query(..., max_length=_MAX_SOURCE_LENGTH, description="Camera source url, device path or video file path"),
+    type: str = Query("rtsp", max_length=_MAX_TYPE_LENGTH, description="usb | rtsp | ip | video_file"),
     video_pos_seconds: float = Query(0.0, ge=0.0, description="Seek position for video_file sources"),
 ):
     if type not in SUPPORTED_CAMERA_TYPES:

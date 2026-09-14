@@ -1,6 +1,5 @@
 import asyncio
 import functools
-import hmac
 import logging
 import os
 import threading
@@ -11,18 +10,21 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.config import DEFAULT_INTERNAL_KEY, settings
+from app.config import settings
 from app.detectors.yolo import InferenceError
+from app.security import verify_internal_key
 from app.services.capture import usb_device_index
 from app.services.detector import detector_service
 from app.services.stats import stream_stats
 from app.services.tracker import IouTracker
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/detect", tags=["detection"])
+# Every detection surface (image, video, detector catalog, webcam stream and
+# stats) is machine-to-machine: guard it with the shared internal key.
+router = APIRouter(prefix="/detect", tags=["detection"], dependencies=[Depends(verify_internal_key)])
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
@@ -291,12 +293,10 @@ async def list_detectors():
 
 @router.get("/webcam/stats")
 async def webcam_stats(
-    request: Request,
     camera_id: str | None = Query(None, description="Stream camera id"),
     detector: str | None = Query(None, description="Stream detector key"),
 ):
     """Live stats for a stream, or the most recent stream when unspecified."""
-    _verify_internal_key(request)
     return stream_stats.get(camera_id, detector)
 
 
@@ -305,35 +305,8 @@ RECONNECT_ATTEMPTS = 3
 RECONNECT_DELAY_SECONDS = 1.0
 
 
-def _verify_internal_key(request: Request) -> None:
-    """Verify the X-Internal-Key header matches the shared secret.
-
-    Auth is required when any of these hold:
-    * the environment is production, or
-    * the shared secret is a real (non-bundled-default) value, or
-    * ``AI_STATS_REQUIRE_AUTH`` is set explicitly (true/1).
-
-    The only anonymous path is a development environment still using the
-    bundled insecure default key without the explicit flag. A deployment that
-    sets a real ``BACKEND_INTERNAL_KEY`` therefore stays protected even if
-    ``NODE_ENV`` is never set and the boolean flag is not flipped.
-    """
-    required = settings.backend_internal_key
-    if not required:
-        return
-    node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
-    explicit_require = os.getenv("AI_STATS_REQUIRE_AUTH", "").lower() in ("1", "true")
-    using_default_key = required == DEFAULT_INTERNAL_KEY
-    if node_env != "production" and using_default_key and not explicit_require:
-        return
-    provided = request.headers.get("x-internal-key", "")
-    if not hmac.compare_digest(provided.encode(), required.encode()):
-        raise HTTPException(status_code=401, detail="Invalid or missing internal key")
-
-
 @router.get("/webcam")
 async def detect_webcam(
-    request: Request,
     camera_id: str = "default",
     detector: str = "person",
     device: str = "0",
@@ -342,9 +315,8 @@ async def detect_webcam(
     processor: str | None = _processor_hint(),
 ):
     # The webcam stream posts detections to the backend's internal API and
-    # exposes live stats; it must be guarded like the stats endpoint so a
-    # production deployment cannot be streamed or triggered anonymously.
-    _verify_internal_key(request)
+    # exposes live stats. Guarding is inherited from the router dependency so
+    # a production deployment cannot be streamed or triggered anonymously.
     ai_detector_name = resolve_ai_detector_name(detector)
     try:
         detector_obj = detector_service.get(ai_detector_name)
