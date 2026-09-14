@@ -25,29 +25,35 @@ export async function authenticate(
   const header = req.headers.authorization;
   // EventSource cannot set the Authorization header, so the realtime stream
   // endpoint (`/api/realtime/events`) authenticates with a short-lived
-  // ?token= query parameter instead. The fallback is intentionally limited
-  // to that single route so JWTs never travel in URLs elsewhere.
+  // ?ticket= query parameter instead. The credential carried here is a
+  // purpose-limited token issued by POST /auth/realtime-ticket (30s TTL,
+  // type: "realtime"); the user's access JWT is rejected in the query so a
+  // long-lived token never ends up in proxy or access logs.
   const isRealtimeStream =
     req.originalUrl?.split("?")[0] === "/api/realtime/events";
-  const queryToken =
-    isRealtimeStream && typeof req.query.token === "string" && req.query.token.length > 0
-      ? req.query.token
+  const queryTicket =
+    isRealtimeStream && typeof req.query.ticket === "string" && req.query.ticket.length > 0
+      ? req.query.ticket
       : undefined;
 
-  if (!header?.startsWith("Bearer ") && !queryToken) {
+  if (!header?.startsWith("Bearer ") && !queryTicket) {
     return apiError(res, "Authentication required", 401);
   }
 
   try {
-    const token = queryToken ?? header!.split(" ")[1];
-    const decoded = jwt.verify(token, config.jwt.secret, {
+    const rawToken = queryTicket ?? header!.split(" ")[1];
+    const decoded = jwt.verify(rawToken, config.jwt.secret, {
       // Pin the algorithm and token claims so a JWT with a different (or no)
       // algorithm header — e.g. "none" — or a foreign issuer/audience is
       // rejected outright.
       algorithms: ["HS256"],
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
-    }) as JwtPayload;
+    }) as JwtPayload & { type?: string };
+
+    if (queryTicket && decoded.type !== "realtime") {
+      return apiError(res, "Invalid or expired token", 401);
+    }
     req.userId = decoded.userId;
     req.userRole = decoded.role;
 

@@ -158,6 +158,15 @@ export const authController = {
     }
   },
 
+  async issueRealtimeTicket(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = authService.issueRealtimeTicket(req.userId!, req.userRole || "viewer");
+      success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async logout(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const info = getClientInfo(req);

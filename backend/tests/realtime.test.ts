@@ -182,27 +182,56 @@ async function run() {
 
   // 1) Unauthenticated SSE must be rejected.
   const sseRejected = await openSse(
-    `/api/realtime/events?token=not-a-real-token`,
+    `/api/realtime/events?ticket=not-a-real-ticket`,
   ).then(
     () => false,
     () => true,
   );
   if (sseRejected) {
-    fail("SSE rejects bad token", "connection destroyed");
+    fail("SSE rejects bad ticket", "connection destroyed");
   } else {
     await sleep(1000);
-    // If the server kept the connection open a bad token would still be
+    // If the server kept the connection open a bad ticket would still be
     // accepted; assert actual server-side rejection by checking subscribers.
     const subs = await request("/realtime/subscribers", {}, adminToken);
     const count = (subs.body as { data?: { count: number } })?.data?.count ?? -1;
-    if (count === 0) ok("SSE rejects bad token (no subscriber registered)");
-    else fail("SSE rejects bad token", `subscriber count=${count}`);
+    if (count === 0) ok("SSE rejects bad ticket (no subscriber registered)");
+    else fail("SSE rejects bad ticket", `subscriber count=${count}`);
   }
 
-  // 2) Open a valid SSE stream.
-  const sse = await openSse(`/api/realtime/events?token=${adminToken}`);
+  // 2a) A full access JWT must NOT be accepted via the query string — that is
+  // the leakage vector being removed (long-lived tokens in proxy logs).
+  const sseWithJwt = await openSse(`/api/realtime/events?ticket=${adminToken}`);
   await sleep(300);
-  ok("valid token opens an SSE stream (connected comment)");
+  const subsWithJwt = await request("/realtime/subscribers", {}, adminToken);
+  const withJwt = (subsWithJwt.body as { data?: { count: number } })?.data?.count ?? -1;
+  if (withJwt === 0) {
+    ok("access JWT is rejected in the SSE query string (no subscriber)");
+  } else {
+    fail("access JWT rejected in query", `subscriber count=${withJwt}`);
+  }
+  sseWithJwt.close();
+
+  // 2b) Fetch a short-lived realtime ticket over the Authorization header,
+  // then open the SSE stream with it.
+  const ticketRes = await request(
+    "/auth/realtime-ticket",
+    { method: "POST" },
+    adminToken,
+  );
+  const ticket =
+    ticketRes.status === 200
+      ? (ticketRes.body as { data: { ticket: string } }).data.ticket
+      : "";
+  if (ticketRes.status === 200 && ticket.length > 0) {
+    ok("authenticated user can mint a short-lived realtime ticket");
+  } else {
+    fail("realtime ticket issuance", ticketRes);
+  }
+
+  const sse = await openSse(`/api/realtime/events?ticket=${ticket}`);
+  await sleep(300);
+  ok("valid ticket opens an SSE stream (connected comment)");
 
   const subsNow = await request("/realtime/subscribers", {}, adminToken);
   const now = (subsNow.body as { data?: { count: number } })?.data?.count ?? -1;

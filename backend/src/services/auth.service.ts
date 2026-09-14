@@ -67,6 +67,8 @@ function enforcePasswordPolicy(
   }
 }
 
+export const REALTIME_TICKET_TTL_SECONDS = 30;
+
 export const authService = {
   async register(input: RegisterInput) {
     const existing = await prisma.user.findUnique({
@@ -249,5 +251,25 @@ export const authService = {
       audience: config.jwt.audience,
       expiresIn: expiresIn as SignOptions["expiresIn"],
     });
+  },
+
+  /**
+   * Issues a short-lived, purpose-limited credential for the realtime SSE
+   * stream. The ticket is a single-use JWT that cannot be replayed against
+   * any other endpoint and expires quickly so leaked access logs or
+   * proxy caches contain only a low-value token.
+   */
+  issueRealtimeTicket(userId: string, role: string) {
+    const ticket = jwt.sign(
+      { userId, role, type: "realtime" },
+      config.jwt.secret,
+      {
+        algorithm: "HS256",
+        issuer: config.jwt.issuer,
+        audience: config.jwt.audience,
+        expiresIn: `${REALTIME_TICKET_TTL_SECONDS}s`,
+      },
+    );
+    return { ticket, expiresInSeconds: REALTIME_TICKET_TTL_SECONDS };
   },
 };

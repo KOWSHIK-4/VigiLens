@@ -31,5 +31,6 @@ router.post(
   validate(changePasswordSchema),
   authController.changePassword,
 );
+router.post("/realtime-ticket", authenticate, authController.issueRealtimeTicket);
 
 export default router;
