@@ -51,7 +51,7 @@ const adminNavItems = [
   },
   {
     path: "/monitoring",
-    label: "Monitoring",
+    label: "Continuous Monitoring",
     icon: Radar,
     permission: "monitoring.read",
   },
@@ -226,35 +226,38 @@ export default function Layout() {
           )}
           {hasPermission(user, "alerts.read") && (
             <>
-            <Link
-              to="/alerts"
-              className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === "/alerts"
-                  ? "bg-brand-600 text-white"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Bell className="w-4 h-4" />
-                Alerts
-              </span>
-              {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                  {unreadCount > 99 ? "99+" : unreadCount}
+              <div className="pt-3 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Operations
+              </div>
+              <Link
+                to="/alerts"
+                className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === "/alerts"
+                    ? "bg-brand-600 text-white"
+                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Bell className="w-4 h-4" />
+                  Alerts
                 </span>
-              )}
-            </Link>
-            <Link
-              to="/incidents"
-              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === "/incidents"
-                  ? "bg-brand-600 text-white"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
-              }`}
-            >
-              <LifeBuoy className="w-4 h-4 mr-3" />
-              Incidents
-            </Link>
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link
+                to="/incidents"
+                className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === "/incidents"
+                    ? "bg-brand-600 text-white"
+                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                <LifeBuoy className="w-4 h-4 mr-3" />
+                Incidents
+              </Link>
             </>
           )}
         </nav>

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -9,7 +10,7 @@ import {
   HardDrive,
   RefreshCw,
   Server,
-  Timer,
+  ArrowRight,
   XCircle,
 } from "lucide-react";
 import { systemService } from "@/services/system";
@@ -21,8 +22,6 @@ import PerformanceMetrics from "@/components/PerformanceMetrics";
 import EngineStatusBadge from "@/components/EngineStatusBadge";
 import type {
   EngineHealthSummary,
-  MonitorLoopSummary,
-  MonitorSchedulerSummary,
   OverallStatus,
   ServiceHealth,
 } from "@/types";
@@ -121,152 +120,29 @@ function ServiceCardsSkeleton() {
   );
 }
 
-const LOOP_STATUS_STYLES: Record<
-  MonitorLoopSummary["status"],
-  { label: string; className: string }
-> = {
-  idle: { label: "Idle", className: "bg-gray-100 text-gray-600" },
-  running: { label: "Running", className: "bg-blue-50 text-blue-700" },
-  ok: { label: "OK", className: "bg-green-50 text-green-700" },
-  error: { label: "Error", className: "bg-red-50 text-red-700" },
-  skipped: { label: "Skipped", className: "bg-amber-50 text-amber-700" },
-};
-
-const BACKOFF_FAILURES_THRESHOLD = 3;
-
-function LoopStatusBadge({ loop }: { loop: MonitorLoopSummary }) {
-  const style =
-    LOOP_STATUS_STYLES[loop.status] ?? LOOP_STATUS_STYLES.idle;
-  const backedOff = loop.consecutiveFailures >= BACKOFF_FAILURES_THRESHOLD;
+function SchedulerLinkCard({ loopCount }: { loopCount: number }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${style.className}`}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {style.label}
-      {backedOff && (
-        <span
-          className="inline-flex items-center gap-1 text-red-700"
-          title="Loop is backed off because of repeated consecutive failures"
-        >
-          <AlertTriangle className="h-3 w-3" />
-          backed off
-        </span>
-      )}
-    </span>
-  );
-}
-
-function LoopStatusSkeleton() {
-  return (
-    <div className="animate-pulse space-y-3">
-      <div className="h-8 w-64 rounded bg-gray-200" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="h-12 rounded bg-gray-200" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SchedulerCard({ scheduler }: { scheduler: MonitorSchedulerSummary }) {
-  const { loops } = scheduler;
-  return (
-    <div className="card overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Timer className="h-4 w-4 text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-900">
-            Monitoring Scheduler
-          </h2>
+    <div className="card border-gray-200 bg-gray-50">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Activity className="h-5 w-5 text-gray-500" />
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Continuous monitoring</p>
+            <p className="text-xs text-gray-500">
+              {loopCount > 0
+                ? `${loopCount} detector loop${loopCount === 1 ? "" : "s"} configured`
+                : "No detector loops configured yet"}
+            </p>
+          </div>
         </div>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            scheduler.running
-              ? "bg-green-100 text-green-700"
-              : "bg-gray-100 text-gray-600"
-          }`}
+        <Link
+          to="/monitoring"
+          className="inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700"
         >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              scheduler.running ? "bg-green-500" : "bg-gray-400"
-            }`}
-          />
-          {scheduler.running ? "Running" : "Stopped"}
-        </span>
+          Open Continuous Monitoring
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-gray-100 sm:grid-cols-3">
-        <SchedulerStat label="Tick interval" value={`${scheduler.tickMs} ms`} />
-        <SchedulerStat label="Loops" value={String(scheduler.loopCount)} />
-        <SchedulerStat
-          label="Frames processed"
-          value={scheduler.framesProcessed.toLocaleString()}
-        />
-        <SchedulerStat
-          label="Detections created"
-          value={scheduler.detectionsCreated.toLocaleString()}
-        />
-        <SchedulerStat label="Errors" value={String(scheduler.errorCount)} />
-        <SchedulerStat
-          label="Next run"
-          value={scheduler.nextTickAt ? formatTime(scheduler.nextTickAt) : "—"}
-        />
-      </div>
-      {loops.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-3 font-medium">Camera / Detector</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Interval</th>
-                <th className="px-4 py-3 font-medium">Frames</th>
-                <th className="px-4 py-3 font-medium">Detections</th>
-                <th className="px-4 py-3 font-medium">Errors</th>
-                <th className="px-4 py-3 font-medium">Last Run</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loops.map((loop) => (
-                <tr key={loop.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{loop.cameraName}</p>
-                    <p className="text-xs text-gray-500">{loop.detectorName}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <LoopStatusBadge loop={loop} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {`${loop.intervalMs} ms`}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-gray-800">
-                    {loop.framesProcessed.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {loop.detectionsCreated.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {loop.errorCount.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {formatTime(loop.lastRunAt)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SchedulerStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-4 py-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-0.5 font-medium text-gray-800">{value}</p>
     </div>
   );
 }
@@ -478,7 +354,6 @@ export default function SystemMonitoringPage() {
             <div className="h-3 w-48 rounded bg-gray-200" />
           </div>
           <ServiceCardsSkeleton />
-          <LoopStatusSkeleton />
         </>
       ) : (
         monitoring && (
@@ -527,7 +402,7 @@ export default function SystemMonitoringPage() {
             </div>
             <ServiceStatusTable services={monitoring.services} />
 
-            <SchedulerCard scheduler={monitoring.scheduler} />
+            <SchedulerLinkCard loopCount={monitoring.scheduler.loopCount} />
             <EngineHealthCard engines={monitoring.engines} />
 
             <div className="grid gap-6 xl:grid-cols-2">
