@@ -504,7 +504,7 @@ export const auditLogQuerySchema = z.object({
     "detector_created", "detector_updated", "detector_deleted",
     "detector_enabled", "detector_disabled",
     "detector_config_updated", "detector_cameras_updated",
-    "monitor_started", "monitor_stopped",
+    "monitor_started", "monitor_stopped", "retention_pruned",
     "alert_created", "alert_acknowledged", "alert_escalated", "report_generated", "settings_changed",
     "incident_created", "incident_status_changed", "incident_assigned",
     "incident_unassigned", "incident_note_added", "incident_reopened",

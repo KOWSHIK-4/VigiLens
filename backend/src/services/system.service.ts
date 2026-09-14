@@ -14,6 +14,10 @@ import {
   type OverallStatus,
   type ServiceHealth,
 } from "./health.service";
+import {
+  retentionScheduler,
+  type RetentionStatus,
+} from "./retentionScheduler";
 
 interface CpuSample {
   idle: number;
@@ -151,6 +155,38 @@ export interface EngineHealthSummary {
   lastErrorAt: string | null;
 }
 
+export interface RetentionSchedulerSummary {
+  running: boolean;
+  autoCleanupEnabled: boolean;
+  intervalDays: number;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  runCount: number;
+  failCount: number;
+  lastFilesRemoved: number | null;
+  lastBytesFreed: number | null;
+  lastDetectionsRemoved: number | null;
+  lastReportsRemoved: number | null;
+  lastError: string | null;
+}
+
+export function toRetentionSchedulerSummary(status: RetentionStatus): RetentionSchedulerSummary {
+  return {
+    running: status.running,
+    autoCleanupEnabled: status.autoCleanupEnabled,
+    intervalDays: status.intervalDays,
+    lastRunAt: status.lastRunAt,
+    nextRunAt: status.nextRunAt,
+    runCount: status.runCount,
+    failCount: status.failCount,
+    lastFilesRemoved: status.lastFilesRemoved,
+    lastBytesFreed: status.lastBytesFreed,
+    lastDetectionsRemoved: status.lastDetectionsRemoved,
+    lastReportsRemoved: status.lastReportsRemoved,
+    lastError: status.lastError,
+  };
+}
+
 interface EngineHealthLike {
   key: string;
   status: DetectorRuntimeStatus;
@@ -251,6 +287,7 @@ export interface SystemMonitoringReport {
   };
   services: ServiceHealth[];
   scheduler: MonitorSchedulerSummary;
+  retention: RetentionSchedulerSummary;
   engines: EngineHealthSummary[];
   resources: {
     cpu: { usagePercent: number; cores: number };
@@ -271,10 +308,11 @@ export interface SystemMonitoringReport {
 export const systemService = {
   async getMonitoring(): Promise<SystemMonitoringReport> {
     const storagePath = await healthService.getStorageBasePath();
-    const [health, disk, scheduler, engines] = await Promise.all([
+    const [health, disk, scheduler, retention, engines] = await Promise.all([
       healthService.getReadiness(),
       getDiskUsage(storagePath),
       monitorScheduler.getStatus(),
+      retentionScheduler.getStatus(),
       getEngineHealthSummaries(),
     ]);
 
@@ -288,6 +326,7 @@ export const systemService = {
       },
       services: health.services,
       scheduler: toSchedulerSummary(scheduler),
+      retention: toRetentionSchedulerSummary(retention),
       engines,
       resources: {
         cpu: getCpuUsage(),

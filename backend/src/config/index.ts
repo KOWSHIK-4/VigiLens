@@ -81,6 +81,10 @@ export const config = {
     enabled: process.env.MONITOR_ENABLED === "true",
     tickMs: parseInt(process.env.MONITOR_TICK_MS || "1000", 10),
   },
+  retention: {
+    enabled: process.env.RETENTION_ENABLED !== "false",
+    tickMs: parseInt(process.env.RETENTION_TICK_MS || "60000", 10),
+  },
   log: {
     level: process.env.LOG_LEVEL || "info",
   },

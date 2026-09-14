@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { settingsService } from "./settings.service";
+import type { SystemSettingCategory } from "@prisma/client";
 
 export const SNAPSHOT_SUBDIR = "snapshots";
 export const RECORDINGS_SUBDIR = "recordings";
@@ -10,6 +11,7 @@ export const DEFAULT_STORAGE_BASE_PATH = "/data/vigilens";
 
 const IMAGE_RETENTION_KEY = "image_retention_days";
 const VIDEO_RETENTION_KEY = "video_retention_days";
+const REPORT_RETENTION_KEY = "report_retention_days";
 const MAX_STORAGE_KEY = "max_storage_gb";
 const DELETE_BATCH_SIZE = 500;
 
@@ -24,6 +26,7 @@ export interface PruneOptions {
   imageRetentionDays?: number;
   videoRetentionDays?: number;
   maxStorageGb?: number;
+  reportRetentionDays?: number;
   now?: number;
   dryRun?: boolean;
 }
@@ -35,6 +38,8 @@ export interface PruneReport {
   bytesFreed: number;
   detectionsRemoved: number;
   detectionsCutoff: string | null;
+  reportsRemoved: number;
+  reportsCutoff: string | null;
 }
 
 /**
@@ -59,9 +64,13 @@ async function resolveStorageBasePath(): Promise<string> {
   return DEFAULT_STORAGE_BASE_PATH;
 }
 
-async function resolveRetentionDays(key: string, fallback: number): Promise<number> {
+async function resolveRetentionDays(
+  category: SystemSettingCategory,
+  key: string,
+  fallback: number,
+): Promise<number> {
   try {
-    const value = await settingsService.getValue("storage", key);
+    const value = await settingsService.getValue(category, key);
     if (typeof value === "number" && Number.isFinite(value) && value >= 1) return value;
   } catch {
     // settings unavailable; use the default
@@ -138,11 +147,42 @@ export async function purgeExpiredDetections(
 }
 
 /**
+ * Purges expired report rows (generated analytics artifacts) in bounded
+ * batches. Reports are self-contained database rows, so no files are freed.
+ */
+export async function purgeExpiredReports(
+  cutoff: Date,
+  dryRun: boolean
+): Promise<number> {
+  let removed = 0;
+  for (;;) {
+    const batch = await prisma.report.findMany({
+      where: { createdAt: { lt: cutoff } },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+      take: DELETE_BATCH_SIZE,
+    });
+    if (batch.length === 0) break;
+    const ids = batch.map((row) => row.id);
+    if (dryRun) {
+      removed += ids.length;
+    } else {
+      const result = await prisma.report.deleteMany({ where: { id: { in: ids } } });
+      removed += result.count;
+    }
+    if (batch.length < DELETE_BATCH_SIZE) break;
+  }
+  return removed;
+}
+
+/**
  * Runs media retention enforcement for the configured storage root:
  * 1) Delete snapshot / recording files older than their retention period.
  * 2) Enforce the soft disk quota (`max_storage_gb`) by deleting the oldest
  *    media files first until the root is back under the quota.
  * 3) Purge persisted detections older than the image retention period.
+ * 4) Purge generation report rows (analytics artifacts) older than the
+ *    report retention period.
  *
  * Only the `snapshots/` and `recordings/` sub-directories are ever touched;
  * foreign files next to the root are ignored. Returns a dry-run report.
@@ -158,9 +198,11 @@ export async function pruneMedia(options: PruneOptions = {}): Promise<PruneRepor
   const now = options.now ?? Date.now();
   const dryRun = options.dryRun ?? false;
   const imageRetentionDays =
-    options.imageRetentionDays ?? (await resolveRetentionDays(IMAGE_RETENTION_KEY, 7));
+    options.imageRetentionDays ?? (await resolveRetentionDays("ai_detection", IMAGE_RETENTION_KEY, 7));
   const videoRetentionDays =
-    options.videoRetentionDays ?? (await resolveRetentionDays(VIDEO_RETENTION_KEY, 30));
+    options.videoRetentionDays ?? (await resolveRetentionDays("ai_detection", VIDEO_RETENTION_KEY, 30));
+  const reportRetentionDays =
+    options.reportRetentionDays ?? (await resolveRetentionDays("storage", REPORT_RETENTION_KEY, 90));
 
   let maxStorageBytes: number | undefined;
   if (options.maxStorageGb !== undefined) {
@@ -213,6 +255,9 @@ export async function pruneMedia(options: PruneOptions = {}): Promise<PruneRepor
   const detectionsCutoff = new Date(now - imageRetentionDays * 86400000);
   const detectionsRemoved = await purgeExpiredDetections(detectionsCutoff, dryRun);
 
+  const reportsCutoff = new Date(now - reportRetentionDays * 86400000);
+  const reportsRemoved = await purgeExpiredReports(reportsCutoff, dryRun);
+
   const report: PruneReport = {
     dryRun,
     storageBasePath,
@@ -220,6 +265,8 @@ export async function pruneMedia(options: PruneOptions = {}): Promise<PruneRepor
     bytesFreed,
     detectionsRemoved,
     detectionsCutoff: detectionsCutoff.toISOString(),
+    reportsRemoved,
+    reportsCutoff: reportsCutoff.toISOString(),
   };
 
   logger.info(

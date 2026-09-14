@@ -61,13 +61,21 @@ Honest list of what VigiLens does and does not do in its current form.
   dataset never grows without bound.
 - CSV export streams matching rows in bounded, ordered batches with write
   backpressure, so export memory stays flat regardless of result size.
-- Detection snapshots and recordings are cleaned by the `npm run prune:media`
-  tool (`backend/src/scripts/pruneMedia.ts`). It honours the
-  `image_retention_days`, `video_retention_days` and `max_storage_gb` storage
-  settings, also purges expired detection rows (cascading to alerts), and only
-  ever touches `snapshots/` and `recordings/` beneath the storage root. It is
-  a CLI tool: operators must schedule it (e.g. cron) at the
-  `cleanup_interval_days` cadence — no in-process scheduler runs it yet.
+- Detection snapshots and recordings are cleaned by the data retention job:
+  while `auto_cleanup_enabled` is on, the backend's in-process retention
+  scheduler (`backend/src/services/retentionScheduler.ts`) runs `pruneMedia`
+  (`backend/src/services/mediaPrune.service.ts`) on the
+  `cleanup_interval_days` cadence, honouring `image_retention_days`,
+  `video_retention_days`, `report_retention_days` and `max_storage_gb`
+  settings. Each pass purges expired detection rows (cascading to alerts) and
+  expired generated reports, and is recorded to the audit trail as
+  `retention_pruned`. Only `snapshots/`, `recordings/` and `reports/` beneath
+  the storage root are ever touched. The scheduler is conservative: the first
+  pass runs one full interval after boot (no immediate deletion), failed
+  passes are retried within an hour. It can be disabled via
+  `RETENTION_ENABLED=false` (or the `auto_cleanup_enabled` setting); the CLI
+  equivalent remains available as `npm run prune:media` for on-demand audits
+  and dry runs.
 
 ## Frontend
 

@@ -471,6 +471,16 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         max: 30,
         unit: "days",
       },
+      {
+        key: "report_retention_days",
+        label: "Report retention",
+        description: "How long generated reports (analytics artifacts) are kept before automatic cleanup.",
+        type: "number",
+        defaultValue: 90,
+        min: 1,
+        max: 730,
+        unit: "days",
+      },
     ],
   },
   {

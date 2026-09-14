@@ -354,6 +354,7 @@ enum AuditLogAction {
   detector_cameras_updated
   monitor_started
   monitor_stopped
+  retention_pruned
   alert_created
   alert_acknowledged
   alert_escalated

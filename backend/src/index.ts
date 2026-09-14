@@ -12,6 +12,7 @@ import healthRoutes from "./routes/health.routes";
 import { modelService } from "./services/model.service";
 import { settingsService } from "./services/settings.service";
 import { monitorScheduler } from "./engine/monitor";
+import { retentionScheduler } from "./services/retentionScheduler";
 
 const app = express();
 
@@ -101,6 +102,11 @@ async function start() {
       logger.info("Continuous monitoring auto-started (MONITOR_ENABLED=true)");
     }
 
+    if (config.retention.enabled) {
+      retentionScheduler.start();
+      logger.info("Automated data retention auto-started (RETENTION_ENABLED=true)");
+    }
+
     const server = app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port}`);
     });
@@ -123,6 +129,7 @@ async function start() {
       server.close(async () => {
         try {
           monitorScheduler.stop();
+          retentionScheduler.stop();
           await prisma.$disconnect();
           logger.info("HTTP server and database connections closed");
           process.exit(0);

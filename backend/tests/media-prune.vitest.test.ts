@@ -184,3 +184,46 @@ describe("purgeExpiredDetections", () => {
     }
   });
 });
+
+describe("report retention (analytics artifact archival)", () => {
+  it("purges report rows older than the report retention cutoff", async () => {
+    const oldCreated = new Date(Date.UTC(2026, 2, 1, 12, 0, 0));
+    const recentCreated = new Date(Date.UTC(2026, 5, 10, 12, 0, 0));
+
+    const oldReport = await prisma.report.create({
+      data: {
+        title: "Stale Report",
+        type: "daily",
+        generatedBy: "test",
+        dateRange: { from: "2026-02-01", to: "2026-02-28" },
+        createdAt: oldCreated,
+        status: "completed",
+      },
+    });
+    const freshReport = await prisma.report.create({
+      data: {
+        title: "Fresh Report",
+        type: "daily",
+        generatedBy: "test",
+        dateRange: { from: "2026-06-01", to: "2026-06-30" },
+        createdAt: recentCreated,
+        status: "completed",
+      },
+    });
+
+    try {
+      const report = await pruneMedia({
+        storageBasePath: baseDir,
+        reportRetentionDays: 90,
+        now: Date.UTC(2026, 5, 15, 12, 0, 0), // cutoff = 2026-03-17
+      });
+
+      expect(report.reportsRemoved).toBe(1);
+      expect(report.reportsCutoff).not.toBeNull();
+      expect(await prisma.report.findUnique({ where: { id: oldReport.id } })).toBeNull();
+      expect(await prisma.report.findUnique({ where: { id: freshReport.id } })).not.toBeNull();
+    } finally {
+      await prisma.report.deleteMany({ where: { id: { in: [oldReport.id, freshReport.id] } } });
+    }
+  });
+});
