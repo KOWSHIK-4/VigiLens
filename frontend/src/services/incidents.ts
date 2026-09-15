@@ -3,6 +3,7 @@ import type {
   CreateIncidentInput,
   Incident,
   IncidentFilters,
+  IncidentRelatedDetections,
   IncidentStatus,
   IncidentSummary,
   PaginatedResponse,
@@ -23,6 +24,21 @@ export const incidentService = {
     return data.data;
   },
 
+  async getRelatedDetections(id: string) {
+    const { data } = await api.get<{ success: boolean; data: IncidentRelatedDetections }>(
+      `/incidents/${id}/related-detections`,
+    );
+    return data.data;
+  },
+
+  async updateResolutionSummary(id: string, resolutionSummary: string) {
+    const { data } = await api.patch<{ success: boolean; data: Incident }>(
+      `/incidents/${id}/resolution`,
+      { resolutionSummary },
+    );
+    return data.data;
+  },
+
   async getSummary() {
     const { data } = await api.get<{ success: boolean; data: IncidentSummary }>(
       "/incidents/summary",
@@ -38,10 +54,10 @@ export const incidentService = {
     return data.data;
   },
 
-  async changeStatus(id: string, status: IncidentStatus) {
+  async changeStatus(id: string, status: IncidentStatus, resolutionSummary?: string) {
     const { data } = await api.patch<{ success: boolean; data: Incident }>(
       `/incidents/${id}/status`,
-      { status },
+      resolutionSummary !== undefined ? { status, resolutionSummary } : { status },
     );
     return data.data;
   },

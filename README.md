@@ -243,6 +243,11 @@ Full incident lifecycle management: create from alert, status transitions
 assignment, investigation notes, and activity logging. All mutations are
 audited and broadcast via realtime events.
 
+An investigation workflow provides a deep-linkable page at `/incidents/:id`
+showing the triggering detection with snapshot, related detections from the
+same camera within a ±30 minute window, and a structured resolution summary
+field for recording root cause, actions taken, and lessons learned.
+
 ## Data Retention
 
 The retention system automatically cleans expired detection data, media files,

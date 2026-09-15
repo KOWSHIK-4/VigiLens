@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -18,7 +19,6 @@ import { showToast } from "@/utils/toast";
 import { downloadBlob } from "@/utils/csv";
 import { getSeverityStyle } from "@/utils/statusConfig";
 import { formatRelativeTime } from "@/utils/format";
-import IncidentDetailsDrawer from "@/components/IncidentDetailsDrawer";
 import type { Incident, IncidentFilters, IncidentStatus } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
@@ -57,6 +57,7 @@ const STATUS_LABELS: Record<IncidentStatus, string> = {
 
 export default function IncidentsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canRead = hasPermission(user, "alerts.read");
   const canManage = hasPermission(user, "alerts.manage");
@@ -68,7 +69,6 @@ export default function IncidentsPage() {
   const [unassigned, setUnassigned] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const limit = 20;
 
   const queryFilters = useCallback(
@@ -327,7 +327,7 @@ export default function IncidentsPage() {
                 <div
                   key={incident.id}
                   className="bg-white border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md"
-                  onClick={() => setSelectedIncident(incident)}
+                  onClick={() => navigate(`/incidents/${incident.id}`)}
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
@@ -425,11 +425,6 @@ export default function IncidentsPage() {
           )}
         </>
       )}
-
-      <IncidentDetailsDrawer
-        incident={selectedIncident}
-        onClose={() => setSelectedIncident(null)}
-      />
     </div>
   );
 }

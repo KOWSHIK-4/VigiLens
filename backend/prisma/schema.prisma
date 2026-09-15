@@ -234,6 +234,7 @@ model Incident {
   resolvedAt       DateTime?      @map("resolved_at")
   resolvedById     String?        @map("resolved_by_id")
   resolvedByName   String?        @map("resolved_by_name")
+  resolutionSummary String        @default("") @map("resolution_summary")
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
 

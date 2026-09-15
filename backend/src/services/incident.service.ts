@@ -325,6 +325,75 @@ export const incidentService = {
     return incident;
   },
 
+  async getRelatedDetections(id: string, windowMin = 30) {
+    const incident = await prisma.incident.findUnique({
+      where: { id },
+      include: {
+        alert: {
+          include: {
+            detection: {
+              include: { camera: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!incident) {
+      throw new ApiError(404, "Incident not found");
+    }
+
+    const base = incident.alert?.detection;
+    if (!base?.cameraId) {
+      return { detection: base ?? null, related: [] };
+    }
+
+    const baseTime = base.timestamp ?? new Date();
+    const from = new Date(baseTime.getTime() - windowMin * 60_000);
+    const to = new Date(baseTime.getTime() + windowMin * 60_000);
+
+    const related = await prisma.detection.findMany({
+      where: {
+        cameraId: base.cameraId,
+        timestamp: { gte: from, lte: to },
+        id: { not: base.id },
+      },
+      include: { camera: true },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+      take: 50,
+    });
+
+    return { detection: base, related };
+  },
+
+  async updateResolutionSummary(id: string, summary: string, ctx: ActorContext = {}) {
+    const incident = await prisma.incident.findUnique({ where: { id } });
+    if (!incident) {
+      throw new ApiError(404, "Incident not found");
+    }
+
+    const author = await authorFrom(ctx);
+
+    const updated = await prisma.incident.update({
+      where: { id },
+      data: { resolutionSummary: summary },
+      include: incidentInclude,
+    });
+
+    await logActivity(incident.id, "resolution_updated", author, incident.resolutionSummary || null, summary);
+
+    await audit({
+      action: "incident_status_changed",
+      module: "incidents",
+      description: "Incident resolution summary updated",
+      incidentId: incident.id,
+      alertId: incident.alertId,
+      ctx,
+    });
+
+    return updated;
+  },
+
   async changeStatus(id: string, input: UpdateIncidentStatusInput, ctx: ActorContext = {}) {
     const incident = await prisma.incident.findUnique({ where: { id } });
     if (!incident) {
@@ -358,6 +427,9 @@ export const incidentService = {
       data.resolvedAt = new Date();
       data.resolvedById = author.id;
       data.resolvedByName = author.name;
+      if (input.resolutionSummary !== undefined) {
+        data.resolutionSummary = input.resolutionSummary;
+      }
     }
 
     const updated = await prisma.incident.update({

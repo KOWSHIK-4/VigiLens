@@ -263,6 +263,7 @@ export const createIncidentSchema = z.object({
 
 export const updateIncidentStatusSchema = z.object({
   status: incidentStatusSchema,
+  resolutionSummary: z.string().max(2000).optional(),
 });
 
 export const updateIncidentPrioritySchema = z.object({
@@ -275,6 +276,10 @@ export const assignIncidentSchema = z.object({
 
 export const addIncidentNoteSchema = z.object({
   body: z.string().trim().min(1, "Note body is required").max(4000),
+});
+
+export const updateIncidentResolutionSchema = z.object({
+  resolutionSummary: z.string().trim().max(2000),
 });
 
 export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;

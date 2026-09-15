@@ -129,4 +129,26 @@ export const incidentController = {
       next(err);
     }
   },
+
+  async getRelatedDetections(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const related = await incidentService.getRelatedDetections(req.params.id as string);
+      success(res, related);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateResolutionSummary(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const incident = await incidentService.updateResolutionSummary(
+        req.params.id as string,
+        (req.body as { resolutionSummary: string }).resolutionSummary,
+        actorFrom(req),
+      );
+      success(res, incident);
+    } catch (err) {
+      next(err);
+    }
+  },
 };

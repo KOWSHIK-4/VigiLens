@@ -11,6 +11,7 @@ import {
   updateIncidentPrioritySchema,
   assignIncidentSchema,
   addIncidentNoteSchema,
+  updateIncidentResolutionSchema,
 } from "../types";
 
 const router = Router();
@@ -26,5 +27,7 @@ router.patch("/:id/status", requirePermission("alerts.manage"), validate(inciden
 router.patch("/:id/priority", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(updateIncidentPrioritySchema, "body"), incidentController.updatePriority);
 router.patch("/:id/assign", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(assignIncidentSchema, "body"), incidentController.assign);
 router.post("/:id/notes", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(addIncidentNoteSchema, "body"), incidentController.addNote);
+router.get("/:id/related-detections", requirePermission("alerts.read"), validate(incidentIdSchema, "params"), incidentController.getRelatedDetections);
+router.patch("/:id/resolution", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(updateIncidentResolutionSchema, "body"), incidentController.updateResolutionSummary);
 
 export default router;

@@ -772,10 +772,12 @@ GET   /incidents?page=1&limit=20&status=investigating&priority=critical&mine=tru
 GET   /incidents/summary            # aggregate counts across statuses
 GET   /incidents/export             # stream all matched incidents as CSV
 GET   /incidents/:id
+GET   /incidents/:id/related-detections  # triggering detection + same-camera ±30 min window
 POST  /incidents                    # { alertId } [+ priority/description]
-PATCH /incidents/:id/status         # { "status": "acknowledged"|"investigating"|"resolved"|"reopened" }
+PATCH /incidents/:id/status         # { "status": "...", "resolutionSummary"?: "..." }
 PATCH /incidents/:id/priority       # { "priority": "info"|"warning"|"critical" }
 PATCH /incidents/:id/assign         # { "assigneeId": "<userId>|null" }
+PATCH /incidents/:id/resolution     # { "resolutionSummary": "root cause..." }
 POST  /incidents/:id/notes          # { "body": "..." }
 ```
 
@@ -786,6 +788,13 @@ POST  /incidents/:id/notes          # { "body": "..." }
 `/summary` returns `{ total, open, resolved, byStatus }`. `/export` streams a
 CSV with columns `ID, Status, Priority, Title, Source Camera, Assignee,
 Opened At, Resolved At, Description`.
+
+`GET /incidents/:id/related-detections` returns the triggering detection
+(`detection`) and up to 50 other detections from the same camera within a
+±30 minute window (`related`). `PATCH /incidents/:id/status` now accepts an
+optional `resolutionSummary` field (stored when resolving). A dedicated
+`PATCH /incidents/:id/resolution` endpoint lets you update the resolution
+summary independently (root cause, actions taken, lessons learned).
 
 Incident status transitions are validated against allowed paths (for
 example `new → acknowledged → investigating → resolved`, with `reopened`

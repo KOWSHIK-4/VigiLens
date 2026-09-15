@@ -283,12 +283,18 @@ export interface Incident {
   resolvedAt: string | null;
   resolvedById: string | null;
   resolvedByName: string | null;
+  resolutionSummary: string;
   createdAt: string;
   updatedAt: string;
   alert?: Alert;
   notes?: IncidentNote[];
   activity?: IncidentActivity[];
   assignedTo?: IncidentAssignee | null;
+}
+
+export interface IncidentRelatedDetections {
+  detection: DetectionWithCamera | null;
+  related: DetectionWithCamera[];
 }
 
 export interface IncidentFilters {
