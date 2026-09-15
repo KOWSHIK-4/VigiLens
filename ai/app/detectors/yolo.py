@@ -30,6 +30,12 @@ DEFAULT_INFERENCE_TIMEOUT_S = 30.0
 DEFAULT_MAX_RETRIES = 2
 RETRY_BACKOFF_BASE_S = 0.5
 
+# Minimum interval between model reload attempts when a detector is running
+# without a loaded model. A missing/unavailable model is retried lazily on
+# inference, but must not trigger an ultralytics load (or download) on every
+# single frame of a live stream.
+MODEL_RELOAD_COOLDOWN_S = 30.0
+
 # Accepted values for the ``processor`` scheduling hint. Backend detector
 # settings (``preferred_processor``) map 1:1 onto these.
 PROCESSOR_HINTS = {"auto", "cpu", "gpu"}
@@ -110,6 +116,11 @@ class YoloDetector(BaseDetector):
         )
         self._model = None
         self._model_name = model_name
+        # Bounds how often a detector whose model failed to load retries the
+        # (potentially expensive) reload. 0.0 so the first inference request
+        # after a failed boot tries once, then subsequent attempts are gated
+        # by MODEL_RELOAD_COOLDOWN_S to avoid hammering a broken model file.
+        self._last_reload_attempt = 0.0
         self._load_model()
 
     def _load_model(self) -> None:
@@ -117,11 +128,37 @@ class YoloDetector(BaseDetector):
         try:
             self._model = YOLO(self._model_name)
             self._status.model_loaded = True
+            # A successful load means the previous error (if any) is stale.
+            self._status.last_error = None
             logger.info("Model loaded: %s (%s)", self._detector_name, self._model_name)
         except Exception as exc:
             self._status.model_loaded = False
             self._status.last_error = str(exc)
             logger.error("Failed to load model %s: %s", self._model_name, exc)
+
+    def _ensure_model_loaded(self) -> None:
+        """Lazily (re)load the model if it is missing, bounded by a cooldown.
+
+        A transient failure at startup (e.g. model file briefly unavailable)
+        otherwise leaves detection bricked until the whole process restarts.
+        The next inference request attempts a reload under the inference lock
+        so concurrent requests cannot stampede the load path; a cooldown
+        prevents retrying a genuinely-broken model on every stream frame.
+        """
+        if self._model is not None:
+            return
+        now = time.monotonic()
+        last = getattr(self, "_last_reload_attempt", 0.0)
+        if now - last < MODEL_RELOAD_COOLDOWN_S:
+            return
+        with self._infer_lock:
+            if self._model is not None:
+                return
+            now = time.monotonic()
+            if now - self._last_reload_attempt < MODEL_RELOAD_COOLDOWN_S:
+                return
+            self._last_reload_attempt = now
+            self._load_model()
 
     @property
     def name(self) -> str:
@@ -149,6 +186,11 @@ class YoloDetector(BaseDetector):
         Executes model inference in a thread pool with a hard timeout to
         prevent a stalled model from blocking the server indefinitely.
         """
+        # Self-heal: a model that failed to load earlier is retried lazily on
+        # the next inference request instead of failing forever until the
+        # process restarts.
+        self._ensure_model_loaded()
+
         if self._model is None:
             raise InferenceError(
                 f"Model not loaded for detector '{self._detector_name}'",
@@ -241,6 +283,14 @@ class YoloDetector(BaseDetector):
                 self._status.total_failures += 1
                 self._status.consecutive_failures += 1
                 self._status.last_error = f"{exc.reason}: {exc}"
+                if exc.reason == "model_unavailable":
+                    # Retrying immediately cannot help: reload attempts are
+                    # cooldown-gated and repeatable on the next request.
+                    logger.error(
+                        "Inference failed for %s: %s",
+                        self._detector_name, exc,
+                    )
+                    break
                 if attempt < self._max_retries:
                     backoff = RETRY_BACKOFF_BASE_S * (2 ** (attempt - 1))
                     logger.warning(

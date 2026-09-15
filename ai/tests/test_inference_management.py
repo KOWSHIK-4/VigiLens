@@ -4,6 +4,8 @@ Covers inference timeouts, retries, model availability, invalid inputs,
 and the enhanced health endpoint model status reporting.
 """
 
+import time
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -149,12 +151,115 @@ def test_model_unavailable_rejected_before_inference():
     detector._infer_lock = __import__("threading").Lock()
     detector._model = None
     detector._model_name = "missing.pt"
+    # A very recent reload attempt puts us inside the cooldown window, so no
+    # real YOLO load is attempted; the request fails fast as model_unavailable.
+    detector._last_reload_attempt = time.monotonic()
     detector._status = DetectorStatus(name="test_detector", model_loaded=False)
 
     image = np.zeros((64, 64, 3), dtype=np.uint8)
     with pytest.raises(InferenceError) as exc_info:
         detector.detect(image)
     assert exc_info.value.reason == "model_unavailable"
+
+
+def test_lazy_reload_recovers_after_failed_boot_load(monkeypatch):
+    """A transient model-load failure self-heals on the next detection.
+
+    The model failed to load when the service booted (so no process restart
+    happened); the next inference request must reload it and succeed.
+    """
+    counter = {"attempts": 0, "loads": 0}
+
+    def fake_load():
+        counter["loads"] += 1
+        detector._model = _CountingFakeModel(counter)
+        detector._status.model_loaded = True
+        detector._status.last_error = None
+
+    detector = YoloDetector.__new__(YoloDetector)
+    detector._detector_name = "test_detector"
+    detector._class_filter = None
+    detector._class_names = {0: "person"}
+    detector._conf_threshold = 0.5
+    detector._inference_timeout_s = 5.0
+    detector._max_retries = 1
+    detector._infer_lock = __import__("threading").Lock()
+    detector._model = None
+    detector._model_name = "recoverable.pt"
+    detector._last_reload_attempt = 0.0
+    detector._status = DetectorStatus(name="test_detector", model_loaded=False)
+    monkeypatch.setattr(detector, "_load_model", fake_load)
+
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    detections = detector.detect(image)
+    assert counter["loads"] == 1
+    assert detector.status.model_loaded is True
+    assert detector.status.last_error is None
+    assert len(detections) == 1
+
+
+def test_broken_model_not_reloaded_within_cooldown(monkeypatch):
+    """A still-broken model must not hammer the (expensive) load path."""
+    loads = {"count": 0}
+
+    def fake_load():
+        loads["count"] += 1
+        detector._status.model_loaded = False
+
+    detector = YoloDetector.__new__(YoloDetector)
+    detector._detector_name = "test_detector"
+    detector._class_filter = None
+    detector._class_names = {0: "person"}
+    detector._conf_threshold = 0.5
+    detector._inference_timeout_s = 5.0
+    detector._max_retries = 1
+    detector._infer_lock = __import__("threading").Lock()
+    detector._model = None
+    detector._model_name = "broken.pt"
+    detector._last_reload_attempt = time.monotonic()
+    detector._status = DetectorStatus(name="test_detector", model_loaded=False)
+    monkeypatch.setattr(detector, "_load_model", fake_load)
+
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    with pytest.raises(InferenceError) as exc_info:
+        detector.detect(image)
+    assert exc_info.value.reason == "model_unavailable"
+    assert loads["count"] == 0
+
+
+def test_reload_reattempted_after_cooldown_elapses(monkeypatch):
+    """Once the cooldown passes, a broken model is retried, not abandoned."""
+    loads = {"count": 0}
+
+    def fake_load():
+        loads["count"] += 1
+        detector._status.model_loaded = False
+
+    detector = YoloDetector.__new__(YoloDetector)
+    detector._detector_name = "test_detector"
+    detector._class_filter = None
+    detector._class_names = {0: "person"}
+    detector._conf_threshold = 0.5
+    detector._inference_timeout_s = 5.0
+    detector._max_retries = 1
+    detector._infer_lock = __import__("threading").Lock()
+    detector._model = None
+    detector._model_name = "broken.pt"
+    detector._status = DetectorStatus(name="test_detector", model_loaded=False)
+    monkeypatch.setattr(detector, "_load_model", fake_load)
+
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+
+    detector._last_reload_attempt = time.monotonic()
+    with pytest.raises(InferenceError):
+        detector.detect(image)
+    assert loads["count"] == 0
+
+    detector._last_reload_attempt = 0.0
+    with pytest.raises(InferenceError) as exc_info:
+        detector.detect(image)
+    assert exc_info.value.reason == "model_unavailable"
+    assert loads["count"] == 1
 
 
 def test_detector_list_includes_model_status():

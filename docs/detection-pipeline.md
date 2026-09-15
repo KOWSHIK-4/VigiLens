@@ -59,6 +59,18 @@ A detector key with no catalog entry has **no trained model** and is reported
 as `unconfigured`. The engine refuses to run it rather than fabricating
 detections.
 
+### AI model loading resilience
+
+The AI service loads each YOLO model when it boots. If that initial load
+fails for a transient reason (model file briefly unavailable, OOM, etc.), the
+detector is **not** bricked for the lifetime of the process: the next
+inference request lazily retries the reload in-process (gated by a
+`MODEL_RELOAD_COOLDOWN_S` cooldown, serialized under the detector's inference
+lock) and, when it succeeds, clears `model_loaded`/`last_error` so
+`/health/ready` and the detector status recover. A genuinely-missing model is
+re-tried on subsequent requests instead of hammering the load path every
+frame or requiring an operator-driven restart.
+
 ## How a frame flows
 
 ### 1. Upload an image (`POST /api/engines/:key/process`)
