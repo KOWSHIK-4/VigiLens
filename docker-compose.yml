@@ -39,7 +39,7 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       # Boundary hardening: gate the webcam stream / stats endpoints behind
       # the shared internal key even though the frontend proxies them.
-      - AI_STATS_REQUIRE_AUTH=${AI_STATS_REQUIRE_AUTH:-true}
+      - AI_REQUIRE_AUTH=${AI_REQUIRE_AUTH:-true}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

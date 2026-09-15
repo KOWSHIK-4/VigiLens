@@ -119,8 +119,7 @@ variables — those are embedded into the client bundle at build time.
 |----------|----------|-------------|
 | `BACKEND_URL` | Yes | Backend base URL for webcam ingestion |
 | `BACKEND_INTERNAL_KEY` | Yes | Must match `INTERNAL_API_KEY` on the backend |
-| `AI_REQUIRE_AUTH` | No | Force internal-key auth on all endpoints (default in production) |
-| `AI_STATS_REQUIRE_AUTH` | No | Gate webcam stream/stats behind internal-key (default in Docker) |
+| `AI_REQUIRE_AUTH` | No | Force internal-key auth on all endpoints (default in production). Legacy alias `AI_STATS_REQUIRE_AUTH` is still honored |
 | `CORS_ORIGINS` | Yes (prod) | Comma-separated allowed origins. Required in production |
 | `LOG_LEVEL` | No | Python log level (default `INFO`) |
 | `MEDIA_ROOT` | No | Base directory for captured media (default `/data/vigilens/media`) |

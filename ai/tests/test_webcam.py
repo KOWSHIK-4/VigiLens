@@ -85,14 +85,14 @@ def test_webcam_stats_endpoint_scoped_by_stream():
 
 
 def test_webcam_stats_rejects_missing_internal_key_when_auth_required(monkeypatch):
-    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
     stream_stats.clear()
     response = client.get("/detect/webcam/stats")
     assert response.status_code == 401
 
 
 def test_webcam_stats_accepts_valid_internal_key_when_auth_required(monkeypatch):
-    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
     stream_stats.clear()
     stream_stats.update("cam-1", "person", {"fps": 10.0, "objects": 1})
     response = client.get(
@@ -102,10 +102,30 @@ def test_webcam_stats_accepts_valid_internal_key_when_auth_required(monkeypatch)
     assert response.status_code == 200
 
 
+def test_webcam_stats_rejects_incorrect_internal_key_when_auth_required(monkeypatch):
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    stream_stats.clear()
+    response = client.get(
+        "/detect/webcam/stats",
+        headers={"X-Internal-Key": "wrong-key"},
+    )
+    assert response.status_code == 401
+
+
+def test_webcam_stats_legacy_alias_still_forces_auth(monkeypatch):
+    # Backward compatibility: the legacy AI_STATS_REQUIRE_AUTH flag must keep
+    # gating the endpoint exactly like the canonical AI_REQUIRE_AUTH.
+    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    stream_stats.clear()
+    response = client.get("/detect/webcam/stats")
+    assert response.status_code == 401
+
+
 def test_webcam_stats_requires_auth_for_real_key_without_env_flag(monkeypatch):
     # A deployment that sets a real shared secret must not open the stats
     # endpoint even when the boolean flag was never flipped and no NODE_ENV
     # is set (systemd / bare uvicorn deployments).
+    monkeypatch.delenv("AI_REQUIRE_AUTH", raising=False)
     monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
     monkeypatch.delenv("NODE_ENV", raising=False)
     monkeypatch.setattr("app.routes.detection.settings.backend_internal_key", "real-secret-7f3a")
@@ -123,6 +143,7 @@ def test_webcam_stats_requires_auth_for_real_key_without_env_flag(monkeypatch):
 
 def test_webcam_stats_enforced_in_production_even_with_default_key(monkeypatch):
     # Production (as set by docker-compose) always requires the header.
+    monkeypatch.delenv("AI_REQUIRE_AUTH", raising=False)
     monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
     monkeypatch.setenv("NODE_ENV", "production")
     monkeypatch.setattr(
@@ -137,6 +158,7 @@ def test_webcam_stats_enforced_in_production_even_with_default_key(monkeypatch):
 def test_webcam_stats_open_for_default_key_in_development(monkeypatch):
     # Dev convenience is preserved: no flags and the bundled default key
     # keep the endpoint open for local frontends.
+    monkeypatch.delenv("AI_REQUIRE_AUTH", raising=False)
     monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
     monkeypatch.delenv("NODE_ENV", raising=False)
     monkeypatch.setattr(

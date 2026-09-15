@@ -118,6 +118,26 @@ def test_capture_accepts_internal_key_when_auth_forced(monkeypatch):
     assert response.headers["content-type"] == "image/jpeg"
 
 
+def test_capture_rejects_incorrect_internal_key_when_auth_forced(monkeypatch):
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    response = client.get(
+        "/capture",
+        params={"source": "/dev/video0", "type": "usb"},
+        headers={"X-Internal-Key": "wrong-key"},
+    )
+    assert response.status_code == 401
+
+
+def test_capture_legacy_alias_still_forces_auth(monkeypatch):
+    # Backward-compatible alias for the canonical AI_REQUIRE_AUTH.
+    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    response = client.get(
+        "/capture",
+        params={"source": "/dev/video0", "type": "usb"},
+    )
+    assert response.status_code == 401
+
+
 def test_capture_requires_internal_key_for_real_key_without_env_flag(monkeypatch):
     # A deployment that sets a real shared secret must not expose the capture
     # proxy even when no NODE_ENV and no explicit flag are configured.

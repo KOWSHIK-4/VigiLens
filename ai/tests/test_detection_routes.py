@@ -38,6 +38,31 @@ def test_detectors_accepts_internal_key_when_auth_forced(monkeypatch):
     assert response.json()["success"] is True
 
 
+def test_detectors_rejects_incorrect_internal_key_when_auth_forced(monkeypatch):
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    response = client.get(
+        "/detect/detectors",
+        headers={"X-Internal-Key": "wrong-key"},
+    )
+    assert response.status_code == 401
+
+
+def test_detectors_legacy_alias_still_forces_auth(monkeypatch):
+    # Backward-compatible alias for the canonical AI_REQUIRE_AUTH.
+    monkeypatch.setenv("AI_STATS_REQUIRE_AUTH", "true")
+    response = client.get("/detect/detectors")
+    assert response.status_code == 401
+
+
+def test_detectors_canonical_flag_takes_precedence_over_alias_absence(monkeypatch):
+    # A deployment using only the canonical flag must be protected even when
+    # the legacy alias is absent.
+    monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
+    monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
+    response = client.get("/detect/detectors")
+    assert response.status_code == 401
+
+
 def test_detect_image_requires_internal_key_when_auth_forced(monkeypatch):
     monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
     response = client.post(

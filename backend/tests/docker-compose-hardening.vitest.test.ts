@@ -81,9 +81,9 @@ describe("docker-compose production hardening", () => {
     expect(content).toMatch(/CAMERA_CREDENTIALS_KEY=\$\{CAMERA_CREDENTIALS_KEY:\?[^}]*\}/);
   });
 
-  it("applies the AI stream/stats auth gate by default in the deployment", async () => {
+  it("applies the AI boundary auth gate by default in the deployment", async () => {
     const content = await readCompose();
-    expect(content).toMatch(/AI_STATS_REQUIRE_AUTH=\$\{AI_STATS_REQUIRE_AUTH:-true\}/);
+    expect(content).toMatch(/AI_REQUIRE_AUTH=\$\{AI_REQUIRE_AUTH:-true\}/);
   });
 
   it("gives the database and backend stop grace periods for clean drains", async () => {
@@ -131,7 +131,7 @@ describe("docker-compose service env wiring", () => {
     const keys = collectEnvRefs(content)
       .filter((ref) => ref.service === "ai-service")
       .map((ref) => ref.name);
-    expect(keys).toContain("AI_STATS_REQUIRE_AUTH");
+    expect(keys).toContain("AI_REQUIRE_AUTH");
     expect(keys).toContain("BACKEND_INTERNAL_KEY");
   });
 });
