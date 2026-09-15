@@ -26,6 +26,7 @@ const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const SystemMonitoringPage = lazy(() => import("@/pages/SystemMonitoringPage"));
 const MonitoringPage = lazy(() => import("@/pages/MonitoringPage"));
+const SecurityDashboardPage = lazy(() => import("@/pages/SecurityDashboardPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -209,6 +210,14 @@ const router = createBrowserRouter([
         element: (
           <LazyRoute>
             <MonitoringPage />
+          </LazyRoute>
+        ),
+      },
+      {
+        path: "security-dashboard",
+        element: (
+          <LazyRoute>
+            <SecurityDashboardPage />
           </LazyRoute>
         ),
       },

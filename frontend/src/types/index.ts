@@ -1018,3 +1018,59 @@ export interface MonitorStatus {
   nextTickAt: string | null;
   loops: MonitorLoop[];
 }
+
+// ── Security Dashboard ───────────────────────────────────────────────────────
+
+export interface SecurityDashboardUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  status: "active" | "disabled";
+  isLocked: boolean;
+  failedLoginAttempts: number;
+  lockedAt: string | null;
+  mustChangePassword: boolean;
+  lastLogin: string | null;
+  createdAt: string;
+}
+
+export interface SecurityDashboardEvent {
+  id: string;
+  timestamp: string;
+  username: string;
+  email: string;
+  description: string;
+  ipAddress: string;
+}
+
+export interface SecurityPolicy {
+  maxLoginAttempts: number;
+  lockoutDurationMinutes: number;
+  passwordMinLength: number;
+  requirePasswordComplexity: boolean;
+  jwtExpirationHours: number;
+  jwtRequireHttps: boolean;
+  sessionTimeoutMinutes: number;
+}
+
+export interface SecurityDashboardData {
+  generatedAt: string;
+  accountPosture: {
+    totalAccounts: number;
+    activeAccounts: number;
+    disabledAccounts: number;
+    lockedAccounts: number;
+    accountsWithFailedAttempts: number;
+    mustChangePasswordAccounts: number;
+    lockedAccountsList: SecurityDashboardUser[];
+    atRiskAccounts: SecurityDashboardUser[];
+  };
+  authActivity: {
+    failedLogins24h: number;
+    failedLogins7d: number;
+    failedLogins30d: number;
+    recentFailedLogins: SecurityDashboardEvent[];
+  };
+  policy: SecurityPolicy;
+}

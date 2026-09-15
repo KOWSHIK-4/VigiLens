@@ -71,6 +71,7 @@ role's permission set from the Roles page, and custom roles can be created.
 | `settings.manage`          | settings      | Change system settings and configuration                 |
 | `monitoring.read`          | monitoring    | View system health, status and performance metrics       |
 | `monitoring.manage`        | monitoring    | Start and stop the continuous monitoring scheduler       |
+| `security.read`            | security      | View the security operations dashboard and account posture |
 
 ## Role Matrix
 
@@ -111,6 +112,7 @@ role's permission set from the Roles page, and custom roles can be created.
 | `settings.manage`     | ✔           | ✔     | —        | —      |
 | `monitoring.read`     | ✔           | ✔     | —        | —      |
 | `monitoring.manage`   | ✔           | ✔     | —        | —      |
+| `security.read`       | ✔           | ✔     | —        | —      |
 
 ## Seeded Accounts
 

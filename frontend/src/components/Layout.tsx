@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  ShieldCheck,
   Users,
   Activity,
   Menu,
@@ -54,6 +55,12 @@ const adminNavItems = [
     label: "Continuous Monitoring",
     icon: Radar,
     permission: "monitoring.read",
+  },
+  {
+    path: "/security-dashboard",
+    label: "Security Ops",
+    icon: ShieldCheck,
+    permission: "security.read",
   },
 ];
 

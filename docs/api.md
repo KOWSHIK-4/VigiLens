@@ -59,7 +59,7 @@ All subsequent requests require the `Authorization: Bearer <token>` header.
 ## Users & Roles (RBAC)
 
 Access to every resource is governed by role-based permissions. The database is
-seeded with 35 permissions across 12 categories and 4 roles: `super_admin`
+seeded with 36 permissions across 13 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
 Custom roles can be created and assigned. Accounts with status `disabled`

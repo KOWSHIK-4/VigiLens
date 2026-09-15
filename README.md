@@ -193,7 +193,7 @@ VigiLens implements layered security controls for production use:
 - **JWT tokens** — HS256-signed, pinned issuer (`vigilens-api`) and audience
   (`vigilens-frontend`), configurable expiration (default 7 days). Algorithm
   is pinned to prevent `none`-algorithm attacks.
-- **RBAC** — 4 roles (`super_admin`, `admin`, `operator`, `viewer`) with 35
+- **RBAC** — 4 roles (`super_admin`, `admin`, `operator`, `viewer`) with 36
   granular permissions enforced on every route via `requirePermission()`.
   Permission sets are cached with 30-second TTL.
 - **Account lockout** — configurable `max_login_attempts` (default 5) and
@@ -324,7 +324,7 @@ and monitoring:
   (CPU/memory/disk) and request/detection metrics view, and auto-refresh
 - **Production-Ready Ops** — Graceful shutdown on SIGTERM/SIGINT, request IDs
   for log correlation, centralized error handling, and hardened Docker images
-- **User & Role Management** — 4 built-in roles with 35 granular permissions, a
+- **User & Role Management** — 4 built-in roles with 36 granular permissions, a
   full users page (search, filters, sorting, pagination, status toggles,
   role assignment) and a role page with a permission editor; disabled accounts
   are blocked at login and on every request

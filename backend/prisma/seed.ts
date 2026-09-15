@@ -52,6 +52,8 @@ export const permissionDefinitions = [
   // Monitoring
   { key: "monitoring.read", name: "View System Monitoring", description: "View system health, status and performance metrics", category: "monitoring" },
   { key: "monitoring.manage", name: "Manage Monitoring", description: "Start and stop the continuous monitoring scheduler", category: "monitoring" },
+  // Security
+  { key: "security.read", name: "View Security Dashboard", description: "View the security operations dashboard and account posture", category: "security" },
 ] as const;
 
 export type PermissionDefinitionKey = (typeof permissionDefinitions)[number]["key"];
@@ -93,6 +95,7 @@ export const rolePermissionMap: Record<string, string[]> = {
     "settings.manage",
     "monitoring.read",
     "monitoring.manage",
+    "security.read",
   ],
   operator: [
     "dashboard.view",
