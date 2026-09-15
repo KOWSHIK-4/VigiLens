@@ -41,11 +41,12 @@ Honest list of what VigiLens does and does not do in its current form.
 - The AI service's CORS origins are configurable via `CORS_ORIGINS` or
   `CORS_ORIGIN` env var. In production, if no origins are configured the
   service defaults to same-origin only (no cross-origin requests).
-- Camera credentials (`username`/`password`) are stored in the database in
-  plain text; they are used only to reach private RTSP/HTTP sources. They are
-  never returned by the API — camera responses are redacted at the service
-  layer and a Prisma query extension strips `password` from any Camera-shaped
-  row (including nested includes).
+- Camera credentials (`username`/`password`) are stored in the database
+  encrypted at rest via AES-256-GCM (`CAMERA_CREDENTIALS_KEY`). They are
+  used only to reach private RTSP/HTTP sources and are never returned by the
+  API — camera responses are redacted at the service layer and a Prisma
+  query extension strips credential columns from any Camera-shaped row
+  (including nested includes).
 
 ## Data & metrics
 

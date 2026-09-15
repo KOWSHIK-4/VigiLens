@@ -19,7 +19,7 @@ Status of every VigiLens capability against the three-tier rubric:
 | Alerts + cooldown | IMPLEMENTED | Engine `CooldownAlertStage` + ingestion dedup |
 | Analytics & reports | IMPLEMENTED | Trends, per-camera/per-detector stats |
 | System monitoring | IMPLEMENTED | Health endpoints, scheduler status, metrics |
-| Frontend (15 pages) | IMPLEMENTED | Live camera, models, detectors, cameras, detections, analytics, reports, monitoring, audit, settings, users, RBAC |
+| Frontend (16 pages) | IMPLEMENTED | Dashboard, live camera, models, detectors, cameras, detections, analytics, reports, incidents, monitoring, audit, settings, users, roles, system monitoring |
 | CI pipelines | IMPLEMENTED | Backend + AI checks in GitHub Actions |
 
 ## Real-time detection engine

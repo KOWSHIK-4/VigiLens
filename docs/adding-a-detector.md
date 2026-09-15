@@ -51,7 +51,7 @@ definition in `backend/src/detectors/` (see existing entries) so
 
 ```bash
 # AI
-cd ai && py -3.14 -m pytest -q
+cd ai && python -m pytest -q
 
 # Backend
 cd backend && npm run typecheck && npm run lint && npm run build && npm test
@@ -59,6 +59,8 @@ cd backend && npm run typecheck && npm run lint && npm run build && npm test
 
 ## Ship model weights
 
-Model weights are never committed to the repository. Mount them into the AI
-container at `MODEL_PATH` (default `/app/models`) and load them at startup.
-The detector stays `ARCHITECTURE READY` until weights are present.
+The default model (`yolo11n.pt`) is committed to the repository at
+`ai/yolo11n.pt` and copied into the Docker image automatically. For custom
+detectors, place the weights file where the AI service can load it (the
+detector's `model_name` path) or mount it into the container. The detector
+stays `ARCHITECTURE READY` until valid weights are present.

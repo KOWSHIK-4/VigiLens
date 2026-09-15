@@ -29,10 +29,13 @@ The compose stack hardens production behavior:
 
 ### Production Environment
 
-Before deploying, set these environment variables to secure defaults:
+Before deploying, set these environment variables to secure values:
 
 - `JWT_SECRET` — a strong random string (min 32 chars)
 - `INTERNAL_API_KEY` — a shared secret for AI↔backend communication
+- `CAMERA_CREDENTIALS_KEY` — 32-byte key (64 hex chars) for AES-256-GCM
+  encryption of camera credentials at rest. Generate with
+  `openssl rand -hex 32`. The backend refuses to start without it.
 - `POSTGRES_PASSWORD` — a strong database password
 - `DATABASE_URL` — must not contain the default `vigilens_secret` password
 - `CORS_ORIGIN` — your production domain(s)
@@ -92,9 +95,10 @@ cd backend
 npx vitest run
 ```
 
-Runs 106 pure unit tests covering engine config, lifecycle, postprocess,
-tracking, hardening, detection status, and security validation. Uses the
-`.vitest.test.ts` suffix so they don't conflict with integration tests.
+Runs 275 pure unit tests covering engine config, lifecycle, postprocess,
+tracking, hardening, detection status, camera credential encryption, and
+security validation. Uses the `.vitest.test.ts` suffix so they don't
+conflict with integration tests.
 
 ### Backend Integration Tests (tsx — requires PostgreSQL)
 
@@ -117,7 +121,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -v
 ```
 
-31 tests covering health, detection routes, capture, confidence validation,
+83 tests covering health, detection routes, capture, confidence validation,
 IoU tracking, webcam stats, and detector catalog. Uses mocks for camera
 hardware — no real cameras needed.
 
