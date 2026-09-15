@@ -56,7 +56,7 @@ const incidentInclude = {
     include: {
       detection: {
         include: {
-          camera: true,
+          camera: { select: { id: true, name: true, location: true } },
         },
       },
     },
@@ -198,7 +198,7 @@ export const incidentService = {
       include: {
         detection: {
           include: {
-            camera: true,
+            camera: { select: { id: true, name: true, location: true } },
           },
         },
         incident: true,
@@ -286,7 +286,7 @@ export const incidentService = {
             include: {
               detection: {
                 include: {
-                  camera: true,
+                  camera: { select: { id: true, name: true, location: true } },
                 },
               },
             },
@@ -332,7 +332,7 @@ export const incidentService = {
         alert: {
           include: {
             detection: {
-              include: { camera: true },
+              include: { camera: { select: { id: true, name: true, location: true } } },
             },
           },
         },
@@ -358,7 +358,7 @@ export const incidentService = {
         timestamp: { gte: from, lte: to },
         id: { not: base.id },
       },
-      include: { camera: true },
+      include: { camera: { select: { id: true, name: true, location: true } } },
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: 50,
     });

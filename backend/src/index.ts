@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { prisma } from "./config/prisma";
@@ -71,6 +72,21 @@ app.use(
 );
 
 app.use(requestContext);
+
+// Compress API responses end-to-end. The SSE stream is excluded explicitly:
+// EventSource consumers would have no way to negotiate the encoding the way
+// a fetch/XMLHttpRequest caller does, so streaming must stay identity-encoded.
+app.use(
+  compression({
+    filter: (req, res) => {
+      const contentType = res.getHeader("Content-Type");
+      if (typeof contentType === "string" && contentType.startsWith("text/event-stream")) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 app.use("/health", healthRoutes);
 

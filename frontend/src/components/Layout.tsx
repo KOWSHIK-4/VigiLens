@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Brain,
@@ -22,12 +22,12 @@ import {
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { alertService } from "@/services/alerts";
+import { useRealtime } from "@/hooks/useRealtime";
 import ToastItem from "./Toast";
 import { showToast, useToast } from "@/utils/toast";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
-import type { Alert } from "@/types";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard, permission: null },
@@ -68,7 +68,7 @@ export default function Layout() {
   const location = useLocation();
   const { toasts, dismiss } = useToast();
   const { user } = useAuth();
-  const prevAlertIds = useRef<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const visibleNav = navItems.filter(
@@ -80,51 +80,34 @@ export default function Layout() {
 
   const canSeeAlerts = hasPermission(user, "alerts.read");
 
+  // Server-authoritative unread badge; refetched on invalidation only (not
+  // on a timer — SSE events handle real-time badge bumps below).
   const { data: unreadData } = useQuery({
     queryKey: ["alerts", "unread-count"],
     queryFn: () => alertService.getUnreadCount(),
-    refetchInterval: 5000,
     enabled: canSeeAlerts,
   });
-
-  const { data: latestAlerts } = useQuery({
-    queryKey: ["alerts", "latest"],
-    queryFn: () => alertService.getAll({ page: 1, limit: 5, isRead: "false" }),
-    refetchInterval: 5000,
-    enabled: canSeeAlerts,
-  });
-
-  // The first response seeds known alert ids so pre-existing alerts do not
-  // fire a toast storm on page load; afterwards only genuinely new alerts
-  // toast. The id set is bounded so long sessions cannot grow it forever.
-  const seededAlertIdsRef = useRef(false);
-
-  useEffect(() => {
-    if (!latestAlerts?.data) return;
-    if (!seededAlertIdsRef.current) {
-      latestAlerts.data.forEach((a: Alert) => prevAlertIds.current.add(a.id));
-      seededAlertIdsRef.current = true;
-      return;
-    }
-    const newAlerts = latestAlerts.data.filter(
-      (a: Alert) => !prevAlertIds.current.has(a.id),
-    );
-    newAlerts.forEach((alert: Alert) => {
-      showToast({
-        severity: alert.severity,
-        title: alert.title,
-        message: alert.message,
-      });
-    });
-    latestAlerts.data.forEach((a: Alert) => prevAlertIds.current.add(a.id));
-    while (prevAlertIds.current.size > 500) {
-      const oldest = prevAlertIds.current.values().next().value;
-      if (oldest === undefined) break;
-      prevAlertIds.current.delete(oldest);
-    }
-  }, [latestAlerts]);
 
   const unreadCount = unreadData ?? 0;
+
+  // Push-driven toasts + badge increments via SSE instead of 5s polling.
+  const { events } = useRealtime(canSeeAlerts);
+  useEffect(() => {
+    if (!events.length) return;
+    for (const evt of events) {
+      if (evt.type === "alert" && evt.data.event === "alert_created") {
+        showToast({
+          severity: (evt.data.severity ?? "info") as "info" | "warning" | "critical",
+          title: evt.data.title ?? "New Alert",
+          message: evt.data.message ?? "",
+        });
+        queryClient.setQueryData(
+          ["alerts", "unread-count"],
+          (prev: number | undefined) => (prev ?? 0) + 1,
+        );
+      }
+    }
+  }, [events, queryClient]);
 
   useEffect(() => {
     setSidebarOpen(false);

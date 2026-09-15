@@ -17,6 +17,9 @@ import {
   type EventCorrelationSummary,
 } from "./correlation";
 
+/** Nested camera rows only need display fields on read paths. */
+const cameraView = { select: { id: true, name: true, location: true } };
+
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
 const alertCooldownRegistry = sharedAlertCooldownRegistry;
 const DEFAULT_ALERT_COOLDOWN_MS = 30_000;
@@ -171,7 +174,7 @@ async function computeDetectionStats() {
     prisma.detection.count({ where: { status: "critical" } }),
     prisma.camera.count({ where: { status: "online" } }),
     prisma.detection.findMany({
-      include: { camera: true },
+      include: { camera: cameraView },
       orderBy: { timestamp: "desc" },
       take: 10,
     }),
@@ -382,7 +385,7 @@ export const detectionService = {
     const [data, total] = await Promise.all([
       prisma.detection.findMany({
         where,
-        include: { camera: true },
+        include: { camera: cameraView },
         orderBy: [orderBy],
         skip: (params.page - 1) * params.limit,
         take: params.limit,
@@ -396,7 +399,7 @@ export const detectionService = {
   async findRecentByDetectorKey(detectorKey: string, limit = 25) {
     return prisma.detection.findMany({
       where: { detectorKey },
-      include: { camera: true },
+      include: { camera: cameraView },
       orderBy: { timestamp: "desc" },
       take: limit,
     });
@@ -405,7 +408,7 @@ export const detectionService = {
   async findById(id: string) {
     const detection = await prisma.detection.findUnique({
       where: { id },
-      include: { camera: true, alert: true },
+      include: { camera: cameraView, alert: true },
     });
 
     if (!detection) {
@@ -437,7 +440,7 @@ export const detectionService = {
     for (;;) {
       const page = await prisma.detection.findMany({
         where,
-        include: { camera: true },
+        include: { camera: cameraView },
         orderBy: [{ timestamp: "desc" }, { id: "desc" }],
         take: pageSize,
         skip,

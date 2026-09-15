@@ -258,6 +258,16 @@ export class MonitorScheduler {
   private lastTickError: string | null = null;
   private readonly loopStates = new Map<string, LoopRuntimeState>();
 
+  /**
+   * Last-loaded monitor loops, treated as stale after a short TTL. The status
+   * API (polled every few seconds by the dashboard) and the engine tick both
+   * derive loops from the same DB rows; sharing one short-lived snapshot
+   * prevents hammering the DB with a full monitor-loop join on every poll.
+   */
+  private cachedLoops: MonitorLoop[] | null = null;
+  private cachedLoopsAt = 0;
+  private static readonly LOOP_CACHE_TTL_MS = 2500;
+
   constructor(options: {
     frameSource: FrameSource;
     runner: EngineRunner;
@@ -305,10 +315,23 @@ export class MonitorScheduler {
     logger.info("Continuous monitoring scheduler stopped");
   }
 
+  private async loadLoopsCached(): Promise<MonitorLoop[]> {
+    if (
+      this.cachedLoops &&
+      Date.now() - this.cachedLoopsAt < MonitorScheduler.LOOP_CACHE_TTL_MS
+    ) {
+      return this.cachedLoops;
+    }
+    const loops = await this.loadLoops();
+    this.cachedLoops = loops;
+    this.cachedLoopsAt = Date.now();
+    return loops;
+  }
+
   async getStatus(): Promise<MonitorStatus> {
     let loops: MonitorLoop[] = [];
     try {
-      loops = await this.loadLoops();
+      loops = await this.loadLoopsCached();
     } catch (err) {
       this.lastTickError = err instanceof Error ? err.message : String(err);
     }
@@ -354,6 +377,10 @@ export class MonitorScheduler {
     const tickStarted = process.hrtime.bigint();
     try {
       const loops = await this.loadLoops();
+      // Share the freshest loops with the status API so polls between ticks
+      // reuse this snapshot instead of running the DB join again.
+      this.cachedLoops = loops;
+      this.cachedLoopsAt = Date.now();
       const due = loops.filter((loop) => this.isDue(loop));
       if (due.length > 0) {
         await Promise.all(due.map((loop) => this.runLoop(loop)));

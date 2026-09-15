@@ -7,7 +7,7 @@ import type { AlertQueryInput } from "../types";
 import type { AlertSeverity, Prisma } from "@prisma/client";
 
 const alertInclude = {
-  detection: { include: { camera: true } },
+  detection: { include: { camera: { select: { id: true, name: true, location: true } } } },
   incident: {
     select: { id: true, status: true },
   },
@@ -99,7 +99,7 @@ export const alertService = {
     for (;;) {
       const alerts = await prisma.alert.findMany({
         where,
-        include: { detection: { include: { camera: true } } },
+        include: { detection: { include: { camera: { select: { id: true, name: true, location: true } } } } },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: pageSize,
         skip,

@@ -84,7 +84,7 @@ async function buildReportData(
     case "detection": {
       const detections = await prisma.detection.findMany({
         where,
-        include: { camera: true },
+        include: { camera: { select: { id: true, name: true, location: true } } },
         orderBy: { timestamp: "desc" },
       });
       return format === "csv" ? buildDetectionCsv(detections) : buildDetectionPdf(detections);
@@ -92,7 +92,7 @@ async function buildReportData(
     case "alert": {
       const alerts = await prisma.alert.findMany({
         where: { createdAt: { gte: from, lte: to } },
-        include: { detection: { include: { camera: true } } },
+        include: { detection: { include: { camera: { select: { id: true, name: true, location: true } } } } },
         orderBy: { createdAt: "desc" },
       });
       return format === "csv" ? buildAlertCsv(alerts) : buildAlertPdf(alerts);
