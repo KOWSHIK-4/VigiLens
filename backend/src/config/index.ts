@@ -64,8 +64,12 @@ export const config = {
     audience: process.env.JWT_AUDIENCE || "vigilens-frontend",
   },
   cors: {
+    // Canonical production frontend origin is the Vercel project linked in
+    // frontend/.vercel (projectName "vigilens" -> https://vigilens.vercel.app).
+    // The SPA proxies /api/* to the backend project (vigilens-api.vercel.app)
+    // via frontend/vercel.json rewrites, so preflights arrive with this origin.
     origin: parseCorsOrigins(process.env.CORS_ORIGIN, [
-      "https://viglens-rho.vercel.app",
+      "https://vigilens.vercel.app",
       "http://localhost:5173",
     ]),
   },

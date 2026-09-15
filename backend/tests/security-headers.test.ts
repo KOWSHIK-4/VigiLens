@@ -129,7 +129,7 @@ async function run() {
   // Pass an explicit allowlist (rather than inheriting backend/.env) so the
   // header/CORS assertions are deterministic.
   server = spawnServer({
-    CORS_ORIGIN: "https://viglens-rho.vercel.app,http://localhost:5173",
+    CORS_ORIGIN: "https://vigilens.vercel.app,http://localhost:5173",
   });
   if (!(await waitForServer())) {
     fail("server startup", `backend did not become healthy on port ${TEST_PORT}`);

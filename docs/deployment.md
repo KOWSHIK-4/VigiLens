@@ -1,5 +1,30 @@
 # Deployment
 
+## Vercel Architecture
+
+VigiLens is deployed as two separate Vercel projects that work together:
+
+- **Frontend project (`vigilens`)** — the static React SPA, served at
+  `https://vigilens.vercel.app`. `frontend/vercel.json` rewrites every
+  `/api/*` request to the backend project and serves `index.html` for all
+  other routes (SPA fallback). The browser therefore talks to the API
+  **same-origin** (`https://vigilens.vercel.app/api/...`), and Vercel's edge
+  proxy forwards those requests to the backend.
+- **Backend project (`vigilens-api`)** — the serverless Express function,
+  served at `https://vigilens-api.vercel.app`. `backend/vercel.json`
+  installs dependencies, applies Prisma migrations, seeds the database, and
+  rewrites all routes into the `api/index.ts` serverless function. The
+  linked project names come from `frontend/.vercel/project.json` and
+  `backend/.vercel/project.json`.
+
+Relationship: the SPA never calls the backend origin directly — the frontend
+rewrite is the single proxy path. Because preflight and cross-origin requests
+still carry the `Origin: https://vigilens.vercel.app` header after Vercel's
+rewrite, the backend's CORS allow-list must include the **frontend**
+production origin (set `CORS_ORIGIN` accordingly). The legacy
+`viglens-rho.vercel.app` host is not part of the current architecture and its
+backend CORS default was retired.
+
 ## Docker Compose (Recommended)
 
 ```bash

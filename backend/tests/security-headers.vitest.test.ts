@@ -31,7 +31,7 @@ describe("Security headers configuration", () => {
 });
 
 describe("parseCorsOrigins", () => {
-  const fallback = ["https://viglens-rho.vercel.app", "http://localhost:5173"];
+  const fallback = ["https://vigilens.vercel.app", "http://localhost:5173"];
 
   it("falls back when the env var is unset or blank", () => {
     expect(parseCorsOrigins(undefined, fallback)).toEqual(fallback);
