@@ -13,8 +13,15 @@
  *   - per-loop runtime state (frames, detections, failures, video position)
  *     is accumulated so the API can expose a live monitoring view.
  *
- * Dependencies (`FrameSource`, `EngineRunner`, `loadLoops`) are injected so
- * the scheduler can be unit-tested without a camera, AI service or database.
+ * Stream reliability is durable, not just in-memory: when a loop crosses
+ * the sustained-failure threshold the camera record is flagged as
+ * error/unhealthy and an outage is appended to its health log (once per
+ * episode); a successful run after that flags the camera healthy again and
+ * appends a recovery entry (see `cameraHealthReporter`).
+ *
+ * Dependencies (`FrameSource`, `EngineRunner`, `loadLoops`, reporter) are
+ * injected so the scheduler can be unit-tested without a camera, AI service
+ * or database.
  */
 
 import { config } from "../config";
@@ -22,7 +29,11 @@ import { logger } from "../config/logger";
 import { prisma } from "../config/prisma";
 import { engineService } from "./engineService";
 import { aiServiceClient, type AiServiceClient, type CaptureCredentials } from "./aiClient";
-import { loadCameraCredentials } from "../services/camera.service";
+import {
+  cameraHealthReporter,
+  loadCameraCredentials,
+  type CameraHealthReporter,
+} from "../services/camera.service";
 import type { CameraType } from "@prisma/client";
 import type { PipelineResult } from "./pipeline";
 
@@ -107,6 +118,12 @@ export interface EngineRunner {
 /** Loads the loops the scheduler should drive from current configuration. */
 export type LoopLoader = () => Promise<MonitorLoop[]>;
 
+/** No-op reporter used when the scheduler is constructed without one (tests). */
+export const noopCameraHealthReporter: CameraHealthReporter = {
+  async reportStreamFailure() {},
+  async reportStreamRecovery() {},
+};
+
 interface LoopRuntimeState {
   status: MonitorLoopStatus;
   intervalMs: number;
@@ -123,6 +140,8 @@ interface LoopRuntimeState {
   videoPosSeconds: number;
   runsStarted: number;
   runsSucceeded: number;
+  /** Whether the current failure episode has already been persisted to the camera record. */
+  reportedStreamFailure: boolean;
 }
 
 /** Frame source backed by the AI service `/capture` endpoint. */
@@ -225,6 +244,7 @@ export class MonitorScheduler {
   private readonly frameSource: FrameSource;
   private readonly runner: EngineRunner;
   private readonly loadLoops: LoopLoader;
+  private readonly reporter: CameraHealthReporter;
   private readonly tickMs: number;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
@@ -243,10 +263,12 @@ export class MonitorScheduler {
     runner: EngineRunner;
     loadLoops: LoopLoader;
     tickMs?: number;
+    reporter?: CameraHealthReporter;
   }) {
     this.frameSource = options.frameSource;
     this.runner = options.runner;
     this.loadLoops = options.loadLoops;
+    this.reporter = options.reporter ?? noopCameraHealthReporter;
     this.tickMs = options.tickMs ?? 1000;
   }
 
@@ -384,6 +406,7 @@ export class MonitorScheduler {
         videoPosSeconds: 0,
         runsStarted: 0,
         runsSucceeded: 0,
+        reportedStreamFailure: false,
       };
       this.loopStates.set(loop.id, state);
     }
@@ -411,12 +434,24 @@ export class MonitorScheduler {
       state.runsSucceeded += 1;
       state.framesProcessed += 1;
       state.detectionsCreated += result.detections.length;
+      const wasReportedAsDown = state.reportedStreamFailure;
       state.consecutiveFailures = 0;
+      state.reportedStreamFailure = false;
       state.lastError = null;
       state.lastErrorAt = null;
       state.lastProcessingTimeMs = Math.round(durationMs);
       if (loop.camera.cameraType === "video_file") {
         state.videoPosSeconds += Math.max(1, Math.round(state.intervalMs / 1000));
+      }
+      // Persist recovery (stream back after an outage) or promote a camera
+      // the operator just started (connecting -> online) on its first
+      // successful frame. The reporter is a no-op when already online.
+      if (wasReportedAsDown || state.runsSucceeded === 1) {
+        await this.reporter.reportStreamRecovery(
+          loop.camera.id,
+          "Frame captured and inferred successfully",
+          state.lastProcessingTimeMs,
+        );
       }
       logger.info("Monitor loop processed", {
         loop: loop.id,
@@ -432,6 +467,16 @@ export class MonitorScheduler {
       state.consecutiveFailures += 1;
       state.lastError = message;
       state.lastErrorAt = new Date();
+      // Persist the outage to the camera record exactly once per episode,
+      // aligned with the point where the stream is considered down.
+      if (!state.reportedStreamFailure && state.consecutiveFailures >= BACKOFF_FAILURES_THRESHOLD) {
+        state.reportedStreamFailure = true;
+        await this.reporter.reportStreamFailure(
+          loop.camera.id,
+          message,
+          state.consecutiveFailures,
+        );
+      }
       // Back off the next attempt when the loop is failing repeatedly.
       state.nextRunAt = new Date(Date.now() + this.backoffMs(state.consecutiveFailures, state.intervalMs));
       logger.warn("Monitor loop failed", {
@@ -475,4 +520,5 @@ export const monitorScheduler = new MonitorScheduler({
   runner: realEngineRunner,
   loadLoops: loadMonitorLoops,
   tickMs: config.monitor.tickMs,
+  reporter: cameraHealthReporter,
 });

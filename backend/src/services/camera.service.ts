@@ -592,3 +592,81 @@ export const cameraService = {
     }
   },
 };
+
+/**
+ * Durable stream health reporting for the continuous monitor scheduler.
+ *
+ * Mirrors what a manual health check records, but on the real continuous
+ * path:
+ *   - when the scheduler decides a camera stream is down (sustained
+ *     failures past the backoff threshold) the camera record is flagged as
+ *     error/unhealthy and an outage health log is appended once per episode;
+ *   - when the loop recovers (or a freshly started camera's first frame
+ *     succeeds) the record flips back/up to online and an operational entry
+ *     is appended.
+ *
+ * The interface lives here (leaf module) so `engine/monitor` can consume it
+ * without creating a circular dependency.
+ */
+export interface CameraHealthReporter {
+  reportStreamFailure(id: string, message: string, consecutiveFailures: number): Promise<void>;
+  reportStreamRecovery(id: string, message: string, responseTimeMs: number): Promise<void>;
+}
+
+export const cameraHealthReporter: CameraHealthReporter = {
+  async reportStreamFailure(id, message, consecutiveFailures) {
+    try {
+      const camera = await prisma.camera.findUnique({ where: { id } });
+      if (!camera) return;
+      const now = new Date();
+      await Promise.all([
+        prisma.camera.update({
+          where: { id },
+          data: { status: "error", isHealthy: false, lastHealthCheck: now },
+        }),
+        prisma.cameraHealthLog.create({
+          data: {
+            cameraId: id,
+            status: "error",
+            message: `Stream unavailable after ${consecutiveFailures} consecutive failures: ${message}`,
+          },
+        }),
+      ]);
+    } catch (err) {
+      logger.error("Failed to report camera stream outage", {
+        cameraId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  async reportStreamRecovery(id, message, responseTimeMs) {
+    try {
+      const camera = await prisma.camera.findUnique({ where: { id } });
+      if (!camera) return;
+      // Already online and healthy — nothing to persist (keeps steady-state
+      // monitoring DB-free instead of appending a redundant entry each loop).
+      if (camera.status === "online" && camera.isHealthy) return;
+      const now = new Date();
+      await Promise.all([
+        prisma.camera.update({
+          where: { id },
+          data: { status: "online", isHealthy: true, lastHealthCheck: now, lastSeen: now },
+        }),
+        prisma.cameraHealthLog.create({
+          data: {
+            cameraId: id,
+            status: "online",
+            message: `Stream recovered: ${message}`,
+            responseTime: responseTimeMs,
+          },
+        }),
+      ]);
+    } catch (err) {
+      logger.error("Failed to report camera stream recovery", {
+        cameraId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+};

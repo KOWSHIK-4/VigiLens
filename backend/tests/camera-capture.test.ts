@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { prisma } from "../src/config/prisma";
-import { cameraService } from "../src/services/camera.service";
+import { cameraService, cameraHealthReporter } from "../src/services/camera.service";
 import { AiServiceError } from "../src/engine/aiClient";
 import { ApiError } from "../src/utils/errors";
 
@@ -230,6 +230,88 @@ async function runServiceTests() {
       ok("unreachable ip camera is reported unhealthy");
     } else {
       fail("ip probe state", { status: checked?.status, isHealthy: checked?.isHealthy });
+    }
+  }
+
+  {
+    const reporterCam = await prisma.camera.create({
+      data: {
+        name: "Reporter Stream Cam",
+        url: "rtsp://reporter-stream",
+        cameraType: "rtsp",
+        status: "connecting",
+        isHealthy: false,
+      },
+    });
+    ids.push(reporterCam.id);
+
+    // Push it down first: a camera marked down by the monitor (sustained
+    // failures past the backoff threshold) should persist as error/unhealthy
+    // and log the outage.
+    await cameraHealthReporter.reportStreamFailure(reporterCam.id, "stream unreachable", 3);
+    let row = await prisma.camera.findUnique({ where: { id: reporterCam.id } });
+    let log = await prisma.cameraHealthLog.findFirst({
+      where: { cameraId: reporterCam.id },
+      orderBy: { checkedAt: "desc" },
+    });
+    if (row?.status === "error" && row.isHealthy === false && row.lastHealthCheck) {
+      ok("reportStreamFailure marks the camera error and unhealthy");
+    } else {
+      fail("reporter failure state", { status: row?.status, isHealthy: row?.isHealthy });
+    }
+    if (
+      log?.status === "error" &&
+      log.message === "Stream unavailable after 3 consecutive failures: stream unreachable"
+    ) {
+      ok("reportStreamFailure records an outage health log");
+    } else {
+      fail("reporter failure log", log);
+    }
+
+    // Recovery: a successful frame afterwards returns the camera online and
+    // appends a recovery entry.
+    await cameraHealthReporter.reportStreamRecovery(reporterCam.id, "Frame captured and inferred successfully", 42);
+    row = await prisma.camera.findUnique({ where: { id: reporterCam.id } });
+    log = await prisma.cameraHealthLog.findFirst({
+      where: { cameraId: reporterCam.id },
+      orderBy: { checkedAt: "desc" },
+    });
+    if (row?.status === "online" && row.isHealthy === true && row.lastSeen) {
+      ok("reportStreamRecovery returns the camera online and healthy");
+    } else {
+      fail("reporter recovery state", { status: row?.status, isHealthy: row?.isHealthy });
+    }
+    if (
+      log?.status === "online" &&
+      log.message === "Stream recovered: Frame captured and inferred successfully" &&
+      log.responseTime === 42
+    ) {
+      ok("reportStreamRecovery records a recovery health log");
+    } else {
+      fail("reporter recovery log", log);
+    }
+
+    // The reporter must be idempotent for an already-online camera so the
+    // endless steady-state monitoring loop never appends redundant rows.
+    const beforeCount = await prisma.cameraHealthLog.count({ where: { cameraId: reporterCam.id } });
+    await cameraHealthReporter.reportStreamRecovery(reporterCam.id, "Frame captured and inferred successfully", 42);
+    const afterCount = await prisma.cameraHealthLog.count({ where: { cameraId: reporterCam.id } });
+    if (afterCount === beforeCount) {
+      ok("reportStreamRecovery is a no-op for an already-online camera");
+    } else {
+      fail("reporter idempotency", { beforeCount, afterCount });
+    }
+
+    // Missing camera rows are ignored, never thrown.
+    const missing = await cameraHealthReporter.reportStreamFailure(
+      "00000000-0000-4000-8000-000000000000",
+      "nope",
+      3,
+    );
+    if (missing === undefined) {
+      ok("reportStreamFailure ignores unknown cameras");
+    } else {
+      fail("reporter unknown camera", missing);
     }
   }
 
