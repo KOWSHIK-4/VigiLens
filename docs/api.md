@@ -38,7 +38,14 @@ Additional auth endpoints (all require the Bearer token unless noted):
 POST /auth/logout            # blacklists the token, writes user_logout audit
 GET  /auth/me                # current user profile + effective permissions
 POST /auth/change-password   # { "currentPassword", "newPassword" }
+POST /auth/realtime-ticket   # issue a short-lived SSE credential { ticket, expiresInSeconds }
 ```
+
+`POST /auth/realtime-ticket` issues a purpose-limited `type: "realtime"`
+JWT (30-second TTL) for the realtime SSE stream. It is **not** usable with the
+normal Bearer auth: `GET /realtime/events` accepts only this ticket in its
+`?ticket=` query parameter, and every other endpoint rejects it, so access and
+proxy logs never expose a long-lived credential.
 
 - `POST /auth/change-password` requires a valid current password. It clears
   `mustChangePassword`, `isLocked` and the failed-login counter.
@@ -70,6 +77,7 @@ PATCH  /users/:id/role                       # { "role": "operator" }
 PATCH  /users/:id/status                     # { "status": "disabled" | "active" }
 POST   /users/:id/lock                       # lock account (blocks login)
 POST   /users/:id/unlock                     # clear lock and failed attempts
+PATCH  /users/:id/password                   # { "password": "newpass123", "mustChangePassword": true }
 POST   /users/:id/reset-password             # { "password": "newpass123", "mustChangePassword": true }
 DELETE /users/:id                            # soft delete (deletedAt set, login blocked)
 ```
@@ -107,6 +115,7 @@ DELETE /reports/:id          # requires reports.manage
 
 ```bash
 GET /detections?page=1&limit=20&status=critical
+GET /detections/export/csv   # stream all matched detections as a CSV attachment
 GET /detections/stats
 GET /detections/:id
 DELETE /detections/:id              # requires detections.manage (also removes the linked alert)
@@ -114,17 +123,65 @@ DELETE /detections/:id              # requires detections.manage (also removes t
 
 Detections are read-only for `viewer`/`operator` (require `detections.read`). Deleting a detection additionally requires `detections.manage` (granted to `admin` and `super_admin`) and records a `detection_deleted` audit action. Deleting an unknown id returns `404`.
 
+`GET /detections/export/csv` accepts the same `search`, `status`, `cameraId`,
+`dateFrom`, `dateTo`, `confidenceMin` and `confidenceMax` filters as
+`GET /detections` and streams a CSV attachment with columns `ID, Timestamp,
+Label, Confidence, Status, Camera, Location, Image URL`. Export requires
+`detections.read`.
+
+### Internal ingestion (`POST /detections/internal`)
+
+Machine-to-machine ingestion used by the AI service and other trusted
+producers. It is `requireInternalKey`-guarded (the `X-Internal-Key` header,
+`INTERNAL_API_KEY`) and bypasses the user session entirely. Body uses
+`snake_case`:
+
+```json
+{
+  "camera_id": "demo-camera-1",
+  "label": "person",
+  "class_name": "person",
+  "confidence": 0.87,
+  "image_url": null,
+  "bounding_box": { "x1": 214, "y1": 96, "x2": 328, "y2": 398 },
+  "detector_key": "person",
+  "model_version": "1.0.0",
+  "track_id": "0",
+  "processing_time_ms": 84,
+  "metadata": { "source": "internal" },
+  "skip_alert": false
+}
+```
+
+Required fields: `camera_id` (existing camera), `label`, `confidence`
+(0–1). Optional: `class_name`, `image_url`, `bounding_box`, `detector_key`,
+`model_version`, `track_id`, `processing_time_ms`, `metadata`,
+`skip_alert`. When `skip_alert` is `true` the detection is persisted without
+raising an alert; otherwise the standard alert pipeline (with its per-detector
+cooldown) applies. A missing or wrong `X-Internal-Key` yields `401
+INVALID_INTERNAL_KEY`.
+
 ## Cameras
 
 ```bash
 GET /cameras
 GET /cameras/:id
-POST /cameras/:id/capture          # capture a frame snapshot (cameras.control)
-GET /cameras/:id/thumbnail         # stream the latest snapshot as image/jpeg (cameras.read)
+POST /cameras                           # create (cameras.manage)
+PATCH /cameras/:id                      # update (cameras.manage)
+DELETE /cameras/:id                     # delete (cameras.manage)
+POST /cameras/:id/start                 # transition the feed to connecting/online (cameras.control)
+POST /cameras/:id/stop                  # mark the feed offline (cameras.control)
+POST /cameras/:id/capture               # capture a frame snapshot (cameras.control)
+GET /cameras/:id/thumbnail              # stream the latest snapshot as image/jpeg (cameras.read)
+POST /cameras/:id/health                # run a one-off connectivity/capture probe (cameras.read)
+GET /cameras/:id/health-logs?limit=50   # recent CameraHealthLog entries (cameras.read)
 ```
 
 Camera views require `cameras.read`; creating/editing/deleting cameras requires
 `cameras.manage`; start/stop and snapshot capture require `cameras.control`.
+`start` is idempotent — it flips offline feeds to `connecting` (and leaves
+already-`online`/`connecting` feeds unchanged); `stop` flips them back to
+`offline`.
 
 `POST /cameras/:id/capture` pulls one frame from the camera's feed through the AI
 service `/capture` endpoint (RTSP/IP/HTTP streams, USB webcams and video files),
@@ -141,7 +198,8 @@ It requires authentication, so the browser must fetch it as an authenticated blo
 
 The health check (`POST /cameras/:id/health`) probes IP/HTTP cameras with a HEAD
 request and verifies RTSP/USB/video-file feeds by capturing a real frame through
-the AI service.
+the AI service. `GET /cameras/:id/health-logs` returns the most recent `CameraHealthLog` rows
+for the camera (latest first; `limit` defaults to 50).
 
 Camera `username`/`password` fields are **write-only**: they are accepted on
 create/update so the backend can reach protected RTSP/HTTP sources, but they are
@@ -156,11 +214,21 @@ detection.
 
 ```bash
 GET    /alerts?page=1&limit=20&severity=critical&isRead=false&search=person
-GET    /alerts/unread-count          # { count } for the navbar badge
-PATCH  /alerts/read-all              # mark every alert as read
-PATCH  /alerts/:id/read              # mark one alert as read   (alerts.manage)
-DELETE /alerts/:id                   # delete one alert         (alerts.manage)
+GET    /alerts/export              # stream all matched alerts as a CSV attachment
+GET    /alerts/unread-count        # { count } for the navbar badge
+PATCH  /alerts/read-all            # mark every alert as read
+PATCH  /alerts/:id/read            # mark one alert as read   (alerts.manage)
+PATCH  /alerts/:id/acknowledge     # ack one alert             (alerts.manage)
+PATCH  /alerts/:id/escalate        # escalate one alert        (alerts.manage)
+DELETE /alerts/:id                 # delete one alert          (alerts.manage)
 ```
+
+`GET /alerts/export` accepts the same filters as `GET /alerts`
+(`severity`, `isRead`, `search`, `cameraId`, `dateFrom`, `dateTo`) and
+streams a CSV attachment with columns `ID, Severity, Title, Message, Camera,
+Location, Timestamp, Read`. `acknowledge` and `escalate` record
+`alert_acknowledged` / `alert_escalated` audit actions; `escalate` accepts an
+optional note body `{ "note": "Escalated to on-call" }` (max 500 chars).
 
 Reading requires `alerts.read`; mutating requires `alerts.manage`. Query filters
 are validated: `severity` must be `info|warning|critical`, `isRead` must be
@@ -394,6 +462,7 @@ Engine endpoints require `models.read` (reads) and `models.run` (process):
 ```bash
 GET    /engines                         # runtime descriptors for all detectors
 GET    /engines/:key                    # descriptor for one detector
+GET    /engines/:key/health             # structured health: lifecycle + measured metrics
 GET    /engines/:key/metrics            # measured pipeline metrics (real runs only)
 GET    /engines/:key/detections?limit=25 # recent persisted detections for a detector
 POST   /engines/:key/process            # run inference on an uploaded image
@@ -429,6 +498,47 @@ A descriptor looks like:
 `availability` is `available` only when the detector has a real model wired to the
 AI service (`person` and `vehicle` today). All other detectors are `unconfigured`
 and refuse inference — the engine never fabricates detections.
+
+`GET /engines/:key/health` merges the accumulated engine metrics with lifecycle
+state and never fabricates latency/throughput figures (they are `null` until the
+detector has processed a real frame):
+
+```json
+{
+  "key": "person",
+  "status": "ready",
+  "enabled": true,
+  "healthy": true,
+  "message": "Detector is ready and running live inference",
+  "latencyMs": 82.1,
+  "throughputFps": 12.1,
+  "framesProcessed": 188,
+  "framesSkipped": 0,
+  "errorCount": 0,
+  "lastInferenceAt": "2026-08-08T10:00:00.000Z",
+  "lastSuccessfulInferenceAt": "2026-08-08T10:00:00.000Z",
+  "lastError": null,
+  "lastErrorAt": null,
+  "consecutiveFailures": 0,
+  "aiReachable": true,
+  "lastDetectionAt": "2026-08-08T10:00:00.000Z",
+  "lastFrameAt": "2026-08-08T10:00:00.000Z",
+  "rolling": {
+    "windowSeconds": 300,
+    "samples": 188,
+    "averageProcessingTimeMs": 81.9,
+    "maxProcessingTimeMs": 120.4,
+    "detectionsInWindow": 190,
+    "firstSampleAt": "2026-08-08T09:55:00.000Z",
+    "lastSampleAt": "2026-08-08T10:00:00.000Z"
+  }
+}
+```
+
+`status` mirrors the descriptor's lifecycle status, `healthy` is true only for
+`ready` and `configured`, and `rolling` holds the bounded in-ring sample
+window (5 minutes, max 10 000 frames) from the engine's metrics store
+(`null` while no frames have been sampled).
 
 `POST /engines/:key/process` accepts `multipart/form-data` with an `image` file
 (and an optional `camera_id`; when omitted the first camera is used so persisted
@@ -496,6 +606,7 @@ end-to-end) and `source`:
 ## AI Service
 
 ```bash
+GET  /detect/detectors  # catalog of registered inference models { success, count, detectors }
 POST /detect/image   # multipart/form-data with image file[&detector=&confidence=0..1]
 POST /detect/video   # multipart/form-data with video file[&detector=&confidence=0..1]
 GET  /detect/webcam  # ?camera_id=&detector=&device=&confidence=0..1 (MJPEG stream)
@@ -554,10 +665,14 @@ These endpoints require a JWT and the `monitoring.read` permission (granted to
 `admin` and `super_admin` roles by default).
 
 ```bash
-GET /api/system/health      # overall + per-service status, hostname, uptime, timestamp
-GET /api/system/monitoring  # resource snapshot: cpu (percent/cores), memory (used/total), disk (used/free/mount)
-GET /api/system/metrics     # in-memory request and detection counters
+GET /api/system/health       # overall + per-service status, hostname, uptime, timestamp
+GET /api/system/monitoring   # resource snapshot: cpu (percent/cores), memory (used/total), disk (used/free/mount)
+GET /api/system/metrics      # in-memory request and detection counters
+GET /api/system/logs         # recent buffered application log entries (max 500)
 ```
+
+`GET /api/system/logs` returns the most recent lines from the in-process log
+ring buffer (default 100, maximum 500 via `?limit=`).
 
 `GET /api/system/metrics` returns a live snapshot of the current process:
 
@@ -645,6 +760,116 @@ listed. `status` is `idle` → `running` → `ok`/`error` per loop; failures are
 isolated per loop, and `videoPosSeconds` advances for `video_file` cameras so
 consecutive captures move forward through the recording instead of re-reading
 frame 0.
+
+## Incidents
+
+Incidents group an alert into a trackable lifecycle. All endpoints require a
+JWT; reads require `alerts.read`, mutations (`POST`, `PATCH`) require
+`alerts.manage`.
+
+```bash
+GET   /incidents?page=1&limit=20&status=investigating&priority=critical&mine=true
+GET   /incidents/summary            # aggregate counts across statuses
+GET   /incidents/export             # stream all matched incidents as CSV
+GET   /incidents/:id
+POST  /incidents                    # { alertId } [+ priority/description]
+PATCH /incidents/:id/status         # { "status": "acknowledged"|"investigating"|"resolved"|"reopened" }
+PATCH /incidents/:id/priority       # { "priority": "info"|"warning"|"critical" }
+PATCH /incidents/:id/assign         # { "assigneeId": "<userId>|null" }
+POST  /incidents/:id/notes          # { "body": "..." }
+```
+
+`GET /incidents` accepts `status` (one of `new`, `acknowledged`,
+`investigating`, `resolved`, `reopened`), `priority`, `assignedTo`,
+`mine=true` (only incidents assigned to the caller), `unassigned=true`,
+`search` and `sortBy` (`status|priority|openedAt|createdAt|updatedAt|title`).
+`/summary` returns `{ total, open, resolved, byStatus }`. `/export` streams a
+CSV with columns `ID, Status, Priority, Title, Source Camera, Assignee,
+Opened At, Resolved At, Description`.
+
+Incident status transitions are validated against allowed paths (for
+example `new → acknowledged → investigating → resolved`, with `reopened`
+for resolved incidents). Resolving an incident records an
+`incident_resolved` audit action; reopening records `incident_reopened`.
+Changes are broadcast over the realtime stream (`incident_*` events) and
+drive webhooks.
+
+## Analytics
+
+Dashboard aggregates computed from the detections store. Every endpoint
+requires `analytics.read`.
+
+```bash
+GET /analytics/overview    # headline KPIs for the period
+GET /analytics/daily       # per-day detection counts (total/critical/warning/info)
+GET /analytics/cameras     # per-camera detection counts + share of the busiest
+GET /analytics/detectors   # per-label detection counts + confidence stats
+GET /analytics/timeline    # 24 hourly buckets (hour-of-day activity)
+GET /analytics/confidence  # confidence distribution in 6 buckets
+```
+
+All accept the same query filters: `period` (`7`|`30`|`90`), explicit
+`from`/`to` date bounds (which override `period`), and an optional `tz` IANA
+time zone (e.g. `tz=Asia/Kolkata`) that shifts day/hour bucketing to the
+reporter's clock. Without `tz`, the database server's time zone is used.
+Results are cached briefly (30–120 s depending on the metric), so they are
+snapshots rather than live counters.
+
+`GET /analytics/overview` returns:
+
+```json
+{
+  "totalDetections": 8712,
+  "todayDetections": 133,
+  "activeCameras": 3,
+  "offlineCameras": 1,
+  "totalCameras": 4,
+  "averageConfidence": 0.72,
+  "detectionRate": 35.1,
+  "mostActiveCamera": { "name": "Main Entrance", "count": 3200 },
+  "mostCommonDetectionType": "person",
+  "severityDistribution": [{ "name": "info", "value": 6100 }]
+}
+```
+
+## Audit Logs
+
+Every security-relevant action is recorded in the audit trail. All endpoints
+require a JWT. Reads require `audit.read`; the CSV export additionally
+requires `audit.export`.
+
+```bash
+GET   /audit-logs?page=1&limit=20&action=user_login&module=auth&status=success
+GET   /audit-logs/stats            # totalLogs, todayLogs, failedLogs, activeUsers
+GET   /audit-logs/charts           # 30-day aggregates: actionsPerDay, moduleUsage, statusDistribution, topUsers
+GET   /audit-logs/export           # stream up to 10 000 matching rows as CSV
+GET   /audit-logs/:id
+```
+
+`GET /audit-logs` supports `search` (matches user/email/description/ip),
+`userId`, `action`, `module`, `status` (`success`|`failed`), `dateFrom` /
+`dateTo`, and `sortBy` (`timestamp|action|module|status|username|email`).
+Rows are immutable; there is no update or delete endpoint. Export streams the
+same filters as a CSV attachment named `audit-logs.csv`.
+
+## Realtime Events
+
+Server-Sent Events stream for live dashboard updates (new alerts and incident
+changes). Because `EventSource` cannot set an `Authorization` header, the
+stream authenticates with a short-lived, purpose-limited ticket:
+
+```bash
+POST /auth/realtime-ticket          # -> { "ticket": "...", "expiresInSeconds": 30 }
+GET  /realtime/events?ticket=...    # open the SSE stream
+GET  /realtime/subscribers          # { count, subscribers } (any authenticated JWT)
+```
+
+The ticket is a 30-second, `type: "realtime"` JWT that is rejected by every
+other endpoint. `GET /realtime/events` emits `:connected`, keeps the connection
+alive with `:heartbeat` comments every 25 s, and pushes frames shaped as
+`data: {"type":"alert"|"incident","id":"...","timestamp":"...","data":{...}}`.
+The subscriber pool is capped at 200 connections (oldest evicted first);
+`GET /realtime/subscribers` reports the connected count.
 
 ## Rate Limits
 
