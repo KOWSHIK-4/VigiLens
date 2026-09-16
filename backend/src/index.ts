@@ -28,16 +28,27 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     const origin = req.headers.origin;
     if (origin && config.cors.origin.includes(origin)) {
+      // Allowlisted origin: emit the full CORS preflight response. This
+      // path runs ahead of the cors() middleware below so that nothing else
+      // (helmet, body parser, rate limiter) can interfere with the response.
       res.header("Access-Control-Allow-Origin", origin);
       res.header("Vary", "Origin");
+      res.header("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
+      res.header(
+        "Access-Control-Allow-Headers",
+        req.headers["access-control-request-headers"] || "Content-Type, Authorization, X-Internal-Key",
+      );
+      res.header("Access-Control-Allow-Credentials", "true");
+      res.header("Access-Control-Max-Age", "86400");
+      return res.sendStatus(204);
     }
-    res.header("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      req.headers["access-control-request-headers"] || "Content-Type, Authorization, X-Internal-Key",
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Max-Age", "86400");
+    // Third-party origin (or no Origin at all): answer the preflight with a
+    // bare 204 and NO CORS headers. The browser requires Access-Control-
+    // Allow-Origin to proceed, and leaking Allow-Methods/Allow-Headers/
+    // Allow-Credentials to disallowed origins would hand out a CORS
+    // capability map for free. (The cors() middleware stays mounted for the
+    // simple non-OPTIONS requests where allowlist enforcement matters.)
+    res.header("Vary", "Origin");
     return res.sendStatus(204);
   }
   next();

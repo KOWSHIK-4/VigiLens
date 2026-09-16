@@ -204,6 +204,20 @@ async function run() {
     });
   }
 
+  if (
+    preflightDenied.headers.get("access-control-allow-methods") === null &&
+    preflightDenied.headers.get("access-control-allow-credentials") === null &&
+    preflightDenied.headers.get("access-control-max-age") === null
+  ) {
+    ok("CORS preflight for disallowed origins leaks no CORS headers");
+  } else {
+    fail("disallowed preflight leaks CORS headers", {
+      methods: preflightDenied.headers.get("access-control-allow-methods"),
+      credentials: preflightDenied.headers.get("access-control-allow-credentials"),
+      maxAge: preflightDenied.headers.get("access-control-max-age"),
+    });
+  }
+
   // 3) Login still works — proves tokens signed with the pinned claims verify.
   const login = await request("/auth/login", {
     method: "POST",
