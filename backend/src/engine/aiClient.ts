@@ -9,6 +9,7 @@
 
 import { config } from "../config";
 import { redactSecrets } from "../utils/redact";
+import { getRequestId } from "../utils/requestContext";
 import type { BoundingBox, ProcessingMode } from "./types";
 
 export type AiErrorReason =
@@ -176,12 +177,18 @@ export class HttpAiServiceClient implements AiServiceClient {
   /**
    * Shared-secret header that the AI service requires on every
    * machine-to-machine endpoint (capture and detection). Matches the backend
-   * INTERNAL_API_KEY so the boundary stays closed to anonymous callers.
+   * INTERNAL_API_KEY so the boundary stays closed to anonymous callers. The
+   * originating request's correlation id is forwarded along with the secret
+   * so AI-service logs can be traced back to the API request that triggered
+   * the inference or capture.
    */
   private internalKeyHeaders(): Record<string, string> {
-    return config.security.internalApiKey
+    const headers: Record<string, string> = config.security.internalApiKey
       ? { "X-Internal-Key": config.security.internalApiKey }
       : {};
+    const requestId = getRequestId();
+    if (requestId) headers["X-Request-Id"] = requestId;
+    return headers;
   }
 
   async detectImage(
@@ -402,7 +409,10 @@ export class HttpAiServiceClient implements AiServiceClient {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 2500);
       try {
-        const response = await fetch(`${this.baseUrl}/health`, { signal: controller.signal });
+        const response = await fetch(`${this.baseUrl}/health`, {
+          signal: controller.signal,
+          headers: this.internalKeyHeaders(),
+        });
         return response.ok;
       } finally {
         clearTimeout(timer);
