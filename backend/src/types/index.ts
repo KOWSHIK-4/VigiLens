@@ -24,7 +24,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
   password: z.string().min(1),
 });
 
@@ -116,7 +116,7 @@ export const updateCameraSchema = cameraBaseSchema
 export const cameraQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   status: z.enum(["online", "offline", "connecting", "error"]).optional(),
   cameraType: z.enum(["usb", "rtsp", "ip", "video_file"]).optional(),
   sortBy: z.enum(["name", "status", "cameraType", "location", "lastSeen", "createdAt"]).optional(),
@@ -138,7 +138,7 @@ export const generateReportSchema = z.object({
 export const reportQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   type: reportTypeSchema.optional(),
   status: reportStatusSchema.optional(),
   sortBy: z.enum(["title", "type", "status", "createdAt"]).optional(),
@@ -153,7 +153,7 @@ export const modelStatusSchema = z.enum(["loaded", "loading", "disabled", "error
 export const modelQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   status: modelStatusSchema.optional(),
   enabled: z
     .enum(["true", "false"])
@@ -319,14 +319,14 @@ export const reportDownloadQuerySchema = z.object({
 export const detectorQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   status: z.union([detectorStatusSchema, detectorRuntimeStatusSchema]).optional(),
   type: detectorTypeSchema.optional(),
   enabled: z
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
-  category: z.string().optional(),
+  category: z.string().max(200).optional(),
   installed: z
     .enum(["true", "false"])
     .optional()
@@ -448,7 +448,7 @@ export const userStatusUpdateSchema = z.object({
 export const userQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   role: roleNameValueSchema.optional(),
   status: userStatusSchema.optional(),
   sortBy: z
@@ -492,7 +492,7 @@ export const updateRolePermissionsSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
+  currentPassword: z.string().min(1, "Current password is required").max(100),
   newPassword: z.string().min(8, "New password must be at least 8 characters").max(100),
 });
 
@@ -509,7 +509,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export const auditLogQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   userId: z.string().uuid().optional(),
   action: z.enum([
     "user_login", "user_logout", "password_reset", "password_changed",
@@ -528,7 +528,7 @@ export const auditLogQuerySchema = z.object({
     "incident_unassigned", "incident_note_added", "incident_reopened",
     "incident_resolved",
   ]).optional(),
-  module: z.string().optional(),
+  module: z.string().max(100).optional(),
   status: z.enum(["success", "failed"]).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
