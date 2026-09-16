@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import compression from "compression";
-import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { prisma } from "./config/prisma";
 import { logger } from "./config/logger";
@@ -12,6 +11,7 @@ import routes from "./routes";
 import healthRoutes from "./routes/health.routes";
 import { modelService } from "./services/model.service";
 import { settingsService } from "./services/settings.service";
+import { rateLimitService } from "./services/rateLimit.service";
 import { monitorScheduler } from "./engine/monitor";
 import { retentionScheduler } from "./services/retentionScheduler";
 
@@ -57,19 +57,11 @@ app.use(
 // still hardens the body parser against oversized request abuse.
 app.use(express.json({ limit: "2mb" }));
 
-app.use(
-  rateLimit({
-    // The dashboard polls several endpoints every few seconds, so the
-    // global bucket must tolerate sustained UI traffic (~5 req/s per IP)
-    // while still capping abuse. Credential endpoints carry their own
-    // stricter limit in auth.routes.
-    windowMs: 60 * 1000,
-    max: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, error: "Too many requests, please try again later" },
-  }),
-);
+// Global API limiter. Its window/max come from the Security settings
+// (rate_limit_window_ms / rate_limit_max_requests) and can be retuned in
+// the admin Settings panel without a restart. Credential endpoints carry
+// their own stricter limit (see auth.routes).
+app.use(rateLimitService.middleware);
 
 app.use(requestContext);
 
@@ -112,6 +104,9 @@ async function start() {
     } catch (error) {
       logger.error("Failed to seed default system settings", { error });
     }
+
+    await rateLimitService.refresh();
+    logger.info("Global API rate limit tuning applied", rateLimitService.get());
 
     if (config.monitor.enabled) {
       monitorScheduler.start();

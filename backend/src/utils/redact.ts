@@ -45,6 +45,8 @@ export function redactString(value: string): string {
  * secrets (URL userinfo, DSN passwords, auth header values) and object keys
  * that look like secret material are masked outright.
  */
+export function redactSecrets(value: string): string;
+export function redactSecrets(value: unknown, seen?: WeakSet<object>): unknown;
 export function redactSecrets(value: unknown, seen?: WeakSet<object>): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "string") return redactString(value);

@@ -8,10 +8,10 @@ import { registerSchema, loginSchema, changePasswordSchema } from "../types";
 const router = Router();
 
 /**
- * Credential endpoints get a much stricter bucket than the global API
- * limit: it paces online guessing while the per-account lockout (threshold
- * configured under Security settings -> max_login_attempts) stops targeted
- * brute force.
+ * Credential endpoints get a deliberately fixed, much stricter bucket than
+ * the settings-driven global API limit (auth.routes intentionally does NOT
+ * inherit those values). This paces online guessing; per-account lockout
+ * (Security settings -> max_login_attempts) stops targeted brute force.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

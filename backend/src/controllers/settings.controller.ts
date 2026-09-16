@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from "express";
 import type { AuthRequest, SettingsCategory } from "../types";
 import { settingsService } from "../services/settings.service";
+import { rateLimitService } from "../services/rateLimit.service";
 import { userService } from "../services/user.service";
 import { success } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
@@ -61,6 +62,9 @@ export const settingsController = {
         `Settings updated: ${category} (${Object.keys(body).length} value(s))`,
         { category, keys: Object.keys(body) },
       );
+      if (category === "security") {
+        await rateLimitService.refresh();
+      }
       success(res, settings);
     } catch (err) {
       next(err);
@@ -76,6 +80,9 @@ export const settingsController = {
         `Settings reset to defaults: ${category}`,
         { category, reset: true },
       );
+      if (category === "security") {
+        await rateLimitService.refresh();
+      }
       success(res, settings);
     } catch (err) {
       next(err);

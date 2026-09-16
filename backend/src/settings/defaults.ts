@@ -173,22 +173,24 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
       {
         key: "rate_limit_window_ms",
         label: "API rate limit window",
-        description: "Time window used for per-client API rate limiting.",
+        description:
+          "Time window used for the global per-client API rate limit. Operators can adjust this value in real time without a server restart.",
         type: "number",
-        defaultValue: 900000,
-        min: 60000,
-        max: 86400000,
-        step: 60000,
+        defaultValue: 60_000,
+        min: 60_000,
+        max: 86_400_000,
+        step: 60_000,
         unit: "ms",
       },
       {
         key: "rate_limit_max_requests",
         label: "API rate limit max requests",
-        description: "Maximum requests per client inside the rate limit window.",
+        description:
+          "Maximum requests a single client may make inside the global rate limit window. Changes apply immediately.",
         type: "number",
-        defaultValue: 100,
+        defaultValue: 300,
         min: 10,
-        max: 10000,
+        max: 10_000,
         unit: "req",
       },
       {

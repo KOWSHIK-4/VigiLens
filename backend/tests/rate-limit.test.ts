@@ -165,6 +165,46 @@ async function run() {
     data: { isLocked: false, failedLoginAttempts: 0, lockedAt: null },
   });
 
+  // --- Settings-driven tuning: lowering the max in the Settings API must
+  // --- take effect immediately, without a server restart. Note this blocks
+  // --- the entire client IP once the low bucket is exhausted, so the admin
+  // --- restore below is done directly against the database (the window the
+  // --- operator would otherwise wait out is 60s for these defaults).
+  const settingsDown = await request(
+    "/settings/security",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ rate_limit_max_requests: 10 }),
+    },
+    token,
+  );
+  if (settingsDown.status === 200) {
+    ok("PATCH security settings to rate_limit_max_requests=10 succeeds");
+  } else {
+    fail("PATCH security settings", settingsDown);
+    return;
+  }
+
+  let retuned429 = false;
+  for (let i = 0; i < 20; i++) {
+    const res = await request("/auth/me", {}, token);
+    if (res.status === 429) {
+      retuned429 = true;
+      break;
+    }
+  }
+  if (retuned429) {
+    ok("global limiter respects security settings change (429 seen)");
+  } else {
+    fail("settings-driven global limiter", "lowering max to 10 did not trigger 429");
+  }
+
+  await prisma.systemSetting.updateMany({
+    where: { key: "rate_limit_max_requests" },
+    data: { value: 300, updatedBy: null },
+  });
+  ok("rate limit settings restored to defaults for subsequent runs");
+
   console.log(`\nRate limit tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
 }

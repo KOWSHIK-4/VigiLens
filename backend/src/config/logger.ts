@@ -40,10 +40,11 @@ const redactingFormat = winston.format((info) => {
     }
     const child = info[key];
     if (child instanceof Error) {
-      info[key] = new Error(redactSecrets(child.message) as string);
+      const redacted = new Error(redactSecrets(child.message) as string);
       if (child.stack) {
-        info[key].stack = redactSecrets(child.stack);
+        redacted.stack = redactSecrets(child.stack);
       }
+      info[key] = redacted;
       continue;
     }
     if (typeof child === "object" && child !== null) {
