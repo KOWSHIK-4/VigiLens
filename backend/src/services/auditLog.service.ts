@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
 import type { AuditLogQueryInput } from "../types";
+import { auditRowMatchesHash, computeAuditHash } from "../utils/auditChain";
 
 interface CreateAuditLogInput {
   userId?: string;
@@ -26,7 +27,7 @@ let cachedCharts: { data: unknown; expiresAt: number } | null = null;
 
 export const auditLogService = {
   async create(input: CreateAuditLogInput) {
-    return prisma.auditLog.create({
+    const row = await prisma.auditLog.create({
       data: {
         userId: input.userId || null,
         username: input.username || "",
@@ -39,6 +40,10 @@ export const auditLogService = {
         status: input.status || "success",
         metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : undefined,
       },
+    });
+    return prisma.auditLog.update({
+      where: { id: row.id },
+      data: { hash: computeAuditHash(row) },
     });
   },
 
@@ -239,5 +244,69 @@ export const auditLogService = {
     };
     cachedCharts = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
     return data;
+  },
+
+  /**
+   * Recomputes the tamper-evidence hash of every audit row and reports any
+   * row whose stored hash no longer matches. Rows without a hash (created
+   * before this feature was deployed) are reported as legacy rather than
+   * tampered: they predate stamping and cannot be validated retroactively.
+   */
+  async verifyIntegrity(bound = 100_000) {
+    const rows = await prisma.auditLog.findMany({
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+      take: bound,
+    });
+
+    const tamperedRows: string[] = [];
+    let legacyRows = 0;
+    let checkedRows = 0;
+    for (const row of rows) {
+      if (!row.hash) {
+        legacyRows += 1;
+        continue;
+      }
+      checkedRows += 1;
+      if (!auditRowMatchesHash(row, row.hash)) {
+        tamperedRows.push(row.id);
+        if (tamperedRows.length >= 100) break;
+      }
+    }
+
+    const scanned = tamperedRows.length >= 100 ? bound : rows.length;
+    return {
+      verified: tamperedRows.length === 0,
+      scannedRows: scanned,
+      checkedRows,
+      legacyRows,
+      tamperedRows,
+    };
+  },
+
+  /**
+   * One-time backfill: stamps every audit row that is missing a hash (i.e.
+   * rows written before the feature shipped). Idempotent, so it can run on
+   * every startup with negligible cost once the table is stamped.
+   */
+  async backfillHashes(batchSize = 500) {
+    let stamped = 0;
+    while (true) {
+      const rows = await prisma.auditLog.findMany({
+        where: { hash: null },
+        orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+        take: batchSize,
+      });
+      if (rows.length === 0) break;
+      await prisma.$transaction(
+        rows.map((row) =>
+          prisma.auditLog.update({
+            where: { id: row.id },
+            data: { hash: computeAuditHash(row) },
+          }),
+        ),
+      );
+      stamped += rows.length;
+    }
+    return stamped;
   },
 };

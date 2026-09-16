@@ -7,6 +7,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get("/dashboard", requirePermission("security.read"), securityController.getDashboard);
+router.get("/dashboard", requirePermission("audit.read"), securityController.getDashboard);
+router.get("/audit-integrity", requirePermission("audit.read"), securityController.getAuditIntegrity);
 
 export default router;

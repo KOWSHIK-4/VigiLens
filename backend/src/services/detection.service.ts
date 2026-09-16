@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
@@ -7,6 +8,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
+import { computeAuditHash } from "../utils/auditChain";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
 import { metricsService } from "./metrics.service";
 import { publishAlertCreated } from "./realtime.service";
@@ -250,8 +252,9 @@ export const detectionService = {
       ),
     );
 
-    await prisma.auditLog.createMany({
-      data: rows.map((row, index) => ({
+    const auditRows = rows.map((row, index) => {
+      const audit = {
+        id: randomUUID(),
         userId: null,
         username: "",
         email: "",
@@ -268,8 +271,11 @@ export const detectionService = {
           detectorKey: inputs[index].detectorKey ?? undefined,
           source: "detector-engine",
         },
-      })),
+      } satisfies Prisma.AuditLogCreateManyInput;
+      return { ...audit, hash: computeAuditHash(audit) };
     });
+
+    await prisma.auditLog.createMany({ data: auditRows });
 
     metricsService.recordEvent("detections.created", rows.length);
 

@@ -301,6 +301,33 @@ async function run() {
   }
   ok("viewer is denied CSV export (403)");
 
+  const integrity = await request("/security/audit-integrity", {}, adminToken);
+  const integrityBody = integrity.body as { data?: { verified: boolean; checkedRows: number; tamperedRows: unknown[] } };
+  if (
+    integrity.status !== 200 ||
+    integrityBody.data?.verified !== true ||
+    integrityBody.data.checkedRows < 1 ||
+    (integrityBody.data.tamperedRows ?? []).length !== 0
+  ) {
+    fail("audit trail integrity verifies after write activity", integrityBody);
+    return finalize();
+  }
+  ok("audit trail integrity verifies after write activity");
+
+  const integrityDenied = await request("/security/audit-integrity", {}, viewerToken);
+  if (integrityDenied.status !== 403) {
+    fail("viewer is denied audit integrity check (403)", integrityDenied.status);
+    return finalize();
+  }
+  ok("viewer is denied audit integrity check (403)");
+
+  const integrityUnauthorized = await request("/security/audit-integrity", {});
+  if (integrityUnauthorized.status !== 401) {
+    fail("audit integrity requires authentication (401)", integrityUnauthorized.status);
+    return finalize();
+  }
+  ok("audit integrity requires authentication (401)");
+
   const logout = await request(
     "/auth/logout",
     { method: "POST" },

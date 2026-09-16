@@ -12,6 +12,7 @@ import healthRoutes from "./routes/health.routes";
 import { modelService } from "./services/model.service";
 import { settingsService } from "./services/settings.service";
 import { rateLimitService } from "./services/rateLimit.service";
+import { auditLogService } from "./services/auditLog.service";
 import { monitorScheduler } from "./engine/monitor";
 import { retentionScheduler } from "./services/retentionScheduler";
 
@@ -104,6 +105,13 @@ async function start() {
   try {
     await prisma.$connect();
     logger.info("Database connected");
+
+    try {
+      const stamped = await auditLogService.backfillHashes();
+      if (stamped > 0) logger.info("Audit log integrity backfill complete", { stamped });
+    } catch (error) {
+      logger.warn("Audit log integrity backfill skipped (non-fatal)", { error });
+    }
 
     try {
       await modelService.syncRegisteredDetectors();

@@ -1,6 +1,7 @@
 import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
+import { computeAuditHash } from "./auditChain";
 
 interface LogAuditParams {
   userId?: string;
@@ -17,7 +18,7 @@ interface LogAuditParams {
 
 export async function logAudit(params: LogAuditParams): Promise<void> {
   try {
-    await prisma.auditLog.create({
+    const row = await prisma.auditLog.create({
       data: {
         userId: params.userId || null,
         username: params.username || "",
@@ -30,6 +31,10 @@ export async function logAudit(params: LogAuditParams): Promise<void> {
         status: params.status || "success",
         metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
       },
+    });
+    await prisma.auditLog.update({
+      where: { id: row.id },
+      data: { hash: computeAuditHash(row) },
     });
   } catch (error) {
     logger.error("Failed to write audit log", { error, action: params.action, module: params.module });
