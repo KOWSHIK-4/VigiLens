@@ -242,9 +242,8 @@ export const cameraController = {
         return error(res, "No snapshot available for this camera yet", 404);
       }
 
-      res.setHeader("Content-Type", "image/jpeg");
-      res.setHeader("Cache-Control", "private, max-age=60");
-      return res.send(buffer);
+res.setHeader("Content-Type", "image/jpeg");
+        return res.send(buffer);
     } catch (err) {
       next(err);
     }
