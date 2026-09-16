@@ -6,7 +6,7 @@ import { prisma } from "./config/prisma";
 import { logger } from "./config/logger";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestContext } from "./middleware/requestContext";
-import { securityHeaders } from "./middleware/securityHeaders";
+import { securityHeaders, cacheControlNoStore } from "./middleware/securityHeaders";
 import routes from "./routes";
 import healthRoutes from "./routes/health.routes";
 import { modelService } from "./services/model.service";
@@ -44,6 +44,7 @@ app.use((req, res, next) => {
 });
 
 app.use(securityHeaders());
+app.use(cacheControlNoStore());
 
 app.use(
   cors({

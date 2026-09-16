@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { parseCorsOrigins } from "../src/config";
-import { permissionsPolicyHeader, securityOptions } from "../src/middleware/securityHeaders";
+import {
+  permissionsPolicyHeader,
+  securityOptions,
+  cacheControlNoStore,
+} from "../src/middleware/securityHeaders";
+
+function invokeNoStore() {
+  const headers: Record<string, string> = {};
+  const res = {
+    setHeader: (name: string, value: string) => {
+      headers[name.toLowerCase()] = value;
+    },
+  } as unknown as import("express").Response;
+  cacheControlNoStore()({} as never, res, () => undefined);
+  return headers;
+}
 
 describe("Security headers configuration", () => {
   it("enables a strict Content-Security-Policy for a JSON-only API", () => {
@@ -27,6 +42,30 @@ describe("Security headers configuration", () => {
   it("denies framing and keeps xss filters legacy-disabled", () => {
     expect(securityOptions.frameguard).toEqual({ action: "deny" });
     expect(securityOptions.xssFilter).toBe(false);
+  });
+});
+
+describe("cacheControlNoStore", () => {
+  it("marks every response as non-cacheable", () => {
+    const headers = invokeNoStore();
+    expect(headers["cache-control"]).toContain("no-store");
+    expect(headers["cache-control"]).toContain("max-age=0");
+  });
+
+  it("adds legacy cache-busting headers and continues the chain", () => {
+    let advanced = false;
+    const headers: Record<string, string> = {};
+    const res = {
+      setHeader: (name: string, value: string) => {
+        headers[name.toLowerCase()] = value;
+      },
+    } as unknown as import("express").Response;
+    cacheControlNoStore()({} as never, res, () => {
+      advanced = true;
+    });
+    expect(headers["pragma"]).toBe("no-cache");
+    expect(headers["expires"]).toBe("0");
+    expect(advanced).toBe(true);
   });
 });
 

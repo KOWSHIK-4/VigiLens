@@ -49,3 +49,19 @@ export function securityHeaders(): RequestHandler {
     });
   };
 }
+
+/**
+ * Prevents browsers and shared caches from storing sensitive API responses.
+ * VigiLens answers carry JWTs, user/role data, security dashboards and live
+ * camera frames — none of which should ever be satisfied from cache. The
+ * header is applied to every response (JSON, SSE and snapshot binaries) since
+ * the API has no publicly cacheable endpoints.
+ */
+export function cacheControlNoStore(): RequestHandler {
+  return (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    next();
+  };
+}

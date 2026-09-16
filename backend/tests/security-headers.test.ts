@@ -160,6 +160,7 @@ async function run() {
       "geolocation blocked",
       (v) => v.includes("geolocation=()") && v.includes("microphone=()"),
     ],
+    ["cache-control", "no-store", (v) => v.toLowerCase().includes("no-store")],
   ];
   for (const [name, label, predicate] of checks) {
     const value = h.get(name);
