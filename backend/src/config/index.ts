@@ -7,6 +7,48 @@ const INSECURE_DEFAULTS = [
 
 const INSECURE_DB_PASSWORDS = ["vigilens_secret", "postgres", "password", "admin"];
 
+/**
+ * Placeholder markers that are never acceptable as signing/Crypto material,
+ * even when they differ from the exact dev-default strings (e.g.
+ * "change_me_in_production" or "CHANGEME").
+ */
+const PLACEHOLDER_PATTERN =
+  /(change[_-]?me|changeme|your[_-]?(secret|key)|example[_-]?(secret|key)|s3cret|replace[_-]?me|dummy[_-]?(secret|key)|xxx+)/i;
+
+/** Minimum length for HMAC signing keys / shared boundaries (~256-bit). */
+const MIN_SECRET_LENGTH = 32;
+
+export function isInsecureSecretValue(value: string | undefined): boolean {
+  if (!value) return true;
+  const trimmed = value.trim();
+  if (trimmed.length < MIN_SECRET_LENGTH) return true;
+  return PLACEHOLDER_PATTERN.test(trimmed);
+}
+
+export function hasWeakDatabasePassword(dbUrl: string | undefined): string | null {
+  if (!dbUrl) return "DATABASE_URL (not set)";
+  const match = dbUrl.match(/:\/\/[^:]+:([^@]+)@/);
+  if (match && INSECURE_DB_PASSWORDS.includes(match[1])) {
+    return "DATABASE_URL (contains default/weak password)";
+  }
+  return null;
+}
+
+export function insecureProductionSecrets(): string[] {
+  const failures: string[] = [];
+  for (const { key, value, insecure } of INSECURE_DEFAULTS) {
+    if (!value || value === insecure || isInsecureSecretValue(value)) {
+      failures.push(key);
+    }
+  }
+  const dbFailure = hasWeakDatabasePassword(process.env.DATABASE_URL);
+  if (dbFailure) failures.push(dbFailure);
+  if (!process.env.CAMERA_CREDENTIALS_KEY || isInsecureSecretValue(process.env.CAMERA_CREDENTIALS_KEY)) {
+    failures.push("CAMERA_CREDENTIALS_KEY (not set or insecure)");
+  }
+  return failures;
+}
+
 export function parseCorsOrigins(raw: string | undefined, fallback: string[]): string[] {
   if (!raw || raw.trim() === "") return fallback;
   return raw
@@ -16,38 +58,17 @@ export function parseCorsOrigins(raw: string | undefined, fallback: string[]): s
 }
 
 if (process.env.NODE_ENV === "production") {
-  const failures: string[] = [];
-  for (const { key, value, insecure } of INSECURE_DEFAULTS) {
-    if (!value || value === insecure) {
-      failures.push(key);
-    }
-  }
-
-  const dbUrl = process.env.DATABASE_URL || "";
-  const dbPasswordMatch = dbUrl.match(/:\/\/[^:]+:([^@]+)@/);
-  if (dbPasswordMatch) {
-    const dbPassword = dbPasswordMatch[1];
-    if (INSECURE_DB_PASSWORDS.includes(dbPassword)) {
-      failures.push("DATABASE_URL (contains default/weak password)");
-    }
-  } else if (!process.env.DATABASE_URL) {
-    failures.push("DATABASE_URL (not set)");
-  }
-
-  if (!process.env.CAMERA_CREDENTIALS_KEY) {
-    failures.push("CAMERA_CREDENTIALS_KEY (not set)");
-  }
+  const failures = insecureProductionSecrets();
 
   if (failures.length > 0) {
     const msg =
       `[SECURITY] Insecure defaults detected in production: ${failures.join(", ")}. ` +
       "Set unique values for each via environment variables.";
-    if (process.env.VERCEL) {
-      console.warn(`${msg} Running on Vercel — proceeding with caution.`);
-    } else {
-      console.error(`FATAL: ${msg} The server will not start with insecure defaults.`);
-      process.exit(1);
-    }
+    // Signing/crypto material is never safe to run with a placeholder even on
+    // Vercel: a predictable JWT secret or internal key defeats the purpose of
+    // the platform's hardcoded environment wiring.
+    console.error(`FATAL: ${msg} The server will not start with insecure defaults.`);
+    process.exit(1);
   }
 }
 

@@ -8,6 +8,7 @@
  */
 
 import { config } from "../config";
+import { redactSecrets } from "../utils/redact";
 import type { BoundingBox, ProcessingMode } from "./types";
 
 export type AiErrorReason =
@@ -350,11 +351,17 @@ export class HttpAiServiceClient implements AiServiceClient {
     timeoutMs: number,
     credentials?: CaptureCredentials,
   ): Promise<Buffer> {
-    const authenticatedSource = buildAuthenticatedSourceUrl(source, cameraType, credentials);
     const url = new URL("/capture", this.baseUrl);
-    url.searchParams.set("source", authenticatedSource);
+    url.searchParams.set("source", source);
     url.searchParams.set("type", cameraType);
     if (videoPosSeconds > 0) url.searchParams.set("video_pos_seconds", String(videoPosSeconds));
+
+    // Camera credentials are sent via dedicated headers instead of being
+    // embedded in the URL query string: this keeps them out of access logs,
+    // proxy logs, and the AI-side error detail responses.
+    const headers = { ...this.internalKeyHeaders() };
+    if (credentials?.username) headers["X-Camera-User"] = credentials.username;
+    if (credentials?.password) headers["X-Camera-Pass"] = credentials.password;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -362,7 +369,7 @@ export class HttpAiServiceClient implements AiServiceClient {
       let response: Response;
       try {
         response = await fetch(url, {
-          headers: this.internalKeyHeaders(),
+          headers,
           signal: controller.signal,
         });
       } catch (err) {
@@ -375,7 +382,7 @@ export class HttpAiServiceClient implements AiServiceClient {
       if (!response.ok) {
         throw new AiServiceError(
           "http",
-          `AI service failed to capture frame from source "${source}": ${response.status}`,
+          `AI service failed to capture frame from source "${redactSecrets(source)}": ${response.status}`,
           response.status,
         );
       }

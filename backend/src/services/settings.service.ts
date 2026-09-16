@@ -14,6 +14,7 @@ import {
   isValidSettingValue,
 } from "../settings";
 import type { Prisma, SystemSetting, SystemSettingCategory } from "@prisma/client";
+import { SECRET_MASK } from "../utils/redact";
 
 const CACHE_TTL_MS = 60_000;
 
@@ -36,6 +37,14 @@ export interface SerializedSetting {
   step?: number;
   unit?: string;
   options?: SettingDefinition["options"];
+  /**
+   * True for settings whose value is secret material (webhook signing
+   * secret, SMTP credentials). The stored value is masked in API responses
+   * and `configured` reports whether a secret is actually set.
+   */
+  sensitive?: boolean;
+  /** True when a sensitive setting currently has a stored value. */
+  configured?: boolean;
   updatedAt: string;
   updatedBy: string | null;
 }
@@ -45,14 +54,14 @@ function serialize(
   def: SettingDefinition,
   row: SystemSetting | undefined,
 ): SerializedSetting {
-  const value = (row?.value as SettingValue) ?? def.defaultValue;
+  const stored = (row?.value as SettingValue) ?? def.defaultValue;
   const result: SerializedSetting = {
     key: def.key,
     category,
     label: row?.label ?? def.label,
     description: row?.description ?? def.description,
     type: def.type,
-    value,
+    value: stored,
     updatedAt: row?.updatedAt.toISOString() ?? new Date(0).toISOString(),
     updatedBy: row?.updatedBy ?? null,
   };
@@ -61,6 +70,11 @@ function serialize(
   if (def.step !== undefined) result.step = def.step;
   if (def.unit !== undefined) result.unit = def.unit;
   if (def.options !== undefined) result.options = def.options;
+  if (def.sensitive) {
+    result.sensitive = true;
+    result.configured = typeof stored === "string" && stored.length > 0;
+    result.value = result.configured ? SECRET_MASK : def.defaultValue;
+  }
   return result;
 }
 
@@ -184,8 +198,20 @@ export const settingsService = {
       }
     }
 
+    // Clients only ever see the masked placeholder for sensitive settings, so
+    // echoing it back must never overwrite the real secret with the mask.
+    const effectiveEntries = entries.filter(([key, value]) => {
+      const setting = getSettingDefinition(category, key);
+      if (!setting?.sensitive) return true;
+      return !(typeof value === "string" && value === SECRET_MASK);
+    });
+
+    if (effectiveEntries.length === 0) {
+      throw new ApiError(400, "No settings provided to update");
+    }
+
     await prisma.$transaction(
-      entries.map(([key, value]) => {
+      effectiveEntries.map(([key, value]) => {
         const def = getSettingDefinition(category, key)!;
         return prisma.systemSetting.upsert({
           where: { category_key: { category, key } },
@@ -205,7 +231,7 @@ export const settingsService = {
     invalidateCache();
     logger.info("Settings updated", {
       category,
-      keys: entries.map(([key]) => key),
+      keys: effectiveEntries.map(([key]) => key),
       userId: actorId,
     });
     return this.getByCategory(category);

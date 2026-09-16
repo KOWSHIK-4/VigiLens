@@ -20,6 +20,12 @@ export interface SettingDefinition {
   step?: number;
   unit?: string;
   options?: SettingOption[];
+  /**
+   * Secret material (shared signing secrets, SMTP credentials). The value is
+   * masked in API responses and never echoed back to operators; the raw value
+   * remains available internally via `settingsService.getValue()`.
+   */
+  sensitive?: boolean;
 }
 
 export interface SettingsCategoryDefinition {
@@ -363,6 +369,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         description: "Shared secret used to sign webhook payloads (HMAC-SHA256).",
         type: "string",
         defaultValue: "",
+        sensitive: true,
       },
       {
         key: "webhook_alert_created_enabled",
@@ -519,6 +526,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         description: "Account used to authenticate with the mail server.",
         type: "string",
         defaultValue: "",
+        sensitive: true,
       },
       {
         key: "smtp_from_email",

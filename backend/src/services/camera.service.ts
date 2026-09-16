@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
+import { stripUrlUserinfo, redactSecrets } from "../utils/redact";
 import { settingsService } from "./settings.service";
 import {
   aiServiceClient,
@@ -20,6 +21,25 @@ import type { CreateCameraInput, UpdateCameraInput } from "../types";
 
 const SNAPSHOT_TIMEOUT_MS = 10_000;
 const SNAPSHOT_SUBDIR = "snapshots";
+
+/**
+ * Sanitizes a camera source URL before it is stored or serialized: any
+ * `user:pass@` userinfo is stripped so credentials never linger in the
+ * plaintext `url` column or ride camera API payloads. Operators are expected
+ * to configure credentials through the separate username/password input
+ * fields, which are encrypted at rest.
+ */
+function sanitizeCameraUrl(url: string, cameraType: string): string {
+  if (cameraType === "usb" || cameraType === "video_file") return url;
+  const clean = stripUrlUserinfo(url);
+  if (clean !== url) {
+    logger.warn("Stripped embedded credentials from camera source URL", {
+      cameraType,
+      hasUserinfo: true,
+    });
+  }
+  return clean;
+}
 
 function snapshotFilePath(id: string, dir: string): string {
   return path.join(dir, `${id}.jpg`);
@@ -138,6 +158,9 @@ function toApiCamera(camera: Camera): CameraApiView {
   delete rest.password;
   delete rest.usernameEncrypted;
   delete rest.passwordEncrypted;
+  // Defense in depth: never serve embedded URL credentials even if a legacy
+  // row managed to hold userinfo.
+  if (rest.url) rest.url = sanitizeCameraUrl(rest.url, String(rest.cameraType ?? "rtsp"));
   return {
     ...(rest as Camera),
     hasCredentials: hasStoredCredential(camera),
@@ -323,7 +346,7 @@ export const cameraService = {
     const camera = await prisma.camera.create({
       data: {
         name: data.name,
-        url: data.url,
+        url: sanitizeCameraUrl(data.url, String(data.cameraType ?? "rtsp")),
         cameraType: data.cameraType as CameraType,
         sourceURL: data.sourceURL || null,
         location: data.location || null,
@@ -341,12 +364,13 @@ export const cameraService = {
   async update(id: string, data: UpdateCameraInput) {
     const existing = await prisma.camera.findUnique({
       where: { id },
-      select: { ...CREDENTIAL_SELECT, name: true },
+      select: { ...CREDENTIAL_SELECT, name: true, cameraType: true, url: true },
     });
     if (!existing) return null;
 
     const username = (data.username ?? "").trim();
     const password = data.password ?? "";
+    const requestedType = (data.cameraType as CameraType | undefined) ?? existing.cameraType;
 
     const credentialUpdate: Record<string, unknown> = {};
     if (password.length > 0) {
@@ -371,7 +395,9 @@ export const cameraService = {
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
-        ...(data.url !== undefined && { url: data.url }),
+        ...(data.url !== undefined && {
+          url: sanitizeCameraUrl(data.url, String(requestedType)),
+        }),
         ...(data.cameraType !== undefined && { cameraType: data.cameraType as CameraType }),
         ...(data.sourceURL !== undefined && { sourceURL: data.sourceURL }),
         ...(data.location !== undefined && { location: data.location }),
@@ -465,7 +491,7 @@ export const cameraService = {
       } catch (err) {
         responseTime = Date.now() - start;
         isHealthy = false;
-        message = err instanceof Error ? err.message : "Health check failed";
+        message = err instanceof Error ? redactSecrets(err.message) : "Health check failed";
       }
     } else {
       // rtsp / usb / video_file feeds cannot be probed over plain HTTP — the
@@ -484,7 +510,7 @@ export const cameraService = {
       } catch (err) {
         responseTime = Date.now() - start;
         isHealthy = false;
-        message = err instanceof Error ? err.message : "Health check failed";
+        message = err instanceof Error ? redactSecrets(err.message) : "Health check failed";
       }
     }
 
@@ -576,7 +602,7 @@ export const cameraService = {
       };
     } catch (err) {
       const responseTimeMs = Date.now() - startedAt;
-      const message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? redactSecrets(err.message) : String(err);
       logger.error("Camera snapshot capture failed", { id, message });
       await recordCaptureFailure(id, message, responseTimeMs);
       throw mapCaptureError(err);
@@ -619,6 +645,7 @@ export const cameraHealthReporter: CameraHealthReporter = {
       const camera = await prisma.camera.findUnique({ where: { id } });
       if (!camera) return;
       const now = new Date();
+      const safeMessage = redactSecrets(message) as string;
       await Promise.all([
         prisma.camera.update({
           where: { id },
@@ -628,7 +655,7 @@ export const cameraHealthReporter: CameraHealthReporter = {
           data: {
             cameraId: id,
             status: "error",
-            message: `Stream unavailable after ${consecutiveFailures} consecutive failures: ${message}`,
+            message: `Stream unavailable after ${consecutiveFailures} consecutive failures: ${safeMessage}`,
           },
         }),
       ]);
@@ -644,10 +671,9 @@ export const cameraHealthReporter: CameraHealthReporter = {
     try {
       const camera = await prisma.camera.findUnique({ where: { id } });
       if (!camera) return;
-      // Already online and healthy — nothing to persist (keeps steady-state
-      // monitoring DB-free instead of appending a redundant entry each loop).
       if (camera.status === "online" && camera.isHealthy) return;
       const now = new Date();
+      const safeMessage = redactSecrets(message) as string;
       await Promise.all([
         prisma.camera.update({
           where: { id },
@@ -657,7 +683,7 @@ export const cameraHealthReporter: CameraHealthReporter = {
           data: {
             cameraId: id,
             status: "online",
-            message: `Stream recovered: ${message}`,
+            message: `Stream recovered: ${safeMessage}`,
             responseTime: responseTimeMs,
           },
         }),

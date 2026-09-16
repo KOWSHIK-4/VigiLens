@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../config/logger";
+import { redactSecrets } from "../utils/redact";
 import { ApiError, toApiErrorBody } from "../utils/errors";
 
 export function errorHandler(
@@ -33,6 +34,11 @@ export function errorHandler(
       ? "Request body contains malformed JSON"
       : "Internal server error";
 
+  // 5xx stacks can embed connection strings, query text, or URL userinfo;
+  // scrub them before they reach the log buffer / console.
+  const safeMessage = redactSecrets(err.message) as string;
+  const safeStack = statusCode >= 500 && err.stack ? (redactSecrets(err.stack) as string) : undefined;
+
   logger.log(
     statusCode >= 500 ? "error" : "warn",
     "Request failed",
@@ -42,8 +48,8 @@ export function errorHandler(
       endpoint,
       method,
       severity: statusCode >= 500 ? "error" : "warning",
-      message: err.message,
-      stack: statusCode >= 500 ? err.stack : undefined,
+      message: safeMessage,
+      stack: safeStack,
     },
   );
 

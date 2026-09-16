@@ -120,8 +120,9 @@ describe("AiServiceFrameCaptureStage", () => {
       }),
     );
     expect(client.lastCredentials).toEqual({ username: "stream user", password: "p@ss word" });
-    // The stage hands through the raw source; the client embeds userinfo
-    // (covered by the buildAuthenticatedSourceUrl tests above).
+    // The capture stage hands through the raw source URL; the HTTP client
+    // transports credentials via dedicated headers (X-Camera-User / X-Camera-Pass)
+    // so they never ride the URL query string and access logs stay clean.
     expect(client.lastSource).toBe("rtsp://cam.example.com/live");
   });
 
