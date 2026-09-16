@@ -235,12 +235,13 @@ export const userController = {
         email: actor?.email || "",
         action: "password_reset",
         module: "users",
-        description: `Password reset for ${targetUser?.email || req.params.id}`,
+        description: `Password reset for ${targetUser?.email || req.params.id} (all sessions revoked)`,
         ...info,
         metadata: {
           targetUserId: req.params.id,
           email: targetUser?.email,
           mustChangePassword: body.mustChangePassword ?? false,
+          sessionsRevoked: true,
         },
       });
       success(res, result);

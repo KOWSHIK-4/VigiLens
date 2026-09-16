@@ -273,11 +273,18 @@ export const userService = {
   async resetPassword(id: string, input: ResetPasswordInput) {
     await this.findById(id);
     const hashedPassword = await bcrypt.hash(input.password, 12);
+    // Bump tokenVersion to revoke every outstanding session for the account.
+    // An admin resetting a compromised password must not leave the attacker's
+    // previously-issued JWTs valid until they expire.
     await prisma.user.update({
       where: { id },
       data: {
         password: hashedPassword,
         mustChangePassword: input.mustChangePassword ?? false,
+        failedLoginAttempts: 0,
+        isLocked: false,
+        lockedAt: null,
+        tokenVersion: { increment: 1 },
       },
     });
     logger.info("Password reset", { userId: id });

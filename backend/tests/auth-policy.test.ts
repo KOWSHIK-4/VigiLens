@@ -228,6 +228,7 @@ async function run() {
     fail("register valid password", validRegister);
     return;
   }
+  const createdUserId = (validRegister.body as { data: { user: { id: string } } }).data.user.id;
 
   // ---- Settings-driven lockout threshold + auto-expiry ----
   const wrong1 = await request("/auth/login", {
@@ -327,6 +328,40 @@ async function run() {
     ok("direct (non-proxy) login still allowed without proxy headers");
   } else {
     fail("no-header login", noHeaderLogin);
+  }
+
+  // ---- Admin password reset revokes every outstanding session ----
+  const preResetToken = (autoUnlock.body as { data: { token: string } }).data.token;
+  const resetResult = await request(
+    `/users/${createdUserId}/reset-password`,
+    {
+      method: "POST",
+      body: JSON.stringify({ password: "FreshPass99!" }),
+    },
+    adminToken,
+  );
+  if (resetResult.status === 200) {
+    ok("admin password reset succeeds");
+  } else {
+    fail("admin password reset", resetResult);
+    return;
+  }
+
+  const staleSession = await request("/auth/me", {}, preResetToken);
+  if (staleSession.status === 401) {
+    ok("password reset invalidates previously-issued JWTs (401)");
+  } else {
+    fail("stale session after password reset", staleSession);
+  }
+
+  const relogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: userEmail, password: "FreshPass99!" }),
+  });
+  if (relogin.status === 200 && (relogin.body as { data: { token: string } }).data.token) {
+    ok("user can log in again with the reset password");
+  } else {
+    fail("relogin after password reset", relogin);
   }
 
   // ---- Restore defaults so later suites in the chain are unaffected ----
