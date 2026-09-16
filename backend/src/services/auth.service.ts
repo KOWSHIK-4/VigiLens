@@ -95,7 +95,7 @@ export const authService = {
 
     const permissions = await permissionService.getPermissionsForRole(user.role);
 
-    const token = this.generateToken(user.id, user.role, policy.jwtExpirationHours);
+    const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
 
     return { user: this.publicUser(user, permissions), token };
   },
@@ -159,7 +159,7 @@ export const authService = {
     });
 
     const permissions = await permissionService.getPermissionsForRole(user.role);
-    const token = this.generateToken(user.id, user.role, policy.jwtExpirationHours);
+    const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
 
     return { user: this.publicUser(user, permissions), token };
   },
@@ -175,6 +175,18 @@ export const authService = {
 
     const permissions = await permissionService.getPermissionsForRole(user.role);
     return this.publicUser(user, permissions);
+  },
+
+  /**
+   * Server-side logout: bumps `tokenVersion` so every outstanding JWT for
+   * this user is immediately rejected by the auth middleware, regardless of
+   * whether the token has not yet expired.
+   */
+  async logout(userId: string) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
   },
 
   async changePassword(userId: string, input: ChangePasswordInput) {
@@ -198,6 +210,9 @@ export const authService = {
     }
 
     const hashedPassword = await bcrypt.hash(input.newPassword, 12);
+    // Bump tokenVersion to invalidate all existing sessions on password
+    // change — any previously issued JWT will be rejected by the auth
+    // middleware as soon as the user tries to use it.
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -206,6 +221,7 @@ export const authService = {
         failedLoginAttempts: 0,
         isLocked: false,
         lockedAt: null,
+        tokenVersion: { increment: 1 },
       },
     });
 
@@ -246,6 +262,32 @@ export const authService = {
     const expiresIn =
       expirationHours !== undefined ? `${expirationHours}h` : config.jwt.expiresIn;
     return jwt.sign({ userId, role }, config.jwt.secret, {
+      algorithm: "HS256",
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+      expiresIn: expiresIn as SignOptions["expiresIn"],
+    });
+  },
+
+  /**
+   * Issues a signed JWT that carries the user's current `tokenVersion`.
+   * The auth middleware compares this claim against the live DB value so
+   * that bumping the version (on logout / force-reset) instantly
+   * invalidates every outstanding token.
+   */
+  async generateTokenWithVersion(
+    userId: string,
+    role: string,
+    expirationHours?: number,
+  ): Promise<string> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { tokenVersion: true },
+    });
+    const tokenVersion = user?.tokenVersion ?? 0;
+    const expiresIn =
+      expirationHours !== undefined ? `${expirationHours}h` : config.jwt.expiresIn;
+    return jwt.sign({ userId, role, tokenVersion }, config.jwt.secret, {
       algorithm: "HS256",
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,

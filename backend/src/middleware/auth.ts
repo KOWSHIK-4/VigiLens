@@ -5,10 +5,12 @@ import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../types";
 import { error as apiError } from "../utils/apiResponse";
 import { permissionService } from "../services/permission.service";
+import { settingsService } from "../services/settings.service";
 
 interface JwtPayload {
   userId: string;
   role: string;
+  tokenVersion?: number;
 }
 
 const ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED = new Set([
@@ -49,7 +51,7 @@ export async function authenticate(
       algorithms: ["HS256"],
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
-    }) as JwtPayload & { type?: string };
+    }) as JwtPayload & { type?: string; iat?: number };
 
     if (queryTicket && decoded.type !== "realtime") {
       return apiError(res, "Invalid or expired token", 401);
@@ -65,6 +67,7 @@ export async function authenticate(
         role: true,
         isLocked: true,
         mustChangePassword: true,
+        tokenVersion: true,
       },
     });
 
@@ -77,6 +80,35 @@ export async function authenticate(
     if (user.isLocked) {
       return apiError(res, "Account temporarily locked. Try again later.", 403);
     }
+
+    // Reject tokens issued before the user's tokenVersion was bumped (logout,
+    // force-reset). The version is embedded in the JWT at issuance time; if
+    // the DB value has moved on, the token is stale.
+    if (
+      decoded.tokenVersion !== undefined &&
+      decoded.tokenVersion !== user.tokenVersion
+    ) {
+      return apiError(res, "Session invalidated. Please log in again.", 401);
+    }
+
+    // Enforce the session_timeout_minutes policy: tokens whose embedded iat
+    // is older than the configured window are rejected. This gives operators
+    // a server-side max-session-age without relying on client-side expiry.
+    if (decoded.iat) {
+      const timeoutMinutes = await settingsService.getValue(
+        "security",
+        "session_timeout_minutes",
+      );
+      const timeoutMs =
+        (typeof timeoutMinutes === "number" ? timeoutMinutes : 0) * 60_000;
+      if (timeoutMs > 0) {
+        const tokenAgeMs = Date.now() - decoded.iat * 1000;
+        if (tokenAgeMs > timeoutMs) {
+          return apiError(res, "Session expired. Please log in again.", 401);
+        }
+      }
+    }
+
     if (
       user.mustChangePassword &&
       !ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED.has(req.path)

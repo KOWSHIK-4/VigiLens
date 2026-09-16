@@ -171,6 +171,9 @@ export const authController = {
     try {
       const info = getClientInfo(req);
       const user = await authService.me(req.userId!);
+      // Server-side logout: bump tokenVersion so the user's outstanding JWT
+      // is immediately rejected on every subsequent request.
+      await authService.logout(req.userId!);
       await logAudit({
         userId: user.id,
         username: user.name,
