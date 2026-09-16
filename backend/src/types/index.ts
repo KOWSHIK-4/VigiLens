@@ -8,8 +8,18 @@ export interface AuthRequest extends Request {
 }
 
 export const registerSchema = z.object({
-  name: z.string().min(2).max(100),
-  email: z.string().email(),
+  name: z
+    .string()
+    .min(2)
+    .max(100)
+    .trim()
+    .refine((v) => v.length >= 2, "Name must contain at least 2 non-whitespace characters"),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .toLowerCase(),
   password: z.string().min(8).max(100),
 });
 
@@ -75,9 +85,12 @@ const urlByType = {
 
 const cameraBaseSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
-  url: z.string().min(1, "URL is required"),
+  url: z
+    .string()
+    .min(1, "URL is required")
+    .max(2048, "Camera URL must be at most 2048 characters"),
   cameraType: z.enum(["usb", "rtsp", "ip", "video_file"]).default("rtsp"),
-  sourceURL: z.string().url().optional().nullable(),
+  sourceURL: z.string().url().max(2048).optional().nullable(),
   location: z.string().max(200).optional().nullable(),
   resolution: z.string().regex(/^\d+x\d+$/, "Invalid resolution format (e.g. 1920x1080)").optional().nullable(),
   fps: z.number().int().min(1).max(120).optional().nullable(),

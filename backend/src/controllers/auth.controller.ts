@@ -37,6 +37,14 @@ export const authController = {
           code: "HTTPS_REQUIRED",
         });
       }
+      // Open registration is disabled by default. An admin must explicitly
+      // toggle the allow_registration security setting to permit new sign-ups.
+      const allowRegistration = await settingsService.getValue("security", "allow_registration");
+      if (allowRegistration !== true) {
+        return error(res, "Registration is disabled. Contact your administrator.", 403, {
+          code: "REGISTRATION_DISABLED",
+        });
+      }
       const result = await authService.register(req.body);
       const info = getClientInfo(req);
       await logAudit({

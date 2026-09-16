@@ -208,6 +208,13 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         type: "boolean",
         defaultValue: false,
       },
+      {
+        key: "allow_registration",
+        label: "Allow open registration",
+        description: "Allow anyone to create an account without admin approval. Disable after the initial admin account is created.",
+        type: "boolean",
+        defaultValue: false,
+      },
     ],
   },
   {

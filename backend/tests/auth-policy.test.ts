@@ -140,6 +140,33 @@ async function run() {
     return;
   }
 
+  // ---- Registration is closed by default (and test-enforced) ----
+  const disableUpdate = await request(
+    "/settings/security",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ allow_registration: false }),
+    },
+    adminToken,
+  );
+  if (disableUpdate.status === 200) {
+    ok("allow_registration can be toggled to false");
+  } else {
+    fail("disable registration", disableUpdate);
+    return;
+  }
+
+  const closedEmail = `policy_closed_${Date.now()}@vigilens.io`;
+  const closedRegister = await request("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ name: "Closed Policy", email: closedEmail, password: "PolicyPass99!" }),
+  });
+  if (closedRegister.status === 403) {
+    ok("register is rejected while allow_registration is off (403)");
+  } else {
+    fail("register while disabled", closedRegister);
+  }
+
   // ---- Enforce security policies driven by stored settings ----
   const policyUpdate = await request(
     "/settings/security",
@@ -152,6 +179,7 @@ async function run() {
         password_require_complexity: true,
         jwt_expiration_hours: 1,
         jwt_require_https: true,
+        allow_registration: true,
       }),
     },
     adminToken,

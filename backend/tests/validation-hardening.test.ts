@@ -168,6 +168,15 @@ async function run() {
   // --- Cameras ---
   await expectStatus("camera :id must be a uuid", 400, "/cameras/not-a-uuid", token);
   await expectStatus("camera health probe validates :id", 400, "/cameras/xyz/health", token, { method: "POST" });
+  const longUrl = "rtsp://".padEnd(2100, "x");
+  const longUrlBody = JSON.stringify({ name: "Bad Cam", url: longUrl, cameraType: "rtsp" });
+  await expectStatus(
+    "camera URL exceeding 2048 chars is rejected (400)",
+    400,
+    "/cameras",
+    token,
+    { method: "POST", body: longUrlBody },
+  );
 
   // --- Audit logs ---
   await expectStatus("audit export rejects a bad dateFrom", 400, "/audit-logs/export?dateFrom=zzz", token);
