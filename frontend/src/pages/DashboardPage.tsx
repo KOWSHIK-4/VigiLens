@@ -41,6 +41,7 @@ import DetectionImagePreview from "@/components/DetectionImagePreview";
 import DetectionDetailsDrawer from "@/components/DetectionDetailsDrawer";
 import AlertDetailsDrawer from "@/components/AlertDetailsDrawer";
 import LiveEventsPanel from "@/components/LiveEventsPanel";
+import DashboardHealthSection from "@/components/DashboardHealthSection";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { formatRelativeTime } from "@/utils/format";
@@ -354,6 +355,8 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <DashboardHealthSection autoRefresh={autoRefresh} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard
           title="Total Detections"
@@ -463,9 +466,14 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Detections Over Time
-          </h3>
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Detections Over Time
+            </h3>
+            <span className="text-xs font-medium text-gray-400">
+              Last 7 days
+            </span>
+          </div>
           {detectionsOverTime.length === 0 ? (
             <ChartEmpty label="No detection data available yet" />
           ) : (
@@ -493,9 +501,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Alerts by Type
-          </h3>
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Alerts by Type
+            </h3>
+            <span className="text-xs font-medium text-gray-400">
+              Last 30 days
+            </span>
+          </div>
           {alertsByType.length === 0 ? (
             <ChartEmpty label="No alert data available yet" />
           ) : (
