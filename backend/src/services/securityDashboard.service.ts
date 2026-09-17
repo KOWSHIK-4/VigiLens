@@ -3,6 +3,51 @@ import { settingsService } from "./settings.service";
 
 const DAY_MS = 86_400_000;
 
+export interface FailedLoginPoint {
+  date: string;
+  count: number;
+}
+
+/** Local YYYY-MM-DD for a given instant. */
+export function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Converts date-grouped failed-login rows into a zero-filled daily series
+ * covering the last `days` local calendar days (today inclusive). Rows that
+ * fall outside the window or lack a parseable date are ignored. Pure so it
+ * can be unit tested without a database.
+ */
+export function buildFailedLoginSeries(
+  rows: { date: string | Date | null; count: number }[],
+  days: number,
+  now = new Date(),
+): FailedLoginPoint[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key =
+      row.date instanceof Date
+        ? localDateKey(row.date)
+        : typeof row.date === "string"
+          ? row.date.slice(0, 10)
+          : null;
+    if (!key || !/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+    counts.set(key, (counts.get(key) ?? 0) + (Number.isFinite(row.count) ? row.count : 0));
+  }
+
+  const series: FailedLoginPoint[] = [];
+  for (let offset = days - 1; offset >= 0; offset--) {
+    const day = new Date(now.getTime() - offset * DAY_MS);
+    const key = localDateKey(day);
+    series.push({ date: key, count: counts.get(key) ?? 0 });
+  }
+  return series;
+}
+
 const accountSelect = {
   id: true,
   email: true,
@@ -87,7 +132,7 @@ export const securityDashboardService = {
       }),
     ]);
 
-    const [failedLogins24h, failedLogins7d, failedLogins30d] = await Promise.all([
+    const [failedLogins24h, failedLogins7d, failedLogins30d, failedLoginRows] = await Promise.all([
       prisma.auditLog.count({
         where: {
           module: "auth",
@@ -112,6 +157,16 @@ export const securityDashboardService = {
           timestamp: { gte: new Date(now.getTime() - 30 * DAY_MS) },
         },
       }),
+      prisma.$queryRaw<{ date: Date; count: number }[]>`
+        SELECT DATE(timestamp) as date, COUNT(*)::int as count
+        FROM audit_logs
+        WHERE module = 'auth'
+          AND action = 'user_login'
+          AND status = 'failed'
+          AND timestamp >= NOW() - INTERVAL '14 days'
+        GROUP BY DATE(timestamp)
+        ORDER BY date ASC
+      `,
     ]);
 
     const policyRows = await settingsService.getByCategory("security");
@@ -134,6 +189,7 @@ export const securityDashboardService = {
         failedLogins24h,
         failedLogins7d,
         failedLogins30d,
+        failedLoginSeries: buildFailedLoginSeries(failedLoginRows, 14, now),
         recentFailedLogins,
       },
       policy: {

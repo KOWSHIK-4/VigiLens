@@ -1,10 +1,13 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   ChevronRight,
   KeyRound,
+  ListChecks,
   Lock,
   RefreshCw,
   ShieldAlert,
@@ -114,15 +117,61 @@ function AccountRow({ user }: { user: { name: string; email: string; role: strin
 }
 
 export default function SecurityDashboardPage() {
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
   const { data, isLoading, isError, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["security", "dashboard"],
     queryFn: () => securityService.getDashboard(),
-    refetchInterval: 30000,
+    refetchInterval: autoRefresh ? 30000 : false,
   });
 
   const posture = data ? postureFrom(data) : "good";
   const config = POSTURE_CONFIG[posture];
   const PostureIcon = config.icon;
+
+  const failedLoginSeries = useMemo(() => data?.authActivity.failedLoginSeries ?? [], [data]);
+  const peakFailedLogins = useMemo(
+    () => failedLoginSeries.reduce((m, p) => Math.max(m, p.count), 0),
+    [failedLoginSeries],
+  );
+  const dataIsStale = dataUpdatedAt > 0 && Date.now() - dataUpdatedAt > 70000;
+
+  const recommendations = useMemo(() => {
+    const items: { id: string; text: string; action: string; to: string }[] = [];
+    if (data?.accountPosture.lockedAccounts) {
+      items.push({
+        id: "locked",
+        text: `${data.accountPosture.lockedAccounts} account(s) are locked out and may signal a brute-force attempt.`,
+        action: "Review users",
+        to: "/users",
+      });
+    }
+    if (data?.accountPosture.mustChangePasswordAccounts) {
+      items.push({
+        id: "password-change",
+        text: `${data.accountPosture.mustChangePasswordAccounts} account(s) still require a password change.`,
+        action: "Review users",
+        to: "/users",
+      });
+    }
+    if (data && !data.policy.requirePasswordComplexity) {
+      items.push({
+        id: "complexity",
+        text: "Password complexity is optional — enforce mixed-case, numbers and symbols.",
+        action: "Update policy",
+        to: "/settings",
+      });
+    }
+    if (data && !data.policy.jwtRequireHttps) {
+      items.push({
+        id: "https",
+        text: "HTTPS is not required for session tokens — enable it in production.",
+        action: "Update policy",
+        to: "/settings",
+      });
+    }
+    return items;
+  }, [data]);
 
   if (isLoading && !data) {
     return (
@@ -154,19 +203,39 @@ export default function SecurityDashboardPage() {
             Account posture, authentication activity and effective security policy
           </p>
           {dataUpdatedAt > 0 && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p
+              className={`text-xs mt-1 ${
+                dataIsStale ? "text-amber-600 font-medium" : "text-gray-400"
+              }`}
+            >
               Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
+              {isFetching ? " — syncing…" : ""}
+              {dataIsStale ? " — data may be stale" : ""}
             </p>
           )}
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="btn-secondary inline-flex items-center gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`}
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="btn-secondary inline-flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {isError && (
@@ -250,6 +319,92 @@ export default function SecurityDashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-brand-600" />
+                  Failed Logins — Last 14 Days
+                </h3>
+                <span className="text-xs text-gray-400">Daily totals</span>
+              </div>
+              {failedLoginSeries.every((p) => p.count === 0) ? (
+                <div className="flex items-center gap-2 py-8 text-gray-400">
+                  <CheckCircle2 className="w-5 h-5 text-green-400" />
+                  <p className="text-sm text-gray-500">
+                    No failed logins recorded in the last 14 days
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-end gap-1.5 h-32" role="img" aria-label="Failed login trend chart">
+                  {failedLoginSeries.map((point) => (
+                    <div
+                      key={point.date}
+                      className="group relative flex-1 flex flex-col justify-end min-w-0"
+                    >
+                      <div
+                        className={`rounded-t ${
+                          point.count > 0
+                            ? "bg-red-400 hover:bg-red-500"
+                            : "bg-gray-100"
+                        } transition-colors`}
+                        style={{
+                          height: point.count > 0
+                            ? `${Math.max(12, (point.count / Math.max(peakFailedLogins, 1)) * 100)}%`
+                            : "4px",
+                        }}
+                      />
+                      <span className="mt-1 text-[10px] text-gray-400 truncate text-center">
+                        {point.date.slice(5)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                Peak: {peakFailedLogins} failed login{peakFailedLogins === 1 ? "" : "s"} in a single day
+              </p>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <ListChecks className="w-4 h-4 text-brand-600" />
+                  Recommendations
+                </h3>
+                <span className="text-xs text-gray-400">
+                  {recommendations.length === 0 ? "All clear" : `${recommendations.length} item${recommendations.length === 1 ? "" : "s"}`}
+                </span>
+              </div>
+              {recommendations.length === 0 ? (
+                <div className="flex items-center gap-2 py-8 text-gray-400">
+                  <ShieldCheck className="w-5 h-5 text-green-400" />
+                  <p className="text-sm text-gray-500">
+                    No security recommendations — posture looks healthy
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {recommendations.map((rec) => (
+                    <li
+                      key={rec.id}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5"
+                    >
+                      <p className="text-sm text-amber-800">{rec.text}</p>
+                      <Link
+                        to={rec.to}
+                        className="inline-flex items-center gap-0.5 text-sm font-medium text-brand-700 hover:text-brand-800 flex-shrink-0"
+                      >
+                        {rec.action}
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900">Locked Accounts</h3>
                 <Link to="/users" className="text-sm font-medium text-brand-700 hover:text-brand-800 inline-flex items-center gap-1">
@@ -289,7 +444,15 @@ export default function SecurityDashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="card">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Recent Failed Logins</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Recent Failed Logins</h3>
+                <Link
+                  to="/audit-logs?module=auth&action=user_login&status=failed"
+                  className="text-sm font-medium text-brand-700 hover:text-brand-800 inline-flex items-center gap-1"
+                >
+                  View audit log <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
               {data.authActivity.recentFailedLogins.length === 0 ? (
                 <div className="flex items-center gap-2 py-8 text-gray-400">
                   <CheckCircle2 className="w-5 h-5 text-green-400" />

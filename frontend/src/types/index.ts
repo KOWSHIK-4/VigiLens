@@ -1076,6 +1076,7 @@ export interface SecurityDashboardData {
     failedLogins24h: number;
     failedLogins7d: number;
     failedLogins30d: number;
+    failedLoginSeries: { date: string; count: number }[];
     recentFailedLogins: SecurityDashboardEvent[];
   };
   policy: SecurityPolicy;

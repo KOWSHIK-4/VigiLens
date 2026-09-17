@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -87,10 +88,24 @@ function downloadCSV(blob: Blob) {
 
 export default function AuditLogsPage() {
   const { user } = useAuth();
-  const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState<"" | AuditLogAction>("");
-  const [moduleFilter, setModuleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"" | AuditLogStatus>("");
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(
+    () => searchParams.get("search")?.slice(0, 200) ?? "",
+  );
+  const [actionFilter, setActionFilter] = useState<"" | AuditLogAction>(() => {
+    const action = searchParams.get("action");
+    return action && AUDIT_ACTIONS.includes(action as AuditLogAction)
+      ? (action as AuditLogAction)
+      : "";
+  });
+  const [moduleFilter, setModuleFilter] = useState(() => {
+    const module = searchParams.get("module");
+    return module && modules.includes(module) ? module : "";
+  });
+  const [statusFilter, setStatusFilter] = useState<"" | AuditLogStatus>(() => {
+    const status = searchParams.get("status");
+    return status === "success" || status === "failed" ? status : "";
+  });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState("timestamp");

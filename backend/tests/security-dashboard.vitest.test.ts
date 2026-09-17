@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../src/config/prisma";
-import { securityDashboardService } from "../src/services/securityDashboard.service";
+import {
+  buildFailedLoginSeries,
+  localDateKey,
+  securityDashboardService,
+} from "../src/services/securityDashboard.service";
 
 const FIXTURE_EMAIL = "sec-dash-fixture@vigilens.test";
 
@@ -82,5 +86,70 @@ describe("securityDashboardService", () => {
     expect(
       dashboard.accountPosture.atRiskAccounts.some((a) => a.id === user.id),
     ).toBe(true);
+  });
+
+  it("includes a zero-filled 14-day failed-login series", async () => {
+    const dashboard = await securityDashboardService.getDashboard();
+    expect(dashboard.authActivity.failedLoginSeries).toHaveLength(14);
+    for (const point of dashboard.authActivity.failedLoginSeries) {
+      expect(point.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(point.count).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe("buildFailedLoginSeries", () => {
+  it("fills a zero series when no rows exist", () => {
+    const now = new Date("2026-09-17T12:00:00Z");
+    const series = buildFailedLoginSeries([], 7, now);
+    expect(series).toHaveLength(7);
+    expect(series.every((p) => p.count === 0)).toBe(true);
+    expect(series[0].date).toBe("2026-09-11");
+    expect(series[series.length - 1].date).toBe("2026-09-17");
+  });
+
+  it("assigns counts to the correct local calendar day", () => {
+    const now = new Date("2026-09-17T12:00:00Z");
+    const series = buildFailedLoginSeries(
+      [
+        { date: new Date("2026-09-15T08:00:00"), count: 4 },
+        { date: "2026-09-16", count: 2 },
+      ],
+      7,
+      now,
+    );
+    expect(series.find((p) => p.date === "2026-09-15")?.count).toBe(4);
+    expect(series.find((p) => p.date === "2026-09-16")?.count).toBe(2);
+    expect(series.find((p) => p.date === "2026-09-17")?.count).toBe(0);
+  });
+
+  it("ignores malformed or out-of-window rows", () => {
+    const now = new Date("2026-09-17T12:00:00Z");
+    const series = buildFailedLoginSeries(
+      [
+        { date: null, count: 9 },
+        { date: "not-a-date", count: 9 },
+        { date: "2026-01-01", count: 9 },
+        { date: "2026-09-17", count: 3 },
+      ],
+      7,
+      now,
+    );
+    expect(series).toHaveLength(7);
+    expect(series.reduce((s, p) => s + p.count, 0)).toBe(3);
+  });
+
+  it("sums duplicate days and matches localDateKey output", () => {
+    const now = new Date("2026-09-17T12:00:00Z");
+    expect(localDateKey(new Date("2026-09-17T08:00:00"))).toBe("2026-09-17");
+    const series = buildFailedLoginSeries(
+      [
+        { date: "2026-09-17", count: 1 },
+        { date: "2026-09-17", count: 5 },
+      ],
+      3,
+      now,
+    );
+    expect(series.find((p) => p.date === "2026-09-17")?.count).toBe(6);
   });
 });
