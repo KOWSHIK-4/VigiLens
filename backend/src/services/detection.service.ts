@@ -18,6 +18,7 @@ import {
   correlationMessageSuffix,
   type EventCorrelationSummary,
 } from "./correlation";
+import { detectorCooldownCache } from "../utils/detectorCooldownCache";
 
 /** Nested camera rows only need display fields on read paths. */
 const cameraView = { select: { id: true, name: true, location: true } };
@@ -78,12 +79,7 @@ function getAlertSeverity(status: string): AlertSeverity {
 
 /** Alert cooldown for a detector key from its settings, or the default. */
 async function resolveAlertCooldownMs(detectorKey?: string): Promise<number> {
-  if (!detectorKey) return DEFAULT_ALERT_COOLDOWN_MS;
-  const model = await prisma.aIModel.findUnique({
-    where: { detectorKey },
-    select: { settings: { select: { alertCooldownMs: true } } },
-  });
-  return model?.settings?.alertCooldownMs ?? DEFAULT_ALERT_COOLDOWN_MS;
+  return detectorCooldownCache.resolve(detectorKey, DEFAULT_ALERT_COOLDOWN_MS);
 }
 
 function getAlertTitle(label: string, status: string): string {  const prefix =

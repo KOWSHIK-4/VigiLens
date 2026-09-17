@@ -58,6 +58,23 @@ function buildAlertWhere(params: Pick<AlertQueryInput, "severity" | "isRead" | "
   return where;
 }
 
+export type UnreadSeverityCounts = Record<AlertSeverity, number>;
+
+/**
+ * Maps raw `groupBy` rows into a stable { critical, warning, info } shape.
+ * Kept pure and exported so the mapping logic is unit-testable without a
+ * database.
+ */
+export function aggregateUnreadSeverityCounts(
+  rows: Array<{ severity: AlertSeverity; _count: { severity: number } }>,
+): UnreadSeverityCounts {
+  const bySeverity: UnreadSeverityCounts = { critical: 0, warning: 0, info: 0 };
+  for (const row of rows) {
+    bySeverity[row.severity] = row._count.severity;
+  }
+  return bySeverity;
+}
+
 export const alertService = {
   async create(input: CreateAlertInput) {
     const alert = await prisma.alert.create({
@@ -177,6 +194,20 @@ export const alertService = {
 
   async countUnread() {
     return prisma.alert.count({ where: { isRead: false } });
+  },
+
+  /**
+   * Unread alert population broken down by severity, derived from a single
+   * grouped query. The dashboard uses this instead of issuing one filtered
+   * list request per severity on every polling tick.
+   */
+  async countUnreadBySeverity() {
+    const rows = await prisma.alert.groupBy({
+      by: ["severity"],
+      where: { isRead: false },
+      _count: { severity: true },
+    });
+    return aggregateUnreadSeverityCounts(rows);
   },
 
   async remove(id: string) {

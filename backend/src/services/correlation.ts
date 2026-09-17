@@ -34,6 +34,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "../config/prisma";
 import type { Prisma } from "@prisma/client";
+import { detectorCooldownCache } from "../utils/detectorCooldownCache";
 
 export type CorrelationSource = "engine" | "api";
 
@@ -172,14 +173,11 @@ export const correlationService = {
    * Resolve the correlation window from an existing detector setting. No
    * detector (or no setting row) falls back to the engine's default alert
    * cooldown — the same value used everywhere else as the alert window.
+   * The value is cached per detector to avoid a DB lookup for every
+   * correlation pass; settings edits invalidate the cache.
    */
   async resolveWindowMs(detectorKey?: string | null): Promise<number> {
-    if (!detectorKey) return CORRELATION_DEFAULT_WINDOW_MS;
-    const model = await prisma.aIModel.findUnique({
-      where: { detectorKey },
-      select: { settings: { select: { alertCooldownMs: true } } },
-    });
-    return model?.settings?.alertCooldownMs ?? CORRELATION_DEFAULT_WINDOW_MS;
+    return detectorCooldownCache.resolve(detectorKey, CORRELATION_DEFAULT_WINDOW_MS);
   },
 
   /** Detections in the same fixed bucket as the (camera, detector, class). */

@@ -63,6 +63,22 @@ export const alertService = {
     return data.data.count;
   },
 
+  /**
+   * Total unread plus the per-severity breakdown from one request. The
+   * dashboard consumes the breakdown directly instead of issuing one
+   * filtered list query per severity on every polling tick.
+   */
+  async getUnreadCounts(): Promise<{
+    count: number;
+    bySeverity: { critical: number; warning: number; info: number };
+  }> {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { count: number; bySeverity: { critical: number; warning: number; info: number } };
+    }>("/alerts/unread-count");
+    return data.data;
+  },
+
   async exportCSV(params?: {
     severity?: string;
     isRead?: string;

@@ -9,6 +9,7 @@ import { deriveLifecycleStatus, lifecycleManager } from "../engine/lifecycle";
 import type { DetectorRuntimeStatus } from "../engine/types";
 import { notifyDetectorRestart } from "../engine/engineHooks";
 import { ApiError } from "../utils/errors";
+import { detectorCooldownCache } from "../utils/detectorCooldownCache";
 import type { AIModel, CameraType, DetectorSettings, Prisma } from "@prisma/client";
 
 export type DetectorStatus = "running" | "stopped" | "error";
@@ -427,7 +428,7 @@ export const detectorService = {
     alertCooldownMs?: number;
     preferredProcessor?: DetectorSettings["preferredProcessor"];
   }) {
-    const model = await findModelOrThrow(id);
+const model = await findModelOrThrow(id);
 
     const settings = await prisma.detectorSettings.update({
       where: { aiModelId: id },
@@ -438,6 +439,10 @@ export const detectorService = {
         preferredProcessor: input.preferredProcessor,
       },
     });
+
+    // The alert engine and correlation pipeline cache the cooldown value per
+    // detector; invalidate it so a settings edit takes effect immediately.
+    detectorCooldownCache.invalidate(model.detectorKey);
 
     const modelData: Prisma.AIModelUpdateInput = {};
     if (input.confidenceThreshold !== undefined) {

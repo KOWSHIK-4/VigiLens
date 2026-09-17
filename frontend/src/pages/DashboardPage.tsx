@@ -160,6 +160,7 @@ export default function DashboardPage() {
     queryFn: () =>
       modelService.getActive().catch(() => null),
     refetchInterval: autoRefresh ? 30000 : false,
+    staleTime: 10000,
     placeholderData: keepPreviousData,
   });
 
@@ -167,6 +168,7 @@ export default function DashboardPage() {
     queryKey: ["models", "stats"],
     queryFn: () => modelService.getAll({ page: 1, limit: 100 }),
     refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 30000,
     placeholderData: keepPreviousData,
   });
 
@@ -180,6 +182,7 @@ export default function DashboardPage() {
     enabled: showUserStats,
     queryFn: () => userService.getStats(),
     refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 30000,
     placeholderData: keepPreviousData,
   });
 
@@ -192,33 +195,23 @@ export default function DashboardPage() {
   });
 
   const { data: criticalUnread } = useQuery({
-    queryKey: ["alerts", "unread-count", "critical"],
+    queryKey: ["alerts", "unread-counts"],
     enabled: canSeeAlerts,
-    queryFn: () =>
-      alertService
-        .getAll({ page: 1, limit: 1, severity: "critical", isRead: "false" })
-        .then((res) => res.total),
+    queryFn: () => alertService.getUnreadCounts(),
     refetchInterval: autoRefresh ? 30000 : false,
   });
 
-  const { data: warningUnread } = useQuery({
-    queryKey: ["alerts", "unread-count", "warning"],
-    enabled: canSeeAlerts,
-    queryFn: () =>
-      alertService
-        .getAll({ page: 1, limit: 1, severity: "warning", isRead: "false" })
-        .then((res) => res.total),
-    refetchInterval: autoRefresh ? 30000 : false,
-  });
+  const criticalCount = criticalUnread?.bySeverity.critical ?? 0;
+  const warningCount = criticalUnread?.bySeverity.warning ?? 0;
 
   const securityLevel: SecurityLevel =
     !canSeeAlerts ? "normal"
-    : (criticalUnread ?? 0) > 0 ? "critical"
-    : (warningUnread ?? 0) > 0 ? "warning"
+    : criticalCount > 0 ? "critical"
+    : warningCount > 0 ? "warning"
     : "normal";
   const security = SECURITY_CONFIG[securityLevel];
   const SecurityIcon = security.icon;
-  const unreadAttention = securityLevel === "critical" ? criticalUnread : warningUnread;
+  const unreadAttention = securityLevel === "critical" ? criticalCount : warningCount;
 
   const detectionsOverTime = useMemo(
     () => stats?.detectionsOverTime ?? [],
@@ -230,6 +223,10 @@ export default function DashboardPage() {
     [stats],
   );
   const recentAlerts = latestAlerts?.data ?? [];
+  const criticalRecentCount = useMemo(
+    () => recentDetections.filter((d) => d.status === "critical").length,
+    [recentDetections],
+  );
   const dataIsStale = dataUpdatedAt > 0 && Date.now() - dataUpdatedAt > 100000;
 
   if (isLoading && !stats) {
@@ -336,7 +333,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-6 flex-wrap">
             <div className="text-center">
               <p className="text-xl font-bold text-gray-900">
-                {recentDetections.filter((d) => d.status === "critical").length}
+                {criticalRecentCount}
               </p>
               <p className="text-xs text-gray-500">Critical events</p>
             </div>

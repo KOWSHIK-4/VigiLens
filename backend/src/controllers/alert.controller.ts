@@ -116,8 +116,13 @@ export const alertController = {
 
   async getUnreadCount(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const count = await alertService.countUnread();
-      success(res, { count });
+      // Single grouped query serves both the total and the per-severity
+      // breakdown, so the dashboard only needs one polling request.
+      const [count, bySeverity] = await Promise.all([
+        alertService.countUnread(),
+        alertService.countUnreadBySeverity(),
+      ]);
+      success(res, { count, bySeverity });
     } catch (err) {
       next(err);
     }
