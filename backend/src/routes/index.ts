@@ -17,6 +17,7 @@ import systemRoutes from "./system.routes";
 import monitorRoutes from "./monitor.routes";
 import realtimeRoutes from "./realtime.routes";
 import securityRoutes from "./security.routes";
+import searchRoutes from "./search.routes";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use("/system", systemRoutes);
 router.use("/monitor", monitorRoutes);
 router.use("/realtime", realtimeRoutes);
 router.use("/security", securityRoutes);
+router.use("/search", searchRoutes);
 
 export default router;

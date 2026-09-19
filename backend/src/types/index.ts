@@ -50,6 +50,22 @@ export const detectionQuerySchema = z.object({
 
 export type DetectionQueryInput = z.infer<typeof detectionQuerySchema>;
 
+/** Search types supported by the global search endpoint. */
+export const searchTypeSchema = z.enum(["all", "detections", "alerts", "incidents", "cameras", "audit", "users"]);
+
+export const searchQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .min(2, "Search term must be at least 2 characters")
+    .max(100, "Search term must be at most 100 characters"),
+  type: searchTypeSchema.optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(50).default(25),
+});
+
+export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
+
 /** A date string that JavaScript can actually parse (guards `new Date(x)`). */
 export const dateStringSchema = z
   .string()
