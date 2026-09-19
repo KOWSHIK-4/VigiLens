@@ -8,6 +8,7 @@ import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
 import { sendCsvStream } from "../utils/csvStream";
 import { fleetCorrelationService } from "../services/fleetCorrelationLoader.service";
+import { riskScoreService } from "../services/riskScoreLoader.service";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -152,6 +153,16 @@ export const detectionController = {
         cameraId,
       );
       success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getRiskScore(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const risk = await riskScoreService.forDetection(id);
+      success(res, risk);
     } catch (err) {
       next(err);
     }

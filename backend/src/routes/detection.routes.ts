@@ -31,6 +31,12 @@ router.get(
   detectionController.getAll,
 );
 router.get(
+  "/:id/risk",
+  requirePermission("detections.read"),
+  validate(detectionIdSchema, "params"),
+  detectionController.getRiskScore,
+);
+router.get(
   "/:id",
   requirePermission("detections.read"),
   validate(detectionIdSchema, "params"),
