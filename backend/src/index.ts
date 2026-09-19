@@ -15,6 +15,8 @@ import { rateLimitService } from "./services/rateLimit.service";
 import { auditLogService } from "./services/auditLog.service";
 import { monitorScheduler } from "./engine/monitor";
 import { retentionScheduler } from "./services/retentionScheduler";
+import { webhookRetryScheduler } from "./services/webhookRetryScheduler";
+import { webhookService } from "./services/webhook.service";
 
 const app = express();
 
@@ -138,6 +140,11 @@ async function start() {
       logger.info("Automated data retention auto-started (RETENTION_ENABLED=true)");
     }
 
+    webhookRetryScheduler.deliver = async (eventType, eventId, payload) =>
+      webhookService.dispatchRetry(eventType, payload);
+    webhookRetryScheduler.start();
+    logger.info("Automated webhook retry loop started");
+
     const server = app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port}`);
     });
@@ -176,6 +183,7 @@ async function start() {
         try {
           monitorScheduler.stop();
           retentionScheduler.stop();
+          webhookRetryScheduler.stop();
           await prisma.$disconnect();
           logger.info("HTTP server and database connections closed");
           process.exit(0);

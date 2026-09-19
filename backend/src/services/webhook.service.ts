@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../config/logger";
 import { metricsService } from "./metrics.service";
 import { settingsService } from "./settings.service";
+import { webhookRetryQueue, deliveryIdForEvent } from "./webhookRetryQueue";
 import type { SettingValue } from "../settings";
 
 const WEBHOOK_TIMEOUT_MS = 5000;
@@ -97,6 +98,7 @@ export async function readWebhookConfig(): Promise<WebhookConfig> {
 async function deliver(
   config: WebhookConfig,
   payload: Record<string, unknown>,
+  deliveryId?: string,
 ): Promise<WebhookDispatchResult> {
   const body = JSON.stringify(payload);
   const attemptedAt = new Date().toISOString();
@@ -106,6 +108,9 @@ async function deliver(
   };
   if (config.secret) {
     headers["X-VigiLens-Signature"] = authHeader(config.secret, body);
+  }
+  if (deliveryId) {
+    headers["X-VigiLens-Delivery"] = deliveryId;
   }
 
   let result: WebhookDispatchResult;
@@ -150,6 +155,24 @@ function serializeDate(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+/** Adds the stable idempotency id to a payload so receivers can dedupe. */
+function withDeliveryId(
+  payload: Record<string, unknown>,
+  eventType: WebhookEventType,
+  eventId: string,
+): Record<string, unknown> {
+  return { ...payload, deliveryId: deliveryIdForEvent(eventType, eventId) };
+}
+
+/** Queues a failed real dispatch for bounded automatic retries. */
+function enqueueRetry(
+  eventType: WebhookEventType,
+  eventId: string,
+  payload: Record<string, unknown>,
+): void {
+  webhookRetryQueue.enqueue(eventType, eventId, { ...payload, deliveryId: deliveryIdForEvent(eventType, eventId) });
+}
+
 export const webhookService = {
   async dispatchAlertCreated(alert: {
     id: string;
@@ -168,18 +191,23 @@ export const webhookService = {
       return null;
     }
     if (!config.enabled || !config.url || !config.alertCreatedEnabled) return null;
-    const payload = {
-      version: "1",
-      type: "alert" as WebhookEventType,
-      event: "alert_created",
-      id: alert.id,
-      timestamp: serializeDate(alert.createdAt),
-      severity: alert.severity,
-      title: alert.title,
-      message: alert.message,
-    };
-    const result = await deliver(config, payload);
+    const payload = withDeliveryId(
+      {
+        version: "1",
+        type: "alert" as WebhookEventType,
+        event: "alert_created",
+        id: alert.id,
+        timestamp: serializeDate(alert.createdAt),
+        severity: alert.severity,
+        title: alert.title,
+        message: alert.message,
+      },
+      "alert",
+      alert.id,
+    );
+    const result = await deliver(config, payload, payload.deliveryId as string);
     if (result && result.ok) metricsService.recordEvent("webhooks.dispatched");
+    else if (result) enqueueRetry("alert", alert.id, payload);
     return result;
   },
 
@@ -199,20 +227,57 @@ export const webhookService = {
       return null;
     }
     if (!config.enabled || !config.url || !config.incidentChangedEnabled) return null;
-    const payload = {
-      version: "1",
-      type: "incident" as WebhookEventType,
-      event: `incident_${incident.action}`,
-      id: incident.id,
-      timestamp: serializeDate(incident.timestamp ?? new Date()),
-      status: incident.status,
-    };
-    const result = await deliver(config, payload);
+    const payload = withDeliveryId(
+      {
+        version: "1",
+        type: "incident" as WebhookEventType,
+        event: `incident_${incident.action}`,
+        id: incident.id,
+        timestamp: serializeDate(incident.timestamp ?? new Date()),
+        status: incident.status,
+      },
+      "incident",
+      incident.id,
+    );
+    const result = await deliver(config, payload, payload.deliveryId as string);
     if (result && result.ok) metricsService.recordEvent("webhooks.dispatched");
+    else if (result) enqueueRetry("incident", incident.id, payload);
     return result;
   },
 
   getStatus(): WebhookStatusSnapshot {
     return { ...status };
+  },
+
+  /**
+   * Retry delivery used by the retry queue's scheduler: reads the current
+   * webhook configuration and posts the already-signed payload again. The
+   * stable delivery id (derived from the event) is preserved so receivers
+   * can dedupe and so the payload itself stays deterministic across retries.
+   */
+  async dispatchRetry(
+    eventType: WebhookEventType,
+    payload: Record<string, unknown>,
+  ): Promise<{ ok: boolean; error?: string | null }> {
+    let config: WebhookConfig;
+    try {
+      config = await readWebhookConfig();
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    if (!config.enabled || !config.url) {
+      return { ok: false, error: "webhook disabled or url missing" };
+    }
+    const eventId =
+      typeof payload.id === "string" ? payload.id : String(payload.id ?? "");
+    const deliveryId =
+      typeof payload.deliveryId === "string" ? payload.deliveryId : deliveryIdForEvent(eventType, eventId);
+    const result = await deliver(config, payload, deliveryId);
+    if (result.ok) {
+      metricsService.recordEvent("webhooks.retries.succeeded");
+    } else {
+      metricsService.recordEvent("webhooks.retries.failed");
+    }
+    return { ok: result.ok, error: result.error };
   },
 };
