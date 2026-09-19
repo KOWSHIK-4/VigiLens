@@ -9,5 +9,7 @@ router.use(authenticate);
 
 router.get("/dashboard", requirePermission("audit.read"), securityController.getDashboard);
 router.get("/audit-integrity", requirePermission("audit.read"), securityController.getAuditIntegrity);
+router.get("/intelligence", requirePermission("security.read"), securityController.getIntelligence);
+router.get("/intelligence/context", requirePermission("security.read"), securityController.getIntelligenceContext);
 
 export default router;
