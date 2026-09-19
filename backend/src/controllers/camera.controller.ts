@@ -2,6 +2,7 @@ import type { Response, NextFunction } from "express";
 import type { AuthRequest } from "../types";
 import type { CameraStatus, CameraType } from "@prisma/client";
 import { cameraService } from "../services/camera.service";
+import { cameraFleetHealthService } from "../services/cameraFleetHealth.service";
 import { userService } from "../services/user.service";
 import { success, paginated, error } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
@@ -14,6 +15,18 @@ function getClientInfo(req: AuthRequest) {
 }
 
 export const cameraController = {
+  async getFleetHealth(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const windowMs = Number(req.query.windowMs);
+      const summary = await cameraFleetHealthService.summarize(
+        Number.isFinite(windowMs) && windowMs > 0 ? windowMs : undefined,
+      );
+      success(res, summary);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const result = await cameraService.findAll({

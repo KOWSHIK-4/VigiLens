@@ -23,6 +23,19 @@ const SNAPSHOT_TIMEOUT_MS = 10_000;
 const SNAPSHOT_SUBDIR = "snapshots";
 
 /**
+ * Camera fleet reliability helpers live in `./cameraReliability` (see that
+ * module). They are re-exported here so consumers can keep importing camera
+ * reliability summaries from the camera service while the implementation
+ * stays in a single, tree-shakeable, I/O-free leaf that is unit-testable
+ * without booting Prisma.
+ */
+export {
+  summarizeCameraReliability,
+  type CameraReliability,
+  type CameraFleetReliabilityRow,
+} from "./cameraReliability";
+
+/**
  * Sanitizes a camera source URL before it is stored or serialized: any
  * `user:pass@` userinfo is stripped so credentials never linger in the
  * plaintext `url` column or ride camera API payloads. Operators are expected

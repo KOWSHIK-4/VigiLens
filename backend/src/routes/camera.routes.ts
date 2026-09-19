@@ -15,6 +15,11 @@ const router = Router();
 router.use(authenticate);
 
 router.get("/", requirePermission("cameras.read"), validate(cameraQuerySchema, "query"), cameraController.getAll);
+router.get(
+  "/fleet/health",
+  requirePermission("monitoring.read"),
+  cameraController.getFleetHealth,
+);
 router.get("/:id", requirePermission("cameras.read"), validate(cameraIdSchema, "params"), cameraController.getById);
 router.post("/", requirePermission("cameras.manage"), validate(createCameraSchema), cameraController.create);
 router.patch(
