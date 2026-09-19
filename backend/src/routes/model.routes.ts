@@ -17,6 +17,7 @@ router.use(authenticate);
 
 router.get("/", requirePermission("models.read"), validate(modelQuerySchema, "query"), modelController.getAll);
 router.get("/active", requirePermission("models.read"), modelController.getActive);
+router.get("/telemetry", requirePermission("monitoring.read"), modelController.getTelemetry);
 router.post("/", requirePermission("models.manage"), validate(createModelSchema), modelController.create);
 router.get("/:id", requirePermission("models.read"), validate(modelIdSchema, "params"), modelController.getById);
 router.patch("/:id", requirePermission("models.manage"), validate(modelIdSchema, "params"), validate(updateModelSchema), modelController.update);

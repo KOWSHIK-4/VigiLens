@@ -6,6 +6,7 @@ import type {
   UpdateModelInput,
 } from "../types";
 import { modelService } from "../services/model.service";
+import { aiTelemetryService } from "../services/aiTelemetryLoader.service";
 import { userService } from "../services/user.service";
 import { success, paginated } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
@@ -18,6 +19,15 @@ function getClientInfo(req: AuthRequest) {
 }
 
 export const modelController = {
+  async getTelemetry(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const summary = await aiTelemetryService.getSummary();
+      success(res, summary);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as ModelQueryInput;
