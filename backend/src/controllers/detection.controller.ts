@@ -7,6 +7,7 @@ import { success, paginated } from "../utils/apiResponse";
 import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
 import { sendCsvStream } from "../utils/csvStream";
+import { fleetCorrelationService } from "../services/fleetCorrelationLoader.service";
 
 export const detectionController = {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -134,6 +135,23 @@ export const detectionController = {
     try {
       const stats = await detectionService.getStats();
       success(res, stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getFleetCorrelation(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const windowMs = Number(req.query.windowMs);
+      const cameraId =
+        typeof req.query.cameraId === "string" && req.query.cameraId.length > 0
+          ? req.query.cameraId
+          : undefined;
+      const result = await fleetCorrelationService.analyze(
+        Number.isFinite(windowMs) ? windowMs : undefined,
+        cameraId,
+      );
+      success(res, result);
     } catch (err) {
       next(err);
     }

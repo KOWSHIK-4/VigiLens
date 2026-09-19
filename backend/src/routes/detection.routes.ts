@@ -13,6 +13,11 @@ router.post("/internal", requireInternalKey, detectionController.create);
 router.use(authenticate);
 
 router.get(
+  "/fleet/correlation",
+  requirePermission("detections.read"),
+  detectionController.getFleetCorrelation,
+);
+router.get(
   "/export/csv",
   requirePermission("detections.read"),
   validate(detectionQuerySchema, "query"),
