@@ -12,7 +12,16 @@ function eventLabel(event: RealtimeEventMessage) {
 }
 
 export default function LiveEventsPanel() {
-  const { events, connected } = useRealtime(true);
+  const { events, connected, state } = useRealtime();
+
+  const statusLabel =
+    state === "connected"
+      ? "Live"
+      : state === "error"
+        ? "Connection lost"
+        : state === "connecting"
+          ? "Connecting"
+          : "Reconnecting";
 
   return (
     <div className="card flex flex-col">
@@ -27,14 +36,18 @@ export default function LiveEventsPanel() {
           ) : (
             <WifiOff className="w-4 h-4 text-amber-500" />
           )}
-          {connected ? "Live" : "Reconnecting"}
+          {statusLabel}
         </span>
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto max-h-[320px]">
         {events.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-10">
-            {connected ? "Waiting for security events..." : "Connecting to the live event stream..."}
+            {connected
+              ? "Waiting for security events..."
+              : state === "error"
+                ? "Could not reach the live event stream."
+                : "Connecting to the live event stream..."}
           </div>
         ) : (
           events.map((event, index) => (

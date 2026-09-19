@@ -91,7 +91,7 @@ export default function Layout() {
   const unreadCount = unreadData ?? 0;
 
   // Push-driven toasts + badge increments via SSE instead of 5s polling.
-  const { events } = useRealtime(canSeeAlerts);
+  const { events } = useRealtime({ enabled: canSeeAlerts });
   useEffect(() => {
     if (!events.length) return;
     for (const evt of events) {
