@@ -18,6 +18,7 @@ import {
   retentionScheduler,
   type RetentionStatus,
 } from "./retentionScheduler";
+import { reportScheduler } from "./reportScheduler.service";
 
 interface CpuSample {
   idle: number;
@@ -170,6 +171,21 @@ export interface RetentionSchedulerSummary {
   lastError: string | null;
 }
 
+export interface ReportSchedulerSummary {
+  running: boolean;
+  startedAt: string | null;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  runType: string | null;
+  runCount: number;
+  lastError: string | null;
+  config: {
+    enabled: boolean;
+    cadenceDays: number;
+    digestTime: string;
+  };
+}
+
 export function toRetentionSchedulerSummary(status: RetentionStatus): RetentionSchedulerSummary {
   return {
     running: status.running,
@@ -288,6 +304,7 @@ export interface SystemMonitoringReport {
   services: ServiceHealth[];
   scheduler: MonitorSchedulerSummary;
   retention: RetentionSchedulerSummary;
+  reports: ReportSchedulerSummary;
   engines: EngineHealthSummary[];
   resources: {
     cpu: { usagePercent: number; cores: number };
@@ -316,6 +333,8 @@ export const systemService = {
       getEngineHealthSummaries(),
     ]);
 
+    const reportStatus = reportScheduler.getStatus();
+
     return {
       status: health.status,
       timestamp: new Date().toISOString(),
@@ -327,6 +346,16 @@ export const systemService = {
       services: health.services,
       scheduler: toSchedulerSummary(scheduler),
       retention: toRetentionSchedulerSummary(retention),
+      reports: {
+        running: reportStatus.running,
+        startedAt: reportStatus.startedAt,
+        lastRunAt: reportStatus.lastRunAt,
+        nextRunAt: reportStatus.nextRunAt,
+        runType: reportStatus.runType,
+        runCount: reportStatus.runCount,
+        lastError: reportStatus.lastError,
+        config: reportStatus.config,
+      },
       engines,
       resources: {
         cpu: getCpuUsage(),

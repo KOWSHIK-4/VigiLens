@@ -497,6 +497,32 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         max: 730,
         unit: "days",
       },
+      {
+        key: "scheduled_reports_enabled",
+        label: "Scheduled reports",
+        description: "Automatically generate report summaries on a fixed cadence (daily, weekly or monthly).",
+        type: "boolean",
+        defaultValue: false,
+      },
+      {
+        key: "report_cadence_days",
+        label: "Report cadence",
+        description: "How often a scheduled report is generated.",
+        type: "select",
+        defaultValue: "1",
+        options: [
+          { value: "1", label: "Daily" },
+          { value: "7", label: "Weekly" },
+          { value: "30", label: "Monthly" },
+        ],
+      },
+      {
+        key: "report_digest_time",
+        label: "Report time",
+        description: "Local time of day (HH:MM) at which scheduled reports are generated.",
+        type: "string",
+        defaultValue: "06:00",
+      },
     ],
   },
   {
