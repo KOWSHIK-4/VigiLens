@@ -548,17 +548,34 @@ async function run() {
     fail("change-password", changePw);
   }
 
+  // Password changes intentionally revoke every outstanding session (the
+  // server bumps tokenVersion), so the pre-change token is rejected and the
+  // user must re-authenticate with the new password.
   const meAfterChange = await request("/auth/me", {}, forcedToken);
-  if (
-    meAfterChange.status === 200 &&
-    (meAfterChange.body as { data: { mustChangePassword: boolean } }).data.mustChangePassword === false
-  ) {
-    ok("mustChangePassword clears after password change");
+  if (meAfterChange.status === 401) {
+    ok("password change revokes the pre-change session");
   } else {
     fail("me after password change", meAfterChange);
   }
 
-  const accessAfterChange = await request("/cameras?page=1&limit=5", {}, forcedToken);
+  const reloginAfterChange = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: forcedEmail, password: "FinalPass99!" }),
+  });
+  const freshToken =
+    reloginAfterChange.status === 200
+      ? (reloginAfterChange.body as { data: { token: string } }).data.token
+      : null;
+  if (
+    reloginAfterChange.status === 200 &&
+    (reloginAfterChange.body as { data: { user: { mustChangePassword: boolean } } }).data.user.mustChangePassword === false
+  ) {
+    ok("mustChangePassword clears after password change and re-login");
+  } else {
+    fail("re-login after password change", reloginAfterChange);
+  }
+
+  const accessAfterChange = await request("/cameras?page=1&limit=5", {}, freshToken ?? undefined);
   if (accessAfterChange.status === 200) {
     ok("resource access restored after password change");
   } else {

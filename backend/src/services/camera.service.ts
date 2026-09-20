@@ -375,9 +375,12 @@ export const cameraService = {
   },
 
   async update(id: string, data: UpdateCameraInput) {
+    // Credential fields are read separately, without `cameraType`, so the
+    // prisma redaction scrub (keyed on cameraType + password) lets them
+    // through — matching the loadCameraCredentials convention.
     const existing = await prisma.camera.findUnique({
       where: { id },
-      select: { ...CREDENTIAL_SELECT, name: true, cameraType: true, url: true },
+      select: { name: true, cameraType: true, url: true },
     });
     if (!existing) return null;
 
@@ -396,12 +399,22 @@ export const cameraService = {
       credentialUpdate.passwordEncrypted = encryptSecret(password);
       credentialUpdate.username = null;
       credentialUpdate.password = null;
-    } else if (hasLegacyPlaintextCredential(existing)) {
+    } else {
       // Legacy plaintext row touched by an update: promote it to encrypted.
-      credentialUpdate.usernameEncrypted = encryptSecret(existing.username as string);
-      credentialUpdate.passwordEncrypted = encryptSecret(existing.password as string);
-      credentialUpdate.username = null;
-      credentialUpdate.password = null;
+      const credentials = await prisma.camera.findUnique({
+        where: { id },
+        select: CREDENTIAL_SELECT,
+      });
+      if (credentials && hasLegacyPlaintextCredential(credentials)) {
+        credentialUpdate.usernameEncrypted = encryptSecret(
+          credentials.username as string,
+        );
+        credentialUpdate.passwordEncrypted = encryptSecret(
+          credentials.password as string,
+        );
+        credentialUpdate.username = null;
+        credentialUpdate.password = null;
+      }
     }
 
     const camera = await prisma.camera.update({

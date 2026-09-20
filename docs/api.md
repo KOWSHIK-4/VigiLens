@@ -48,7 +48,11 @@ normal Bearer auth: `GET /realtime/events` accepts only this ticket in its
 proxy logs never expose a long-lived credential.
 
 - `POST /auth/change-password` requires a valid current password. It clears
-  `mustChangePassword`, `isLocked` and the failed-login counter.
+  `mustChangePassword`, `isLocked` and the failed-login counter, and it
+  **revokes every existing session** (the JWT token version is bumped): any
+  request made with a token issued before the change is rejected with `401`
+  `{ "message": "Session invalidated. Please log in again." }` and must be
+  re-issued by logging in again with the new password.
 - When a user's `mustChangePassword` flag is set (e.g. after an admin password
   reset), every authenticated request except `/auth/change-password`,
   `/auth/me` and `/auth/logout` is rejected with `403`
@@ -111,15 +115,40 @@ POST   /reports/generate     # requires reports.manage
 DELETE /reports/:id          # requires reports.manage
 ```
 
+Scheduled reports are generated automatically by an in-process scheduler
+(started at backend boot) at a fixed local-day cadence configured through the
+`storage` settings group: `scheduled_reports_enabled`, `report_cadence_days`
+(`1`, `7` or `30`) and `report_digest_time` (HH:MM anchor). A scheduled report
+is created by `system` through the normal report pipeline (title, type and the
+matched date range), so it appears and renders through the same `GET /reports`
+surface. The scheduler is conservative: the first pass only primes the cadence
+(no report on first boot), a catch-up after an outage fires at most once, and
+generation passes never overlap.
+
 ## Detections
 
 ```bash
 GET /detections?page=1&limit=20&status=critical
 GET /detections/export/csv   # stream all matched detections as a CSV attachment
 GET /detections/stats
+GET /detections/fleet/correlation   # cross-camera correlation groups (detections.read)
+GET /detections/:id/risk            # explainable 0-100 risk score (detections.read)
 GET /detections/:id
 DELETE /detections/:id              # requires detections.manage (also removes the linked alert)
 ```
+
+`GET /detections/fleet/correlation` groups detections across the whole fleet
+(optionally narrowed to one camera with `cameraId`) within a time bucket
+(`windowMs`, default derived by the service). Each group carries a
+`sequenceId` when detections cross a camera boundary, so an event that
+traverses multiple cameras is surfaced as a single correlated incident thread
+rather than isolated rows.
+
+`GET /detections/:id/risk` returns a deterministic, explainable 0-100 risk
+score for a single detection: `{ riskScore, level, factors, summary }` where
+each `factor` names a weighted contribution (class severity, confidence,
+proximity in time to other events, camera vulnerability tier, etc.). The same
+input always produces the same score and the same explanation set.
 
 Detections are read-only for `viewer`/`operator` (require `detections.read`). Deleting a detection additionally requires `detections.manage` (granted to `admin` and `super_admin`) and records a `detection_deleted` audit action. Deleting an unknown id returns `404`.
 
@@ -175,7 +204,15 @@ POST /cameras/:id/capture               # capture a frame snapshot (cameras.cont
 GET /cameras/:id/thumbnail              # stream the latest snapshot as image/jpeg (cameras.read)
 POST /cameras/:id/health                # run a one-off connectivity/capture probe (cameras.read)
 GET /cameras/:id/health-logs?limit=50   # recent CameraHealthLog entries (cameras.read)
+GET /cameras/fleet/health               # fleet-wide reliability summary (monitoring.read)
 ```
+
+`GET /cameras/fleet/health` (optionally `windowMs`) aggregates per-camera
+reliability (health checks, healthy/total ratio, MTBF-style failure gaps,
+last status) into one summary with a fleet verdict: `healthy` | `degraded` |
+`at_risk`. It requires `monitoring.read` rather than `cameras.read`, so the
+fleet view is available to monitoring-capable roles without exposing camera
+credentials.
 
 Camera views require `cameras.read`; creating/editing/deleting cameras requires
 `cameras.manage`; start/stop and snapshot capture require `cameras.control`.
@@ -245,6 +282,7 @@ The database is seeded with 8 default models: Person Detection, Fire Detection, 
 ```bash
 GET    /models?page=1&limit=20&search=fire&status=loaded&enabled=true&sortBy=name&sortOrder=asc
 GET    /models/active                 # currently active model
+GET    /models/telemetry              # measured AI inference telemetry (monitoring.read)
 GET    /models/:id
 POST   /models                        # create a model
 PATCH  /models/:id                    # update a model
@@ -256,6 +294,12 @@ POST   /models/:id/load
 POST   /models/:id/unload
 POST   /models/:id/test
 ```
+
+`GET /models/telemetry` reports the measured AI inference posture:
+`{ status, ... }` where `status` is one of `ok`, `degraded`, `unavailable` or
+`not_configured`, plus inference latency/count metrics actually measured from
+the AI service. No metric is fabricated: fields for which no measurement
+exists are returned as `null`. Requires `monitoring.read`.
 
 POST /models body:
 
@@ -358,7 +402,9 @@ Notable settings:
 - **Cameras**: `default_capture_fps`, `max_connected_cameras`,
   `camera_reconnect_timeout_seconds`, `thumbnail_refresh_seconds`.
 - **Storage**: `storage_base_path`, `max_storage_gb`, `low_storage_threshold_gb`,
-  `cleanup_interval_days`.
+  `cleanup_interval_days`, `scheduled_reports_enabled`,
+  `report_cadence_days` (`1`|`7`|`30`), `report_digest_time` (HH:MM). The last
+  three drive the in-process scheduled-report loop (see Reports).
 - **Email**: `smtp_host`, `smtp_port`, `smtp_secure`, `smtp_username`,
   `smtp_from_email`, `notifications_email`.
 - **Backup**: `auto_backup_enabled`, `backup_interval_days`, `backup_time`,
@@ -860,6 +906,36 @@ GET   /audit-logs/:id
 `dateTo`, and `sortBy` (`timestamp|action|module|status|username|email`).
 Rows are immutable; there is no update or delete endpoint. Export streams the
 same filters as a CSV attachment named `audit-logs.csv`.
+
+## Security Intelligence & Global Search
+
+Security operations endpoints. Reads require the JWT; permission keys noted
+per endpoint.
+
+```bash
+GET /security/dashboard                 # locked/at-risk accounts, failed logins, integrity (audit.read)
+GET /security/audit-integrity           # audit-trail integrity fingerprint (audit.read)
+GET /security/intelligence?windowMs=    # threat-intelligence report over the window (security.read)
+GET /security/intelligence/context?windowMs=  # source events underpinning the report (security.read)
+```
+
+The intelligence report is computed from real stored signals (detection
+events, alerts, incidents, audit activity) — each signal is typed
+(`IntelligenceSignalType`), levelled `low` | `medium` | `high` and explained,
+so every finding can be traced back to the rows that produced it.
+`/intelligence/context` returns those source rows for drill-down.
+
+```bash
+GET /search?q=person&type=all&page=1&limit=25   # scoped global search (monitoring.read)
+```
+
+`GET /search` is a scoped global search across first-class read surfaces.
+Query `type` is one of `all | detections | alerts | incidents | cameras |
+audit | users` (default `all`); `q` must be 2–100 characters; `limit` ≤ 50.
+The endpoint is gated on the highest-tier read permission (`monitoring.read`)
+and the service trims each section to the caller's own grants — a user
+without `users.read` never sees user rows. Returns
+`{ query, sections, totalMatches, searchedTypes }`.
 
 ## Realtime Events
 
