@@ -172,7 +172,7 @@ export default function IncidentsPage() {
                   onChange={(e) => setAutoRefresh(e.target.checked)}
                   className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                 />
-                <Activity className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`} />
+                <Activity className={`w-4 h-4 ${autoRefresh ? "text-brand-600" : "text-gray-400"}`} aria-hidden="true" />
                 Auto-refresh
               </label>
               <button
@@ -198,7 +198,7 @@ export default function IncidentsPage() {
 
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
               <input
                 type="text"
                 placeholder="Search incidents..."
@@ -208,6 +208,7 @@ export default function IncidentsPage() {
                   setPage(1);
                 }}
                 className="input pl-10"
+                aria-label="Search incidents"
               />
             </div>
 
@@ -218,6 +219,7 @@ export default function IncidentsPage() {
                   setUnassigned(false);
                   setPage(1);
                 }}
+                aria-pressed={mine}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   mine
                     ? "bg-brand-600 text-white"
@@ -225,7 +227,7 @@ export default function IncidentsPage() {
                 }`}
                 title="Show only incidents assigned to you"
               >
-                <UserCheck className="w-3.5 h-3.5" />
+                <UserCheck className="w-3.5 h-3.5" aria-hidden="true" />
                 Assigned to me
               </button>
               <button
@@ -234,6 +236,7 @@ export default function IncidentsPage() {
                   setMine(false);
                   setPage(1);
                 }}
+                aria-pressed={unassigned}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   unassigned
                     ? "bg-brand-600 text-white"
@@ -241,7 +244,7 @@ export default function IncidentsPage() {
                 }`}
                 title="Show only unassigned incidents for triage"
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3.5 h-3.5" aria-hidden="true" />
                 Unassigned
               </button>
             </div>
@@ -254,6 +257,7 @@ export default function IncidentsPage() {
                     setStatus(f.value);
                     setPage(1);
                   }}
+                  aria-pressed={status === f.value}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     status === f.value
                       ? "bg-brand-600 text-white"
@@ -273,6 +277,7 @@ export default function IncidentsPage() {
                     setPriority(f.value);
                     setPage(1);
                   }}
+                  aria-pressed={priority === f.value}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     priority === f.value
                       ? "bg-brand-600 text-white"
@@ -291,7 +296,7 @@ export default function IncidentsPage() {
                 onClick={clearFilters}
                 className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3 h-3" aria-hidden="true" />
                 Clear all filters
               </button>
             </div>
@@ -299,7 +304,7 @@ export default function IncidentsPage() {
 
           {isError && (
             <div className="card flex flex-col items-center gap-3 border-red-200 bg-red-50 py-10 text-center">
-              <ShieldAlert className="w-8 h-8 text-red-500" />
+              <ShieldAlert className="w-8 h-8 text-red-500" aria-hidden="true" />
               <p className="font-semibold text-red-700">Failed to load incidents</p>
               <button onClick={() => refetch()} className="btn-secondary">
                 Try again
@@ -308,12 +313,13 @@ export default function IncidentsPage() {
           )}
 
           {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+            <div className="flex justify-center py-12" role="status">
+              <span className="sr-only">Loading incidents</span>
+              <Loader2 className="w-8 h-8 animate-spin text-brand-600" aria-hidden="true" />
             </div>
           ) : incidents.length === 0 ? (
             <div className="card text-center py-12">
-              <Flag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <Flag className="w-12 h-12 text-gray-300 mx-auto mb-3" aria-hidden="true" />
               <p className="text-gray-500 font-medium">No incidents found</p>
               <p className="text-gray-400 text-sm mt-1">
                 {hasActiveFilters
@@ -390,19 +396,22 @@ export default function IncidentsPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
+                  aria-label="Previous page"
                   className="btn-secondary p-2"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                 </button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
                   .map((p, idx, arr) => (
                     <span key={p} className="flex items-center">
                       {idx > 0 && arr[idx - 1] !== p - 1 && (
-                        <span className="px-1 text-gray-400">...</span>
+                        <span className="px-1 text-gray-400" aria-hidden="true">...</span>
                       )}
                       <button
                         onClick={() => setPage(p)}
+                        aria-current={p === page ? "page" : undefined}
+                        aria-label={`Page ${p}`}
                         className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
                           p === page
                             ? "bg-brand-600 text-white"
@@ -416,9 +425,10 @@ export default function IncidentsPage() {
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
+                  aria-label="Next page"
                   className="btn-secondary p-2"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>

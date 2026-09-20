@@ -57,20 +57,21 @@ export default function GenerateReportDialog({ onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="generate-report-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 drawer-enter">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Generate Report</h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
+          <h2 id="generate-report-title" className="text-lg font-semibold text-gray-900">Generate Report</h2>
+          <button onClick={onClose} aria-label="Close dialog" className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Report Title</label>
+            <label htmlFor="report-title" className="block text-sm font-medium text-gray-700 mb-1">Report Title</label>
             <input
+              id="report-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -80,30 +81,37 @@ export default function GenerateReportDialog({ onClose }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {reportTypes.map((rt) => (
-                <button
-                  key={rt.value}
-                  type="button"
-                  onClick={() => handleTypeSelect(rt.value)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    type === rt.value
-                      ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="text-sm font-medium text-gray-900">{rt.label}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{rt.description}</div>
-                </button>
-              ))}
-            </div>
+            <fieldset>
+              <legend id="report-type-legend" className="block text-sm font-medium text-gray-700 mb-2">
+                Report Type
+              </legend>
+              <div role="radiogroup" aria-labelledby="report-type-legend" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {reportTypes.map((rt) => (
+                  <button
+                    key={rt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={type === rt.value}
+                    onClick={() => handleTypeSelect(rt.value)}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      type === rt.value
+                        ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="text-sm font-medium text-gray-900">{rt.label}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{rt.description}</div>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+              <label htmlFor="report-date-from" className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
               <input
+                id="report-date-from"
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -112,8 +120,9 @@ export default function GenerateReportDialog({ onClose }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+              <label htmlFor="report-date-to" className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
               <input
+                id="report-date-to"
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}

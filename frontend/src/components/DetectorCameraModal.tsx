@@ -108,11 +108,16 @@ export default function DetectorCameraModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="detector-camera-title"
+        className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col"
+      >
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-gray-900 truncate">Assign Cameras</h2>
+            <h2 id="detector-camera-title" className="text-lg font-semibold text-gray-900 truncate">Assign Cameras</h2>
             <p className="text-xs text-gray-500 truncate">
               Select feeds monitored by {detector.name} — toggling Active pauses
               detection on that feed without removing it
@@ -120,21 +125,23 @@ export default function DetectorCameraModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 
         <div className="p-4 border-b border-gray-100">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
             <input
               type="text"
               placeholder="Search cameras..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="input pl-10"
+              aria-label="Search cameras to assign"
             />
           </div>
           <div className="flex items-center justify-between mt-2">
@@ -166,12 +173,13 @@ export default function DetectorCameraModal({
 
         <div className="flex-1 overflow-y-auto p-2">
           {isLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+            <div className="flex items-center justify-center h-40" role="status">
+              <span className="sr-only">Loading cameras</span>
+              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" aria-hidden="true" />
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12">
-              <VideoOff className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <VideoOff className="w-10 h-10 text-gray-300 mx-auto mb-3" aria-hidden="true" />
               <p className="text-sm text-gray-500">No cameras found</p>
             </div>
           ) : (
@@ -193,7 +201,7 @@ export default function DetectorCameraModal({
                       className="w-4 h-4 rounded accent-brand-600"
                       aria-label={`Assign ${camera.name}`}
                     />
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0" aria-hidden="true">
                       <CameraIcon className="w-4 h-4 text-gray-500" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -240,9 +248,9 @@ export default function DetectorCameraModal({
             className="btn-primary inline-flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-4 h-4" aria-hidden="true" />
             )}
             Save Assignment
           </button>

@@ -35,37 +35,44 @@ function CameraFormFields({
   return (
     <>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+        <label htmlFor="camera-name" className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
         <input
+          id="camera-name"
           type="text"
           value={form.name}
           onChange={(e) => onChange({ name: e.target.value })}
           className={`input ${errors.name ? "border-red-400 focus:ring-red-500" : ""}`}
           placeholder="Main Entrance"
+          aria-invalid={Boolean(errors.name)}
+          aria-describedby={errors.name ? "camera-name-error" : undefined}
         />
-        {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+        {errors.name && <p id="camera-name-error" className="text-xs text-red-500 mt-1">{errors.name}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">URL *</label>
+        <label htmlFor="camera-url" className="block text-sm font-medium text-gray-700 mb-1">URL *</label>
         <input
+          id="camera-url"
           type="text"
           value={form.url}
           onChange={(e) => onChange({ url: e.target.value })}
           className={`input ${errors.url ? "border-red-400 focus:ring-red-500" : ""}`}
           placeholder={typeInfo.placeholder}
+          aria-invalid={Boolean(errors.url)}
+          aria-describedby="camera-url-hint"
         />
         {errors.url ? (
-          <p className="text-xs text-red-500 mt-1">{errors.url}</p>
+          <p id="camera-url-error" className="text-xs text-red-500 mt-1">{errors.url}</p>
         ) : (
-          <p className="text-xs text-gray-400 mt-1">{typeInfo.hint}</p>
+          <p id="camera-url-hint" className="text-xs text-gray-400 mt-1">{typeInfo.hint}</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+          <label htmlFor="camera-type" className="block text-sm font-medium text-gray-700 mb-1">Type</label>
           <select
+            id="camera-type"
             value={form.cameraType}
             onChange={(e) => {
               const ct = e.target.value as CameraType;
@@ -81,8 +88,9 @@ function CameraFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+          <label htmlFor="camera-location" className="block text-sm font-medium text-gray-700 mb-1">Location</label>
           <input
+            id="camera-location"
             type="text"
             value={form.location || ""}
             onChange={(e) => onChange({ location: e.target.value })}
@@ -94,20 +102,24 @@ function CameraFormFields({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
+          <label htmlFor="camera-resolution" className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
           <input
+            id="camera-resolution"
             type="text"
             value={form.resolution || ""}
             onChange={(e) => onChange({ resolution: e.target.value })}
             className={`input ${errors.resolution ? "border-red-400 focus:ring-red-500" : ""}`}
             placeholder="1920x1080"
+            aria-invalid={Boolean(errors.resolution)}
+            aria-describedby={errors.resolution ? "camera-resolution-error" : undefined}
           />
-          {errors.resolution && <p className="text-xs text-red-500 mt-1">{errors.resolution}</p>}
+          {errors.resolution && <p id="camera-resolution-error" className="text-xs text-red-500 mt-1">{errors.resolution}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">FPS</label>
+          <label htmlFor="camera-fps" className="block text-sm font-medium text-gray-700 mb-1">FPS</label>
           <input
+            id="camera-fps"
             type="number"
             value={form.fps ?? ""}
             onChange={(e) => onChange({ fps: e.target.value ? parseInt(e.target.value) : null })}
@@ -115,14 +127,17 @@ function CameraFormFields({
             placeholder="30"
             min="1"
             max="120"
+            aria-invalid={Boolean(errors.fps)}
+            aria-describedby={errors.fps ? "camera-fps-error" : undefined}
           />
-          {errors.fps && <p className="text-xs text-red-500 mt-1">{errors.fps}</p>}
+          {errors.fps && <p id="camera-fps-error" className="text-xs text-red-500 mt-1">{errors.fps}</p>}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Source URL (override)</label>
+        <label htmlFor="camera-source-url" className="block text-sm font-medium text-gray-700 mb-1">Source URL (override)</label>
         <input
+          id="camera-source-url"
           type="text"
           value={form.sourceURL || ""}
           onChange={(e) => onChange({ sourceURL: e.target.value || null })}
@@ -134,27 +149,35 @@ function CameraFormFields({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <label htmlFor="camera-username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
           <input
+            id="camera-username"
             type="text"
             value={form.username || ""}
             onChange={(e) => onChange({ username: e.target.value })}
             className={`input ${errors.username ? "border-red-400 focus:ring-red-500" : ""}`}
             placeholder={isEdit ? "Leave blank to keep current" : "admin"}
+            autoComplete="off"
+            aria-invalid={Boolean(errors.username)}
+            aria-describedby={errors.username ? "camera-username-error" : undefined}
           />
-          {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
+          {errors.username && <p id="camera-username-error" className="text-xs text-red-500 mt-1">{errors.username}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <label htmlFor="camera-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <input
+            id="camera-password"
             type="password"
             value={form.password || ""}
             onChange={(e) => onChange({ password: e.target.value })}
             className={`input ${errors.password ? "border-red-400 focus:ring-red-500" : ""}`}
             placeholder={isEdit ? "•••••••• (unchanged)" : "••••••••"}
+            autoComplete="new-password"
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? "camera-password-error" : undefined}
           />
-          {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+          {errors.password && <p id="camera-password-error" className="text-xs text-red-500 mt-1">{errors.password}</p>}
         </div>
       </div>
 
@@ -234,20 +257,20 @@ export function AddCameraDialog({ open, onClose }: AddCameraDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="add-camera-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto drawer-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Add Camera</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
+          <h3 id="add-camera-title" className="text-lg font-semibold text-gray-900">Add Camera</h3>
+          <button onClick={onClose} aria-label="Close dialog" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {serverError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {serverError}
             </div>
           )}
@@ -328,20 +351,20 @@ export function EditCameraDialog({ open, onClose, camera }: EditCameraDialogProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="edit-camera-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto drawer-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Edit Camera</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
+          <h3 id="edit-camera-title" className="text-lg font-semibold text-gray-900">Edit Camera</h3>
+          <button onClick={onClose} aria-label="Close dialog" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {serverError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {serverError}
             </div>
           )}
@@ -395,23 +418,23 @@ export function DeleteCameraDialog({ open, onClose, camera }: DeleteCameraDialog
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="delete-camera-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <AlertTriangle className="w-5 h-5 text-red-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Delete Camera</h3>
+              <h3 id="delete-camera-title" className="text-lg font-semibold text-gray-900">Delete Camera</h3>
               <p className="text-sm text-gray-500">
                 Are you sure you want to delete <strong>{camera.name}</strong>? This action cannot be undone.
               </p>

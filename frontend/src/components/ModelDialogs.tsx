@@ -124,70 +124,88 @@ function ModelFormDialog({ open, onClose, model }: ModelFormDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="model-form-title"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto drawer-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 id="model-form-title" className="text-lg font-semibold text-gray-900">
             {isEdit ? "Edit Model" : "Add Model"}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {serverError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {serverError}
             </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <label htmlFor="model-name" className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
               <input
+                id="model-name"
                 type="text"
                 value={form.name}
                 onChange={(e) => update({ name: e.target.value })}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? "model-name-error" : undefined}
                 className={`input ${errors.name ? "border-red-400 focus:ring-red-500" : ""}`}
                 placeholder="Person Detection"
               />
-              {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+              {errors.name && <p id="model-name-error" className="text-xs text-red-500 mt-1">{errors.name}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Version *</label>
+              <label htmlFor="model-version" className="block text-sm font-medium text-gray-700 mb-1">Version *</label>
               <input
+                id="model-version"
                 type="text"
                 value={form.version}
                 onChange={(e) => update({ version: e.target.value })}
+                aria-invalid={Boolean(errors.version)}
+                aria-describedby={errors.version ? "model-version-error" : undefined}
                 className={`input ${errors.version ? "border-red-400 focus:ring-red-500" : ""}`}
                 placeholder="1.0.0"
               />
-              {errors.version && <p className="text-xs text-red-500 mt-1">{errors.version}</p>}
+              {errors.version && <p id="model-version-error" className="text-xs text-red-500 mt-1">{errors.version}</p>}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="model-detector-key" className="block text-sm font-medium text-gray-700 mb-1">
               Detector Key {isEdit ? "" : "*"}
             </label>
             <input
+              id="model-detector-key"
               type="text"
               value={form.detectorKey}
               onChange={(e) => update({ detectorKey: e.target.value })}
               disabled={isEdit}
+              aria-invalid={Boolean(errors.detectorKey)}
+              aria-describedby={errors.detectorKey ? "model-detector-key-error" : "model-detector-key-hint"}
               className={`input ${errors.detectorKey ? "border-red-400 focus:ring-red-500" : ""} ${
                 isEdit ? "bg-gray-50 text-gray-500" : ""
               }`}
               placeholder="person"
             />
             {errors.detectorKey ? (
-              <p className="text-xs text-red-500 mt-1">{errors.detectorKey}</p>
+              <p id="model-detector-key-error" className="text-xs text-red-500 mt-1">{errors.detectorKey}</p>
             ) : (
-              <p className="text-xs text-gray-400 mt-1">
+              <p id="model-detector-key-hint" className="text-xs text-gray-400 mt-1">
                 {isEdit
                   ? "Detector key cannot be changed after creation"
                   : "Unique key used by the detection engine"}
@@ -196,8 +214,9 @@ function ModelFormDialog({ open, onClose, model }: ModelFormDialogProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label htmlFor="model-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
+              id="model-description"
               value={form.description}
               onChange={(e) => update({ description: e.target.value })}
               rows={2}
@@ -207,22 +226,26 @@ function ModelFormDialog({ open, onClose, model }: ModelFormDialogProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Model Path *</label>
+            <label htmlFor="model-path" className="block text-sm font-medium text-gray-700 mb-1">Model Path *</label>
             <input
+              id="model-path"
               type="text"
               value={form.modelPath}
               onChange={(e) => update({ modelPath: e.target.value })}
+              aria-invalid={Boolean(errors.modelPath)}
+              aria-describedby={errors.modelPath ? "model-path-error" : undefined}
               className={`input font-mono text-sm ${errors.modelPath ? "border-red-400 focus:ring-red-500" : ""}`}
               placeholder="/models/person/yolo11n.pt"
             />
-            {errors.modelPath && <p className="text-xs text-red-500 mt-1">{errors.modelPath}</p>}
+            {errors.modelPath && <p id="model-path-error" className="text-xs text-red-500 mt-1">{errors.modelPath}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="model-threshold" className="block text-sm font-medium text-gray-700 mb-1">
               Confidence Threshold: <span className="font-semibold text-gray-900">{form.confidenceThreshold}%</span>
             </label>
             <input
+              id="model-threshold"
               type="range"
               min={0}
               max={100}
@@ -256,8 +279,8 @@ function ModelFormDialog({ open, onClose, model }: ModelFormDialogProps) {
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={mutation.isPending} className="btn-primary flex items-center gap-2">
-              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            <button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending} className="btn-primary flex items-center gap-2">
+              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
               {isEdit ? "Save Changes" : "Add Model"}
             </button>
           </div>
@@ -291,23 +314,28 @@ export function DeleteModelDialog({ open, onClose, model }: DeleteModelDialogPro
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-model-title"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0" aria-hidden="true">
               <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Delete Model</h3>
+              <h3 id="delete-model-title" className="text-lg font-semibold text-gray-900">Delete Model</h3>
               <p className="text-sm text-gray-500">
                 Are you sure you want to delete{" "}
                 <strong>{model.name}</strong> v{model.version}? This action cannot be
@@ -323,7 +351,7 @@ export function DeleteModelDialog({ open, onClose, model }: DeleteModelDialogPro
               disabled={mutation.isPending}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
               Delete
             </button>
           </div>

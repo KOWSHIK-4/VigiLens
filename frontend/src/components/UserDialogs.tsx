@@ -113,29 +113,30 @@ function UserFormDialog({ open, onClose, user }: UserFormDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="user-form-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto drawer-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 id="user-form-title" className="text-lg font-semibold text-gray-900">
             {isEdit ? "Edit User" : "Add User"}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} aria-label="Close dialog" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {serverError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {serverError}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <label htmlFor="user-name" className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
             <input
+              id="user-name"
               type="text"
               value={name}
               onChange={(e) => {
@@ -145,13 +146,16 @@ function UserFormDialog({ open, onClose, user }: UserFormDialogProps) {
               }}
               className={`input ${errors.name ? "border-red-400 focus:ring-red-500" : ""}`}
               placeholder="Jane Cooper"
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={errors.name ? "user-name-error" : undefined}
             />
-            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+            {errors.name && <p id="user-name-error" className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <label htmlFor="user-email" className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
             <input
+              id="user-email"
               type="email"
               value={email}
               onChange={(e) => {
@@ -159,29 +163,36 @@ function UserFormDialog({ open, onClose, user }: UserFormDialogProps) {
                 setErrors({});
                 setServerError("");
               }}
+              autoComplete="username"
               className={`input ${errors.email ? "border-red-400 focus:ring-red-500" : ""}`}
               placeholder="jane@vigilens.io"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? "user-email-error" : undefined}
             />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+            {errors.email && <p id="user-email-error" className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
           {!isEdit && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="user-password" className="block text-sm font-medium text-gray-700 mb-1">
                 Temporary Password *
               </label>
               <input
+                id="user-password"
                 type="password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setErrors({});
                 }}
+                autoComplete="new-password"
                 className={`input ${errors.password ? "border-red-400 focus:ring-red-500" : ""}`}
                 placeholder="Minimum 8 characters"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? "user-password-error" : undefined}
               />
               {errors.password && (
-                <p className="text-xs text-red-500 mt-1">{errors.password}</p>
+                <p id="user-password-error" className="text-xs text-red-500 mt-1">{errors.password}</p>
               )}
             </div>
           )}
@@ -189,8 +200,9 @@ function UserFormDialog({ open, onClose, user }: UserFormDialogProps) {
           {!isEdit && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                <label htmlFor="user-role" className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
                 <select
+                  id="user-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   className="input"
@@ -282,23 +294,23 @@ export function DeleteUserDialog({ open, onClose, user }: DeleteUserDialogProps)
   if (!open || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="delete-user-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <AlertTriangle className="w-5 h-5 text-red-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Delete User</h3>
+              <h3 id="delete-user-title" className="text-lg font-semibold text-gray-900">Delete User</h3>
               <div className="flex items-center gap-2 mt-2">
                 <UserAvatar name={user.name} avatar={user.avatar} size="sm" />
                 <div>
@@ -370,23 +382,23 @@ export function AssignRoleDialog({ open, onClose, user }: AssignRoleDialogProps)
   const options = roleOptions.length > 0 ? roleOptions : [{ name: user.role } as Role];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="assign-role-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-center gap-3 mb-5">
             <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center flex-shrink-0">
-              <UserRound className="w-5 h-5 text-brand-600" />
+              <UserRound className="w-5 h-5 text-brand-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Assign Role</h3>
+              <h3 id="assign-role-title" className="text-lg font-semibold text-gray-900">Assign Role</h3>
               <p className="text-sm text-gray-500">
                 Change the access level for <strong>{user.name}</strong>
               </p>
@@ -465,13 +477,13 @@ export function ToggleStatusDialog({ open, onClose, user }: ToggleStatusDialogPr
   if (!open || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="toggle-status-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
@@ -483,13 +495,13 @@ export function ToggleStatusDialog({ open, onClose, user }: ToggleStatusDialogPr
               }`}
             >
               {disabling ? (
-                <UserRoundX className="w-5 h-5 text-amber-600" />
+                <UserRoundX className="w-5 h-5 text-amber-600" aria-hidden="true" />
               ) : (
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <CheckCircle2 className="w-5 h-5 text-green-600" aria-hidden="true" />
               )}
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 id="toggle-status-title" className="text-lg font-semibold text-gray-900">
                 {disabling ? "Disable User" : "Enable User"}
               </h3>
               <div className="flex items-center gap-2 mt-2">
@@ -587,23 +599,23 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
   if (!open || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="reset-password-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center flex-shrink-0">
-              <KeyRound className="w-5 h-5 text-brand-600" />
+              <KeyRound className="w-5 h-5 text-brand-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Reset Password</h3>
+              <h3 id="reset-password-title" className="text-lg font-semibold text-gray-900">Reset Password</h3>
               <div className="flex items-center gap-2 mt-2">
                 <UserAvatar name={user.name} avatar={user.avatar} size="sm" />
                 <div>
@@ -616,10 +628,11 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reset-password-input" className="block text-sm font-medium text-gray-700 mb-1">
                 New Password
               </label>
               <input
+                id="reset-password-input"
                 type="password"
                 value={password}
                 onChange={(e) => {
@@ -627,12 +640,15 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
                   setErrors({});
                   setError("");
                 }}
+                autoComplete="new-password"
                 className={`input ${errors.password ? "border-red-400 focus:ring-red-500" : ""}`}
                 placeholder="Minimum 8 characters"
                 autoFocus
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? "reset-password-error" : undefined}
               />
               {errors.password && (
-                <p className="text-xs text-red-500 mt-1">{errors.password}</p>
+                <p id="reset-password-error" className="text-xs text-red-500 mt-1">{errors.password}</p>
               )}
             </div>
 
@@ -697,23 +713,23 @@ export function LockUserDialog({ open, onClose, user }: LockUserDialogProps) {
   if (!open || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="lock-user-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <Lock className="w-5 h-5 text-red-600" />
+              <Lock className="w-5 h-5 text-red-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Lock Account</h3>
+              <h3 id="lock-user-title" className="text-lg font-semibold text-gray-900">Lock Account</h3>
               <div className="flex items-center gap-2 mt-2">
                 <UserAvatar name={user.name} avatar={user.avatar} size="sm" />
                 <div>
@@ -774,23 +790,23 @@ export function UnlockUserDialog({ open, onClose, user }: UnlockUserDialogProps)
   if (!open || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="unlock-user-title" className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {error}
             </div>
           )}
 
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <Unlock className="w-5 h-5 text-green-600" />
+              <Unlock className="w-5 h-5 text-green-600" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Unlock Account</h3>
+              <h3 id="unlock-user-title" className="text-lg font-semibold text-gray-900">Unlock Account</h3>
               <div className="flex items-center gap-2 mt-2">
                 <UserAvatar name={user.name} avatar={user.avatar} size="sm" />
                 <div>

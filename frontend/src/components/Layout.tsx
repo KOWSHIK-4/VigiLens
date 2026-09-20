@@ -124,6 +124,12 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-gray-50">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-lg focus:text-sm"
+      >
+        Skip to main content
+      </a>
       <div
         className={`lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-gray-900 text-white flex items-center justify-between px-4`}
       >
@@ -170,7 +176,7 @@ export default function Layout() {
           <p className="text-sm text-gray-400 mt-1">Security Monitoring</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Primary">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
@@ -178,13 +184,14 @@ export default function Layout() {
               <Link
                 key={item.path}
                 to={item.path}
+                aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active
                     ? "bg-brand-600 text-white"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4" aria-hidden="true" />
                 {item.label}
               </Link>
             );
@@ -201,13 +208,14 @@ export default function Layout() {
                   <Link
                     key={item.path}
                     to={item.path}
+                    aria-current={active ? "page" : undefined}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       active
                         ? "bg-brand-600 text-white"
                         : "text-gray-300 hover:bg-gray-800 hover:text-white"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4" aria-hidden="true" />
                     {item.label}
                   </Link>
                 );
@@ -221,6 +229,7 @@ export default function Layout() {
               </div>
               <Link
                 to="/alerts"
+                aria-current={location.pathname === "/alerts" ? "page" : undefined}
                 className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === "/alerts"
                     ? "bg-brand-600 text-white"
@@ -228,7 +237,7 @@ export default function Layout() {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <Bell className="w-4 h-4" />
+                  <Bell className="w-4 h-4" aria-hidden="true" />
                   Alerts
                 </span>
                 {unreadCount > 0 && (
@@ -239,13 +248,14 @@ export default function Layout() {
               </Link>
               <Link
                 to="/incidents"
+                aria-current={location.pathname === "/incidents" ? "page" : undefined}
                 className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === "/incidents"
                     ? "bg-brand-600 text-white"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
               >
-                <LifeBuoy className="w-4 h-4 mr-3" />
+                <LifeBuoy className="w-4 h-4 mr-3" aria-hidden="true" />
                 Incidents
               </Link>
             </>
@@ -262,7 +272,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
+      <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
         <div className="p-4 md:p-8 pt-16 lg:pt-8">
           <Outlet />
         </div>

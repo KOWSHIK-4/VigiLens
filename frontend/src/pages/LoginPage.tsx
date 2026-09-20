@@ -39,56 +39,63 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           {error && (
-            <div className="p-3 text-sm text-red-800 bg-red-100 rounded-lg">
+            <div role="alert" className="p-3 text-sm text-red-800 bg-red-100 rounded-lg">
               {error}
             </div>
           )}
 
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">
                 Name
               </label>
               <input
+                id="register-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="input"
                 required
+                autoComplete="name"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="input"
               required
+              autoComplete="username"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <input
+              id="login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input"
               required
               minLength={8}
+              autoComplete={isRegister ? "new-password" : "current-password"}
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             className="btn-primary w-full"
           >
             {loading ? "Loading..." : isRegister ? "Create Account" : "Sign In"}

@@ -49,55 +49,61 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           {error && (
-            <div className="p-3 text-sm text-red-800 bg-red-100 rounded-lg">
+            <div role="alert" className="p-3 text-sm text-red-800 bg-red-100 rounded-lg">
               {error}
             </div>
           )}
           {success && (
-            <div className="p-3 text-sm text-green-800 bg-green-100 rounded-lg">
+            <div role="status" className="p-3 text-sm text-green-800 bg-green-100 rounded-lg">
               {success}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="current-password" className="block text-sm font-medium text-gray-700 mb-1">
               Current Password
             </label>
             <input
+              id="current-password"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               className="input"
               required
               minLength={8}
+              autoComplete="current-password"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-1">
               New Password
             </label>
             <input
+              id="new-password"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="input"
               required
               minLength={8}
+              autoComplete="new-password"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
               Confirm New Password
             </label>
             <input
+              id="confirm-password"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="input"
               required
               minLength={8}
+              autoComplete="new-password"
             />
           </div>
 

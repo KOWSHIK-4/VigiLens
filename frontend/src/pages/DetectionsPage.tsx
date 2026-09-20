@@ -207,13 +207,14 @@ export default function DetectionsPage() {
       <div className="card p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
             <input
               type="text"
               placeholder="Search detector type..."
               value={filters.search || ""}
               onChange={(e) => updateFilter("search", e.target.value)}
               className="input pl-9 text-sm"
+              aria-label="Search detections by detector type"
             />
           </div>
 
@@ -224,6 +225,7 @@ export default function DetectionsPage() {
               onChange={(e) => updateFilter("dateFrom", e.target.value)}
               className="input text-sm"
               title="From date"
+              aria-label="Detections from date"
             />
           </div>
 
@@ -234,6 +236,7 @@ export default function DetectionsPage() {
               onChange={(e) => updateFilter("dateTo", e.target.value)}
               className="input text-sm"
               title="To date"
+              aria-label="Detections to date"
             />
           </div>
 
@@ -242,6 +245,7 @@ export default function DetectionsPage() {
               value={filters.cameraId || ""}
               onChange={(e) => updateFilter("cameraId", e.target.value)}
               className="input text-sm"
+              aria-label="Filter detections by camera"
             >
               <option value="">All Cameras</option>
               {cameras?.map((camera) => (
@@ -262,6 +266,7 @@ export default function DetectionsPage() {
               max="1"
               step="0.01"
               className="input text-sm w-20"
+              aria-label="Minimum confidence"
             />
             <input
               type="number"
@@ -272,6 +277,7 @@ export default function DetectionsPage() {
               max="1"
               step="0.01"
               className="input text-sm w-20"
+              aria-label="Maximum confidence"
             />
           </div>
 
@@ -279,6 +285,7 @@ export default function DetectionsPage() {
             value={filters.status || ""}
             onChange={(e) => updateFilter("status", e.target.value)}
             className="input text-sm"
+            aria-label="Filter detections by status"
           >
             <option value="">All Status</option>
             <option value="critical">Critical</option>
@@ -312,7 +319,7 @@ export default function DetectionsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                    <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
                       Image
                     </th>
                     <Th
@@ -355,7 +362,7 @@ export default function DetectionsPage() {
                       sortOrder={sortOrder}
                       onSort={handleSort}
                     />
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                    <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                       Actions
                     </th>
                   </tr>
@@ -380,13 +387,14 @@ export default function DetectionsPage() {
                       >
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => detection.imageUrl && setPreviewImage(detection.imageUrl)}
-                            disabled={!detection.imageUrl}
-                            className="w-12 h-9 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 hover:ring-2 hover:ring-brand-500 transition-all disabled:cursor-not-allowed disabled:hover:ring-0"
-                            title={detection.imageUrl ? "Preview image" : "No snapshot captured"}
-                          >
-                            <DetectionSnapshot imageUrl={detection.imageUrl} alt={detection.label} />
-                          </button>
+                              onClick={() => detection.imageUrl && setPreviewImage(detection.imageUrl)}
+                              disabled={!detection.imageUrl}
+                              aria-label={`Preview snapshot for ${detection.label}`}
+                              className="w-12 h-9 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 hover:ring-2 hover:ring-brand-500 transition-all disabled:cursor-not-allowed disabled:hover:ring-0"
+                              title={detection.imageUrl ? "Preview image" : "No snapshot captured"}
+                            >
+                              <DetectionSnapshot imageUrl={detection.imageUrl} alt={detection.label} />
+                            </button>
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm font-medium text-gray-900">
@@ -433,33 +441,37 @@ export default function DetectionsPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setSelectedDetection(detection)}
+                              aria-label={`View details for ${detection.label}`}
                               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                               title="View details"
                             >
-                              <Eye className="w-4 h-4 text-gray-500" />
+                              <Eye className="w-4 h-4 text-gray-500" aria-hidden="true" />
                             </button>
                             <button
                               onClick={() => detection.imageUrl && setPreviewImage(detection.imageUrl)}
                               disabled={!detection.imageUrl}
+                              aria-label={`Preview snapshot for ${detection.label}`}
                               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                               title={detection.imageUrl ? "Preview image" : "No snapshot captured"}
                             >
-                              <Maximize2 className="w-4 h-4 text-gray-500" />
+                              <Maximize2 className="w-4 h-4 text-gray-500" aria-hidden="true" />
                             </button>
                             <button
                               onClick={() => handleDownloadSnapshot(detection)}
+                              aria-label={`Download snapshot for ${detection.label}`}
                               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                               title="Download snapshot"
                             >
-                              <Download className="w-4 h-4 text-gray-500" />
+                              <Download className="w-4 h-4 text-gray-500" aria-hidden="true" />
                             </button>
                             {canManage && (
                               <button
                                 onClick={() => setDeleteTarget(detection)}
+                                aria-label={`Delete detection ${detection.label}`}
                                 className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Delete detection"
                               >
-                                <Trash2 className="w-4 h-4 text-red-500" />
+                                <Trash2 className="w-4 h-4 text-red-500" aria-hidden="true" />
                               </button>
                             )}
                           </div>
@@ -483,9 +495,10 @@ export default function DetectionsPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
+                  aria-label="Previous page"
                   className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                 </button>
 
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -503,6 +516,8 @@ export default function DetectionsPage() {
                     <button
                       key={pageNum}
                       onClick={() => setPage(pageNum)}
+                      aria-current={page === pageNum ? "page" : undefined}
+                      aria-label={`Page ${pageNum}`}
                       className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                         page === pageNum
                           ? "bg-brand-600 text-white"
@@ -517,9 +532,10 @@ export default function DetectionsPage() {
                 <button
                   onClick={() => setPage((p) => p + 1)}
                   disabled={page >= totalPages}
+                  aria-label="Next page"
                   className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -573,15 +589,20 @@ function Th({
   const isActive = sortBy === column;
   return (
     <th
+      aria-sort={sortable ? (isActive ? (sortOrder === "asc" ? "ascending" : "descending") : "none") : undefined}
       className={`text-left px-4 py-3 text-xs font-medium uppercase tracking-wider ${
-        sortable ? "cursor-pointer select-none hover:bg-gray-100" : ""
+        sortable ? "select-none" : ""
       } ${isActive ? "text-brand-600" : "text-gray-500"}`}
-      onClick={() => sortable && onSort(column)}
     >
-      <div className="flex items-center gap-1">
-        {label}
-        {sortable && (
-          <div className="flex flex-col">
+      {sortable ? (
+        <button
+          type="button"
+          onClick={() => onSort(column)}
+          aria-label={`Sort by ${label}${isActive ? ` (currently ${sortOrder === "asc" ? "ascending" : "descending"})` : ""}`}
+          className={`flex items-center gap-1 w-full ${isActive ? "text-brand-600" : "text-gray-500 cursor-pointer hover:text-gray-700"}`}
+        >
+          {label}
+          <div className="flex flex-col" aria-hidden="true">
             <ChevronUp
               className={`w-2.5 h-2.5 -mb-1 ${
                 isActive && sortOrder === "asc" ? "text-brand-600" : "text-gray-300"
@@ -593,8 +614,12 @@ function Th({
               }`}
             />
           </div>
-        )}
-      </div>
+        </button>
+      ) : (
+        <div className="flex items-center gap-1">
+          {label}
+        </div>
+      )}
     </th>
   );
 }

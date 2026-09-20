@@ -43,18 +43,20 @@ export default function ToastItem({
 
   return (
     <div
+      role={toast.severity === "info" ? "status" : "alert"}
       className={`${cfg.bg} border rounded-lg shadow-lg p-4 flex items-start gap-3 w-full sm:w-auto sm:min-w-[320px] sm:max-w-md animate-slide-in`}
     >
-      <Icon className={`w-5 h-5 mt-0.5 ${cfg.iconColor} flex-shrink-0`} />
+      <Icon className={`w-5 h-5 mt-0.5 ${cfg.iconColor} flex-shrink-0`} aria-hidden="true" />
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold ${cfg.titleColor}`}>{toast.title}</p>
         <p className={`text-xs ${cfg.msgColor} mt-0.5 break-words`}>{toast.message}</p>
       </div>
       <button
         onClick={() => onDismiss(toast.id)}
+        aria-label="Dismiss notification"
         className="text-gray-400 hover:text-gray-600 flex-shrink-0"
       >
-        <X className="w-4 h-4" />
+        <X className="w-4 h-4" aria-hidden="true" />
       </button>
     </div>
   );

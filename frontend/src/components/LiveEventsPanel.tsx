@@ -27,14 +27,14 @@ export default function LiveEventsPanel() {
     <div className="card flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Activity className="w-5 h-5 text-brand-600" />
+          <Activity className="w-5 h-5 text-brand-600" aria-hidden="true" />
           Real-time security events
         </h3>
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span role="status" className="flex items-center gap-1.5 text-xs font-medium">
           {connected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
+            <Wifi className="w-4 h-4 text-green-500" aria-hidden="true" />
           ) : (
-            <WifiOff className="w-4 h-4 text-amber-500" />
+            <WifiOff className="w-4 h-4 text-amber-500" aria-hidden="true" />
           )}
           {statusLabel}
         </span>

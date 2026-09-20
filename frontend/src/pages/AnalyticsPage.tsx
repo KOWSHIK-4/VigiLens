@@ -274,8 +274,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Detection Trend ({periodLabels[period]})</h3>
-            <button onClick={() => handleExport("daily")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("daily")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Detection Trend as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {dailyData.length === 0 ? (
@@ -304,8 +304,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Detection Type Distribution</h3>
-            <button onClick={() => handleExport("detectors")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("detectors")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Detection Type Distribution as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {detectorsData.length === 0 ? (
@@ -336,8 +336,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Camera Activity</h3>
-            <button onClick={() => handleExport("cameras")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("cameras")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Camera Activity as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {camerasData.length === 0 ? (
@@ -368,8 +368,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Hourly Detection Timeline</h3>
-            <button onClick={() => handleExport("timeline")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("timeline")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Hourly Detection Timeline as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {timelineData.length === 0 ? (
@@ -397,8 +397,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Severity Distribution</h3>
-            <button onClick={() => handleExport("severity")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("severity")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Severity Distribution as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {severityData.length === 0 ? (
@@ -436,8 +436,8 @@ export default function AnalyticsPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Confidence Distribution</h3>
-            <button onClick={() => handleExport("confidence")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV">
-              <Download className="w-4 h-4" />
+            <button onClick={() => handleExport("confidence")} className="text-gray-400 hover:text-gray-600 p-1" title="Export CSV" aria-label="Export Confidence Distribution as CSV">
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {confidenceData.length === 0 ? (

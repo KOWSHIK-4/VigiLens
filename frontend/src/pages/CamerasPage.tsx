@@ -208,13 +208,14 @@ export default function CamerasPage() {
 
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search cameras..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="input pl-10"
+            aria-label="Search cameras"
           />
         </div>
 
@@ -222,6 +223,7 @@ export default function CamerasPage() {
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="input w-auto min-w-[140px]"
+          aria-label="Filter cameras by status"
         >
           <option value="">All Status</option>
           <option value="online">Online</option>
@@ -234,6 +236,7 @@ export default function CamerasPage() {
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
           className="input w-auto min-w-[160px]"
+          aria-label="Filter cameras by type"
         >
           <option value="">All Types</option>
           <option value="usb">USB Camera</option>
@@ -336,6 +339,7 @@ export default function CamerasPage() {
                     <button
                       key={p}
                       onClick={() => setPage(p)}
+                      aria-current={p === page ? "page" : undefined}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                         p === page
                           ? "bg-brand-600 text-white"
@@ -488,40 +492,44 @@ function CameraCard({
         <button
           onClick={onHealthCheck}
           disabled={isChecking}
+          aria-label={`Run health check for ${camera.name}`}
           className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
           title="Health check"
         >
-          <Activity className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} />
+          <Activity className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} aria-hidden="true" />
         </button>
 
         {canControl && (
           <button
             onClick={onCapture}
             disabled={isCapturing}
+            aria-label={`Capture snapshot from ${camera.name}`}
             className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-sky-50 hover:text-sky-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
             title="Capture snapshot"
           >
-            <CameraIcon className={`w-3.5 h-3.5 ${isCapturing ? "animate-pulse" : ""}`} />
+            <CameraIcon className={`w-3.5 h-3.5 ${isCapturing ? "animate-pulse" : ""}`} aria-hidden="true" />
           </button>
         )}
 
         {canManage && (
           <button
             onClick={onEdit}
+            aria-label={`Edit ${camera.name}`}
             className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors flex items-center justify-center"
             title="Edit camera"
           >
-            <Edit3 className="w-3.5 h-3.5" />
+            <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         )}
 
         {canManage && (
           <button
             onClick={onDelete}
+            aria-label={`Delete ${camera.name}`}
             className="text-sm py-1.5 px-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors flex items-center justify-center"
             title="Delete camera"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         )}
       </div>

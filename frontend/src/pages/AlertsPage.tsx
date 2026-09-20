@@ -292,7 +292,7 @@ export default function AlertsPage() {
 
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search alerts..."
@@ -302,6 +302,7 @@ export default function AlertsPage() {
               setPage(1);
             }}
             className="input pl-10"
+            aria-label="Search alerts"
           />
         </div>
 
@@ -313,6 +314,7 @@ export default function AlertsPage() {
                 setSeverity(f.value);
                 setPage(1);
               }}
+              aria-pressed={severity === f.value}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 severity === f.value
                   ? "bg-brand-600 text-white"
@@ -332,6 +334,7 @@ export default function AlertsPage() {
                 setIsRead(f.value);
                 setPage(1);
               }}
+              aria-pressed={isRead === f.value}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
                 isRead === f.value
                   ? "bg-brand-600 text-white"
@@ -339,9 +342,9 @@ export default function AlertsPage() {
               }`}
             >
               {f.value === "true" ? (
-                <EyeOff className="w-3.5 h-3.5" />
+                <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
               ) : f.value === "false" ? (
-                <Eye className="w-3.5 h-3.5" />
+                <Eye className="w-3.5 h-3.5" aria-hidden="true" />
               ) : null}
               {f.label}
             </button>
@@ -523,7 +526,7 @@ export default function AlertsPage() {
                       title="View alert details"
                       aria-label={`View details for ${alert.title}`}
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4" aria-hidden="true" />
                     </button>
                     {canManage && !alert.isRead && (
                       <button
@@ -531,8 +534,9 @@ export default function AlertsPage() {
                         disabled={markReadMutation.isPending}
                         className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                         title="Mark as read"
+                        aria-label={`Mark ${alert.title} as read`}
                       >
-                        <CheckCheck className="w-4 h-4" />
+                        <CheckCheck className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                     {canManage && !alert.acknowledgedAt && (
@@ -543,7 +547,7 @@ export default function AlertsPage() {
                         title="Acknowledge alert"
                         aria-label={`Acknowledge ${alert.title}`}
                       >
-                        <CheckCircle2 className="w-4 h-4" />
+                        <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                     {canManage && !alert.escalatedAt && (
@@ -558,7 +562,7 @@ export default function AlertsPage() {
                         title="Escalate alert"
                         aria-label={`Escalate ${alert.title}`}
                       >
-                        <ArrowUpCircle className="w-4 h-4" />
+                        <ArrowUpCircle className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                     {canManage && (
@@ -570,8 +574,9 @@ export default function AlertsPage() {
                         disabled={deleteMutation.isPending}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete alert"
+                        aria-label={`Delete ${alert.title}`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -591,19 +596,22 @@ export default function AlertsPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
+              aria-label="Previous page"
               className="btn-secondary p-2"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
               .map((p, idx, arr) => (
                 <span key={p} className="flex items-center">
                   {idx > 0 && arr[idx - 1] !== p - 1 && (
-                    <span className="px-1 text-gray-400">...</span>
+                    <span className="px-1 text-gray-400" aria-hidden="true">...</span>
                   )}
                   <button
                     onClick={() => setPage(p)}
+                    aria-current={p === page ? "page" : undefined}
+                    aria-label={`Page ${p}`}
                     className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
                       p === page
                         ? "bg-brand-600 text-white"
@@ -617,9 +625,10 @@ export default function AlertsPage() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
+              aria-label="Next page"
               className="btn-secondary p-2"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -657,20 +666,26 @@ export default function AlertsPage() {
       />
 
       {escalationTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="escalate-alert-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           <div
             className="absolute inset-0 bg-black bg-opacity-40"
             onClick={() => setEscalationTarget(null)}
+            aria-hidden="true"
           />
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Escalate Alert</h3>
+              <h3 id="escalate-alert-title" className="text-lg font-semibold text-gray-900">Escalate Alert</h3>
               <button
                 onClick={() => setEscalationTarget(null)}
                 className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
                 aria-label="Close escalation dialog"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-4">
@@ -695,12 +710,13 @@ export default function AlertsPage() {
                 maxLength={500}
                 placeholder="Why is this alert being escalated?"
                 className="input mt-1 w-full resize-none"
+                aria-describedby="escalation-note-count"
               />
-              <p className="text-right text-xs text-gray-400 mt-1">
+              <p id="escalation-note-count" className="text-right text-xs text-gray-400 mt-1">
                 {escalationNote.length}/500
               </p>
               {escalationError ? (
-                <p className="text-sm text-red-600 mt-2">{escalationError}</p>
+                <p role="alert" className="text-sm text-red-600 mt-2">{escalationError}</p>
               ) : null}
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -721,9 +737,9 @@ export default function AlertsPage() {
                 className="btn-primary flex items-center gap-2"
               >
                 {escalateMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <ArrowUpCircle className="w-4 h-4" />
+                  <ArrowUpCircle className="w-4 h-4" aria-hidden="true" />
                 )}
                 Escalate
               </button>

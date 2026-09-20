@@ -1,4 +1,5 @@
 import { AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 interface ConfirmDialogProps {
@@ -22,24 +23,33 @@ export default function ConfirmDialog({
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-enter" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md drawer-enter">
         <div className="p-6">
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
+            <div role="alert" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
               {error}
             </div>
           )}
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <AlertTriangle className="w-5 h-5 text-red-600" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+              <h3 id="confirm-dialog-title" className="text-lg font-semibold text-gray-900">{title}</h3>
               <div className="text-sm text-gray-500 mt-2">{message}</div>
             </div>
           </div>
@@ -56,7 +66,7 @@ export default function ConfirmDialog({
               disabled={busy}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+              {busy && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
               {confirmLabel}
             </button>
           </div>

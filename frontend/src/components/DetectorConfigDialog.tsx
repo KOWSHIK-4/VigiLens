@@ -99,26 +99,32 @@ export default function DetectorConfigDialog({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="detector-config-title"
+        className="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto"
+      >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-gray-900 truncate">Configure Detector</h2>
+            <h2 id="detector-config-title" className="text-lg font-semibold text-gray-900 truncate">Configure Detector</h2>
             <p className="text-xs text-gray-500 truncate">{detector.name}</p>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <Gauge className="w-4 h-4 text-brand-600" />
+              <label htmlFor="detector-threshold" className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                <Gauge className="w-4 h-4 text-brand-600" aria-hidden="true" />
                 Confidence Threshold
               </label>
               <span className="text-sm font-semibold text-gray-900 tabular-nums">
@@ -126,6 +132,7 @@ export default function DetectorConfigDialog({
               </span>
             </div>
             <input
+              id="detector-threshold"
               type="range"
               min={0}
               max={100}
@@ -133,22 +140,22 @@ export default function DetectorConfigDialog({
               value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
               className="w-full accent-brand-600"
-              aria-label="Confidence threshold"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 mt-1" id="detector-threshold-hint">
               Detections below this confidence are ignored.
             </p>
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-              <BellRing className="w-4 h-4 text-brand-600" />
+            <label id="detector-severity-label" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <BellRing className="w-4 h-4 text-brand-600" aria-hidden="true" />
               Alert Severity
             </label>
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as "info" | "warning" | "critical")}
               className="input"
+              aria-labelledby="detector-severity-label"
             >
               <option value="info">Info</option>
               <option value="warning">Warning</option>
@@ -157,14 +164,15 @@ export default function DetectorConfigDialog({
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-              <Clock className="w-4 h-4 text-brand-600" />
+            <label id="detector-interval-label" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <Clock className="w-4 h-4 text-brand-600" aria-hidden="true" />
               Detection Interval
             </label>
             <select
               value={intervalMs}
               onChange={(e) => setIntervalMs(Number(e.target.value))}
               className="input"
+              aria-labelledby="detector-interval-label"
             >
               {intervalOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -175,14 +183,15 @@ export default function DetectorConfigDialog({
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-              <BellRing className="w-4 h-4 text-brand-600" />
+            <label id="detector-cooldown-label" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <BellRing className="w-4 h-4 text-brand-600" aria-hidden="true" />
               Alert Cooldown
             </label>
             <select
               value={cooldownMs}
               onChange={(e) => setCooldownMs(Number(e.target.value))}
               className="input"
+              aria-labelledby="detector-cooldown-label"
             >
               {cooldownOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -196,14 +205,15 @@ export default function DetectorConfigDialog({
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-              <Cpu className="w-4 h-4 text-brand-600" />
+            <label id="detector-processor-label" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <Cpu className="w-4 h-4 text-brand-600" aria-hidden="true" />
               Processor Preference
             </label>
             <select
               value={processor}
               onChange={(e) => setProcessor(e.target.value as ProcessorPreference)}
               className="input"
+              aria-labelledby="detector-processor-label"
             >
               <option value="auto">Auto (recommended)</option>
               <option value="gpu">GPU</option>
@@ -225,9 +235,9 @@ export default function DetectorConfigDialog({
             className="btn-primary inline-flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-4 h-4" aria-hidden="true" />
             )}
             Save Changes
           </button>

@@ -143,7 +143,7 @@ export default function ReportsPage() {
 
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search reports..."
@@ -153,6 +153,7 @@ export default function ReportsPage() {
               setPage(1);
             }}
             className="input pl-10"
+            aria-label="Search reports"
           />
         </div>
 
@@ -164,6 +165,7 @@ export default function ReportsPage() {
                 setTypeFilter(f.value);
                 setPage(1);
               }}
+              aria-pressed={typeFilter === f.value}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 typeFilter === f.value
                   ? "bg-brand-600 text-white"
@@ -183,6 +185,7 @@ export default function ReportsPage() {
                 setStatusFilter(f.value);
                 setPage(1);
               }}
+              aria-pressed={statusFilter === f.value}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 statusFilter === f.value
                   ? "bg-brand-600 text-white"
@@ -230,22 +233,22 @@ export default function ReportsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Title
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date Range
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Created
                   </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -296,16 +299,18 @@ export default function ReportsPage() {
                                 disabled={downloadMutation.isPending}
                                 className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                                 title="Download PDF"
+                                aria-label={`Download ${report.title} as PDF`}
                               >
-                                <Download className="w-4 h-4" />
+                                <Download className="w-4 h-4" aria-hidden="true" />
                               </button>
                               <button
                                 onClick={() => downloadMutation.mutate({ id: report.id, format: "csv" })}
                                 disabled={downloadMutation.isPending}
                                 className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                 title="Download CSV"
+                                aria-label={`Download ${report.title} as CSV`}
                               >
-                                <Download className="w-4 h-4" />
+                                <Download className="w-4 h-4" aria-hidden="true" />
                               </button>
                             </>
                           )}
@@ -318,8 +323,9 @@ export default function ReportsPage() {
                               disabled={deleteMutation.isPending}
                               className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete report"
+                              aria-label={`Delete ${report.title}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           )}
                         </div>

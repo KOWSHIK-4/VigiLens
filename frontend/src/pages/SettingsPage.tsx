@@ -693,19 +693,25 @@ export default function SettingsPage() {
       </div>
 
       {confirmLeave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unsaved-changes-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => {
               blocker.reset?.();
               setConfirmLeave(false);
             }}
+            aria-hidden="true"
           />
           <div className="relative z-10 card w-full max-w-md space-y-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Unsaved changes</h3>
+                <h3 id="unsaved-changes-title" className="text-lg font-semibold text-gray-900">Unsaved changes</h3>
                 <p className="text-sm text-gray-500 mt-1">
                   You have unsaved settings changes. Leaving this page will discard
                   them.
@@ -717,9 +723,9 @@ export default function SettingsPage() {
                   setConfirmLeave(false);
                 }}
                 className="ml-auto p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Close"
+                aria-label="Close dialog"
               >
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-gray-500" aria-hidden="true" />
               </button>
             </div>
             <div className="flex justify-end gap-2">
