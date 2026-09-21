@@ -208,6 +208,7 @@ describe("report retention (analytics artifact archival)", () => {
         dateRange: { from: "2026-02-01", to: "2026-02-28" },
         createdAt: oldCreated,
         status: "completed",
+        organizationId: DEFAULT_ORG_ID,
       },
     });
     const freshReport = await prisma.report.create({
@@ -218,6 +219,7 @@ describe("report retention (analytics artifact archival)", () => {
         dateRange: { from: "2026-06-01", to: "2026-06-30" },
         createdAt: recentCreated,
         status: "completed",
+        organizationId: DEFAULT_ORG_ID,
       },
     });
 
