@@ -15,6 +15,7 @@ export interface User {
   mustChangePassword: boolean;
   deletedAt: string | null;
   organizationId?: string;
+  teamId?: string | null;
   permissions?: Permission[] | string[];
   createdAt: string;
   updatedAt: string;

@@ -58,6 +58,7 @@ model Organization {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   users      User[]
+  teams      Team[]
   cameras    Camera[]
   detections Detection[]
   alerts     Alert[]
@@ -66,6 +67,22 @@ model Organization {
   auditLogs  AuditLog[]
 
   @@map("organizations")
+}
+
+model Team {
+  id             String   @id @default(uuid())
+  name           String
+  description    String   @default("")
+  organizationId String   @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  members      User[]       @relation("TeamMembers")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("teams")
 }
 
 model User {
@@ -87,8 +104,10 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
   organizationId     String     @map("organization_id")
+  teamId             String?    @map("team_id")
 
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team             Team?         @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
   incidents        Incident[]
 
   @@index([role])
@@ -96,6 +115,7 @@ model User {
   @@index([lastLogin])
   @@index([deletedAt])
   @@index([organizationId])
+  @@index([teamId])
   @@map("users")
 }
 
@@ -407,6 +427,11 @@ enum AuditLogAction {
   incident_note_added
   incident_reopened
   incident_resolved
+  team_created
+  team_updated
+  team_deleted
+  team_member_assigned
+  team_member_removed
 }
 
 enum AuditLogStatus {

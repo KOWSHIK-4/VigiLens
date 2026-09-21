@@ -27,6 +27,7 @@ const safeSelect = {
   createdAt: true,
   updatedAt: true,
   organizationId: true,
+  teamId: true,
 } as const;
 
 interface FindAllParams extends UserQueryInput {

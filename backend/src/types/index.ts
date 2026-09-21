@@ -478,6 +478,46 @@ export const userIdSchema = z.object({
   id: z.string().uuid("Invalid user id"),
 });
 
+export const createTeamSchema = z.object({
+  name: z.string().trim().min(2, "Team name must be at least 2 characters").max(100),
+  description: z.string().max(500).optional(),
+});
+
+export const updateTeamSchema = z
+  .object({
+    name: z.string().trim().min(2, "Team name must be at least 2 characters").max(100).optional(),
+    description: z.string().max(500).optional(),
+  })
+  .refine((data) => data.name !== undefined || data.description !== undefined, {
+    message: "At least one field must be provided to update",
+  });
+
+export const teamQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().max(200).optional(),
+  sortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+export const teamIdSchema = z.object({
+  id: z.string().uuid("Invalid team id"),
+});
+
+export const teamMemberParamSchema = z.object({
+  id: z.string().uuid("Invalid team id"),
+  userId: z.string().uuid("Invalid user id"),
+});
+
+export const assignTeamMemberSchema = z.object({
+  userId: z.string().uuid("Invalid user id"),
+});
+
+export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
+export type TeamQueryInput = z.infer<typeof teamQuerySchema>;
+export type AssignTeamMemberInput = z.infer<typeof assignTeamMemberSchema>;
+
 export const resetPasswordSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
   mustChangePassword: z.boolean().optional(),
@@ -544,6 +584,8 @@ export const auditLogQuerySchema = z.object({
     "incident_created", "incident_status_changed", "incident_assigned",
     "incident_unassigned", "incident_note_added", "incident_reopened",
     "incident_resolved",
+    "team_created", "team_updated", "team_deleted",
+    "team_member_assigned", "team_member_removed",
   ]).optional(),
   module: z.string().max(100).optional(),
   status: z.enum(["success", "failed"]).optional(),
