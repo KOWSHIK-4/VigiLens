@@ -679,6 +679,143 @@ async function run() {
   if (badToken.status === 400) ok("invalid token rejected (400)");
   else fail("bad token accept", badToken);
 
+  // 15. Team lead delegation.
+  const leadTeamName = `Lead Team ${RUN_TAG}`;
+  const leadTeam = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: leadTeamName }) },
+    tokenA,
+  );
+  const leadTeamId = (leadTeam.body as { data?: { id?: string } })?.data?.id;
+  if (leadTeam.status === 201 && leadTeamId) {
+    ok("lead fixture team created");
+    createdTeamIds.push(leadTeamId);
+  } else {
+    fail("lead fixture team", leadTeam);
+    return;
+  }
+
+  const leadJoin = await request(
+    `/teams/${leadTeamId}/members`,
+    { method: "POST", body: JSON.stringify({ userId: opId }) },
+    tokenA,
+  );
+  if (leadJoin.status === 200) ok("operator joined the lead team");
+  else {
+    fail("operator join lead team", leadJoin);
+    return;
+  }
+
+  const setLead = await request(
+    `/teams/${leadTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ leadId: opId }) },
+    tokenA,
+  );
+  const setLeadData = (setLead.body as {
+    data?: { leadId?: string | null; lead?: { id: string } | null };
+  })?.data;
+  if (setLead.status === 200 && setLeadData?.leadId === opId && setLeadData.lead?.id === opId)
+    ok("team lead assigned (lead preview returned)");
+  else fail("set team lead", setLead);
+
+  const viewerList = await request("/users?search=viewer%40vigilens.io", {}, tokenA);
+  const viewerId = (viewerList.body as { data?: Array<{ id: string }> })?.data?.[0]?.id;
+  if (!viewerId) {
+    fail("viewer id lookup", viewerList);
+    return;
+  }
+  const nonMemberLead = await request(
+    `/teams/${leadTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ leadId: viewerId }) },
+    tokenA,
+  );
+  if (nonMemberLead.status === 400) ok("non-member cannot be promoted to team lead (400)");
+  else fail("non-member lead", nonMemberLead);
+
+  const crossLead = await request(
+    `/teams/${leadTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ leadId: fixture.userId }) },
+    tokenA,
+  );
+  if (crossLead.status === 404) ok("cross-tenant lead assignment returns 404");
+  else fail("cross-tenant lead", crossLead);
+
+  const leadRename = await request(
+    `/teams/${leadTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ name: `${leadTeamName} R` }) },
+    tokenOp,
+  );
+  if (leadRename.status === 200) ok("team lead can update their own team (delegated manage)");
+  else fail("lead update own team", leadRename);
+
+  const memberEmail = `lead-member-${RUN_TAG}@vigilens.io`;
+  const memberCreate = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Lead Member",
+        email: memberEmail,
+        password: "admin123",
+      }),
+    },
+    tokenA,
+  );
+  const memberId = (memberCreate.body as { data?: { id?: string } })?.data?.id;
+  if (memberCreate.status !== 201 || !memberId) {
+    fail("create lead member", memberCreate);
+    return;
+  }
+  createdUserIds.push(memberId);
+
+  const leadAssign = await request(
+    `/teams/${leadTeamId}/members`,
+    { method: "POST", body: JSON.stringify({ userId: memberId }) },
+    tokenOp,
+  );
+  if (leadAssign.status === 200) ok("team lead can assign members (delegated manage)");
+  else fail("lead assign member", leadAssign);
+
+  const leadUnassign = await request(
+    `/teams/${leadTeamId}/members/${memberId}`,
+    { method: "DELETE" },
+    tokenOp,
+  );
+  if (leadUnassign.status === 200) ok("team lead can remove members (delegated manage)");
+  else fail("lead remove member", leadUnassign);
+
+  const foreignManage = await request(
+    `/teams/${inviteTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ description: "should fail" }) },
+    tokenOp,
+  );
+  if (foreignManage.status === 403) ok("team lead cannot manage a team they do not lead (403)");
+  else fail("lead foreign team", foreignManage);
+
+  const opCreateTeam = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: `Op Team ${RUN_TAG}` }) },
+    tokenOp,
+  );
+  if (opCreateTeam.status === 403) ok("operator still cannot create teams (403)");
+  else fail("operator create team", opCreateTeam);
+
+  const clearLead = await request(
+    `/teams/${inviteTeamId}`,
+    { method: "PATCH", body: JSON.stringify({ leadId: null }) },
+    tokenA,
+  );
+  if (
+    clearLead.status === 200 &&
+    (clearLead.body as { data?: { leadId?: string | null } })?.data?.leadId === null
+  )
+    ok("team lead cleared via leadId null");
+  else fail("clear team lead", clearLead);
+
+  const leadDelete = await request(`/teams/${leadTeamId}`, { method: "DELETE" }, tokenOp);
+  if (leadDelete.status === 200) ok("team lead can delete their own team (delegated manage)");
+  else fail("lead delete own team", leadDelete);
+
   if (failed > 0) {
     console.log(`\n${failed} team test(s) FAILED, ${passed} passed`);
     process.exitCode = 1;

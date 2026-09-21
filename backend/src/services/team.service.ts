@@ -13,6 +13,8 @@ const teamSelect = {
   name: true,
   description: true,
   organizationId: true,
+  leadId: true,
+  lead: { select: { id: true, name: true, email: true } },
   createdAt: true,
   updatedAt: true,
   _count: { select: { members: true } },
@@ -147,6 +149,25 @@ export const teamService = {
       data.name = name;
     }
     if (input.description !== undefined) data.description = input.description;
+    if (input.leadId !== undefined) {
+      if (input.leadId === null) {
+        data.lead = { disconnect: true };
+      } else {
+        // Team leads must belong to the tenant and be members of their own
+        // team, so a lead always manages a group they are part of.
+        const lead = await prisma.user.findFirst({
+          where: { id: input.leadId, organizationId, deletedAt: null },
+          select: { id: true, teamId: true },
+        });
+        if (!lead) {
+          throw new ApiError(404, "User not found in this organization");
+        }
+        if (lead.teamId !== id) {
+          throw new ApiError(400, "The team lead must be a member of the team");
+        }
+        data.lead = { connect: { id: lead.id } };
+      }
+    }
 
     return prisma.team.update({
       where: { id },

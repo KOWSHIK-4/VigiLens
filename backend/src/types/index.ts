@@ -487,10 +487,15 @@ export const updateTeamSchema = z
   .object({
     name: z.string().trim().min(2, "Team name must be at least 2 characters").max(100).optional(),
     description: z.string().max(500).optional(),
+    leadId: z.string().uuid("Invalid user id").nullable().optional(),
   })
-  .refine((data) => data.name !== undefined || data.description !== undefined, {
-    message: "At least one field must be provided to update",
-  });
+  .refine(
+    (data) =>
+      data.name !== undefined || data.description !== undefined || data.leadId !== undefined,
+    {
+      message: "At least one field must be provided to update",
+    },
+  );
 
 export const teamQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),

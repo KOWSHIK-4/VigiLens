@@ -2,6 +2,7 @@ import { Router } from "express";
 import { teamController } from "../controllers/team.controller";
 import { authenticate } from "../middleware/auth";
 import { requirePermission } from "../middleware/permissions";
+import { requireTeamLeadOrManage } from "../middleware/teamAuthorization";
 import { validate } from "../middleware/validate";
 import {
   acceptInvitationSchema,
@@ -39,21 +40,21 @@ router.post(
 );
 router.patch(
   "/:id",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(teamIdSchema, "params"),
   validate(updateTeamSchema),
   teamController.update,
 );
 router.post(
   "/:id/members",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(teamIdSchema, "params"),
   validate(assignTeamMemberSchema),
   teamController.assignMember,
 );
 router.delete(
   "/:id/members/:userId",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(teamMemberParamSchema, "params"),
   teamController.removeMember,
 );
@@ -65,14 +66,14 @@ router.get(
 );
 router.post(
   "/:id/invitations",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(teamIdSchema, "params"),
   validate(createInvitationSchema),
   teamController.createInvitation,
 );
 router.delete(
   "/:id/invitations/:invitationId",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(invitationParamSchema, "params"),
   teamController.revokeInvitation,
 );
@@ -84,7 +85,7 @@ router.post(
 );
 router.delete(
   "/:id",
-  requirePermission("teams.manage"),
+  requireTeamLeadOrManage,
   validate(teamIdSchema, "params"),
   teamController.remove,
 );

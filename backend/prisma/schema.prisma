@@ -75,15 +75,18 @@ model Team {
   name           String
   description    String   @default("")
   organizationId String   @map("organization_id")
+  leadId         String?  @map("lead_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   members      User[]           @relation("TeamMembers")
   invitations  TeamInvitation[]
+  lead         User?            @relation("TeamLeads", fields: [leadId], references: [id], onDelete: SetNull)
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
   @@index([organizationId])
+  @@index([leadId])
   @@map("teams")
 }
 
@@ -141,6 +144,7 @@ model User {
   team           Team?            @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
   incidents      Incident[]
   invitationsOut TeamInvitation[] @relation("TeamInvitationInviters")
+  leadingTeams   Team[]           @relation("TeamLeads")
 
   @@index([role])
   @@index([status])
