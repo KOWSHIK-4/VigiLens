@@ -60,6 +60,24 @@ export interface UserFilters {
   sortOrder?: "asc" | "desc";
 }
 
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { members: number };
+}
+
+export interface TeamFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: "name" | "createdAt" | "updatedAt";
+  sortOrder?: "asc" | "desc";
+}
+
 export interface CreateUserInput {
   name: string;
   email: string;

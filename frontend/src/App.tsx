@@ -22,6 +22,7 @@ const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const ModelsPage = lazy(() => import("@/pages/ModelsPage"));
 const DetectorsPage = lazy(() => import("@/pages/DetectorsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const TeamsPage = lazy(() => import("@/pages/TeamsPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
@@ -180,6 +181,14 @@ const router = createBrowserRouter([
         element: (
           <LazyRoute>
             <UsersPage />
+          </LazyRoute>
+        ),
+      },
+      {
+        path: "teams",
+        element: (
+          <LazyRoute>
+            <TeamsPage />
           </LazyRoute>
         ),
       },

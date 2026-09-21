@@ -15,6 +15,7 @@ import {
   Shield,
   ShieldCheck,
   Users,
+  UsersRound,
   Activity,
   Menu,
   LogOut,
@@ -41,6 +42,7 @@ const navItems = [
 
 const adminNavItems = [
   { path: "/users", label: "Users", icon: Users, permission: "users.read" },
+  { path: "/teams", label: "Teams", icon: UsersRound, permission: "teams.read" },
   { path: "/roles", label: "Roles", icon: Shield, permission: "roles.read" },
   { path: "/settings", label: "Settings", icon: Settings, permission: "settings.read" },
   { path: "/audit-logs", label: "Audit Logs", icon: ScrollText, permission: "audit.read" },
