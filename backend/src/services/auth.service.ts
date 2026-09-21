@@ -4,6 +4,7 @@ import { prisma } from "../config/prisma";
 import { config } from "../config";
 import { permissionService } from "./permission.service";
 import { settingsService } from "./settings.service";
+import { teamService } from "./team.service";
 import { ApiError } from "../utils/errors";
 import type { RegisterInput, LoginInput, ChangePasswordInput } from "../types";
 
@@ -98,13 +99,20 @@ export const authService = {
 
     const password = await bcrypt.hash(input.password, 12);
 
+    const organizationId = await resolveDefaultOrganizationId();
+    // Join-the-right-team induction: self-signed accounts land on the default
+    // organization (see resolveDefaultOrganizationId) and are inducted into
+    // that tenant's default team.
+    const defaultTeam = await teamService.getOrCreateDefaultTeam(organizationId);
+
     const user = await prisma.user.create({
       data: {
         email: input.email,
         password,
         name: input.name,
         role: "operator",
-        organizationId: await resolveDefaultOrganizationId(),
+        organizationId,
+        teamId: defaultTeam.id,
       },
     });
 
@@ -256,6 +264,7 @@ export const authService = {
       lastLogin: Date | null;
       createdAt: Date;
       organizationId: string;
+      teamId: string | null;
     },
     permissions: Set<string>,
   ) {
@@ -271,6 +280,7 @@ export const authService = {
       lastLogin: user.lastLogin,
       createdAt: user.createdAt,
       organizationId: user.organizationId,
+      teamId: user.teamId,
       permissions: Array.from(permissions),
     };
   },

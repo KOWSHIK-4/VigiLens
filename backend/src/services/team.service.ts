@@ -37,6 +37,31 @@ function ensureOrg(organizationId?: string) {
 }
 
 export const teamService = {
+  /**
+   * Returns the tenant's default team, creating it idempotently on first use.
+   * New users are inducted into this team so every tenant member starts on the
+   * same "right team"; the lookup is case-insensitive and the create is a
+   * race-safe upsert against the (organizationId, name) unique key.
+   */
+  async getOrCreateDefaultTeam(organizationId: string) {
+    const DEFAULT_TEAM_NAME = "Default Team";
+    const existing = await prisma.team.findFirst({
+      where: { organizationId, name: { equals: DEFAULT_TEAM_NAME, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existing) return existing;
+    return prisma.team.upsert({
+      where: { organizationId_name: { organizationId, name: DEFAULT_TEAM_NAME } },
+      update: {},
+      create: {
+        name: DEFAULT_TEAM_NAME,
+        description: "Default team for inducted members",
+        organizationId,
+      },
+      select: { id: true },
+    });
+  },
+
   async findAll(params: FindAllParams, organizationId?: string) {
     ensureOrg(organizationId);
     const where: Prisma.TeamWhereInput = { organizationId };

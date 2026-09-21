@@ -176,57 +176,71 @@ async function main() {
     });
   }
 
+  const defaultTeam = await prisma.team.upsert({
+    where: { organizationId_name: { organizationId: defaultOrg.id, name: "Default Team" } },
+    update: {},
+    create: {
+      name: "Default Team",
+      description: "Default team for inducted members",
+      organizationId: defaultOrg.id,
+    },
+  });
+
   const admin = await prisma.user.upsert({
     where: { email: "admin@vigilens.io" },
-    update: { role: "admin", status: "active", organizationId: defaultOrg.id },
+    update: { role: "admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
     create: {
       email: "admin@vigilens.io",
       password,
       name: "Admin User",
       role: "admin",
       organizationId: defaultOrg.id,
+      teamId: defaultTeam.id,
     },
   });
 
   const superAdmin = await prisma.user.upsert({
     where: { email: "super@vigilens.io" },
-    update: { role: "super_admin", status: "active", organizationId: defaultOrg.id },
+    update: { role: "super_admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
     create: {
       email: "super@vigilens.io",
       password,
       name: "Super Admin",
       role: "super_admin",
       organizationId: defaultOrg.id,
+      teamId: defaultTeam.id,
     },
   });
 
   const operator = await prisma.user.upsert({
     where: { email: "operator@vigilens.io" },
-    update: { role: "operator", status: "active", organizationId: defaultOrg.id },
+    update: { role: "operator", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
     create: {
       email: "operator@vigilens.io",
       password,
       name: "Operator User",
       role: "operator",
       organizationId: defaultOrg.id,
+      teamId: defaultTeam.id,
     },
   });
 
   const viewer = await prisma.user.upsert({
     where: { email: "viewer@vigilens.io" },
-    update: { role: "viewer", status: "active", organizationId: defaultOrg.id },
+    update: { role: "viewer", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
     create: {
       email: "viewer@vigilens.io",
       password,
       name: "Viewer User",
       role: "viewer",
       organizationId: defaultOrg.id,
+      teamId: defaultTeam.id,
     },
   });
 
   const disabled = await prisma.user.upsert({
     where: { email: "disabled@vigilens.io" },
-    update: { role: "viewer", status: "disabled", organizationId: defaultOrg.id },
+    update: { role: "viewer", status: "disabled", organizationId: defaultOrg.id, teamId: defaultTeam.id },
     create: {
       email: "disabled@vigilens.io",
       password,
@@ -234,6 +248,7 @@ async function main() {
       role: "viewer",
       status: "disabled",
       organizationId: defaultOrg.id,
+      teamId: defaultTeam.id,
     },
   });
 

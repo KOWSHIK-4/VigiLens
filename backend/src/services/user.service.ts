@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
+import { teamService } from "./team.service";
 import type {
   CreateUserInput,
   ResetPasswordInput,
@@ -127,6 +128,10 @@ export const userService = {
       throw new ApiError(400, "A tenant organization is required to create a user");
     }
 
+    // Join-the-right-team induction: every new tenant member starts on the
+    // organization's default team so new accounts are never left ungrouped.
+    const defaultTeam = await teamService.getOrCreateDefaultTeam(organizationId);
+
     const user = await prisma.user.create({
       data: {
         email: input.email,
@@ -135,6 +140,7 @@ export const userService = {
         role,
         mustChangePassword: input.mustChangePassword ?? false,
         organizationId,
+        teamId: defaultTeam.id,
       },
       select: safeSelect,
     });

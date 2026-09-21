@@ -15,6 +15,7 @@ const RUN_TAG = `${process.pid}`;
 let server: ChildProcess | null = null;
 let orgB: OrgBFixture | null = null;
 const createdTeamIds: string[] = [];
+const createdUserIds: string[] = [];
 let passed = 0;
 let failed = 0;
 
@@ -418,6 +419,101 @@ async function run() {
     ok("team owner deletes team and fetch returns 404");
   else fail("team owner delete", { deleteOwn, afterDelete });
 
+  // 13. Join-the-right-team induction.
+  const defaultSearch = await request(
+    `/teams?search=${encodeURIComponent("Default Team")}`,
+    {},
+    tokenA,
+  );
+  const defaultATeamId = (defaultSearch.body as { data?: Array<{ id: string }> })?.data?.[0]?.id;
+  if (defaultATeamId) ok("org A default team exists");
+  else fail("org A default team lookup", defaultSearch.body);
+
+  const regEmail = `joiner-${RUN_TAG}@vigilens.io`;
+  const enableReg = await request(
+    "/settings/security",
+    { method: "PATCH", body: JSON.stringify({ allow_registration: true }) },
+    tokenA,
+  );
+  const reg = await request(
+    "/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify({ name: "Joiner User", email: regEmail, password: "Admin123!" }),
+    },
+  );
+  const restoreReg = await request(
+    "/settings/security",
+    { method: "PATCH", body: JSON.stringify({ allow_registration: false }) },
+    tokenA,
+  );
+  if (enableReg.status === 200 && restoreReg.status === 200)
+    ok("registration policy toggled and restored for induction test");
+  else fail("registration policy toggle", { enableReg, restoreReg });
+  const regUser = (reg.body as { data?: { user?: { id?: string; teamId?: string | null } } })?.data?.user;
+  if (reg.status === 201 && regUser?.id && regUser.teamId === defaultATeamId) {
+    ok("self-registered user is inducted into the org default team");
+    createdUserIds.push(regUser.id);
+  } else {
+    fail("register induction", reg.body);
+  }
+
+  const adminCreatedEmail = `inductee-${RUN_TAG}@vigilens.io`;
+  const adminCreate = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Admin Inductee",
+        email: adminCreatedEmail,
+        password: "Admin123!",
+      }),
+    },
+    tokenA,
+  );
+  const adminCreatedId = (adminCreate.body as { data?: { id?: string; teamId?: string | null } })?.data?.id;
+  if (adminCreate.status === 201 && adminCreatedId) {
+    const fetched = await request(`/users/${adminCreatedId}`, {}, tokenA);
+    const fetchedTeamId = (fetched.body as { data?: { teamId?: string | null } })?.data?.teamId;
+    if (fetchedTeamId === defaultATeamId)
+      ok("admin-created user is inducted into the org default team");
+    else fail("admin create induction", fetched.body);
+    createdUserIds.push(adminCreatedId);
+  } else {
+    fail("admin create induction", adminCreate.body);
+  }
+
+  const orgBInducteeEmail = `orgb-inductee-${RUN_TAG}@vigilens.io`;
+  const orgBInductee = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Tenant B Inductee",
+        email: orgBInducteeEmail,
+        password: "Admin123!",
+      }),
+    },
+    tokenB,
+  );
+  const orgBInducteeId = (orgBInductee.body as { data?: { id?: string } })?.data?.id;
+  if (orgBInductee.status === 201 && orgBInducteeId) {
+    const fetchedB = await request(`/users/${orgBInducteeId}`, {}, tokenB);
+    const orgBTempTeamId = (fetchedB.body as { data?: { teamId?: string | null } })?.data?.teamId;
+    if (orgBTempTeamId && orgBTempTeamId !== defaultATeamId) {
+      const orgBTeamDetail = await request(`/teams/${orgBTempTeamId}`, {}, tokenB);
+      const orgBTeamOrg =
+        (orgBTeamDetail.body as { data?: { organizationId?: string } })?.data?.organizationId;
+      if (orgBTeamOrg === fixture.orgId)
+        ok("tenant B induction joins tenant B's own default team (right team per tenant)");
+      else fail("tenant B induced team org", orgBTeamDetail.body);
+    } else {
+      fail("tenant B induction team", fetchedB.body);
+    }
+  } else {
+    fail("tenant B inductee creation", orgBInductee.body);
+  }
+
   if (failed > 0) {
     console.log(`\n${failed} team test(s) FAILED, ${passed} passed`);
     process.exitCode = 1;
@@ -436,6 +532,9 @@ run()
       if (server) killProcessTree(server);
       if (createdTeamIds.length > 0) {
         await prisma.team.deleteMany({ where: { id: { in: createdTeamIds } } });
+      }
+      if (createdUserIds.length > 0) {
+        await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
       }
       if (orgB) await cleanupOrgB(orgB.orgId);
       await prisma.$disconnect();
