@@ -57,14 +57,15 @@ model Organization {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  users      User[]
-  teams      Team[]
-  cameras    Camera[]
-  detections Detection[]
-  alerts     Alert[]
-  incidents  Incident[]
-  reports    Report[]
-  auditLogs  AuditLog[]
+  users           User[]
+  teams           Team[]
+  cameras         Camera[]
+  detections      Detection[]
+  alerts          Alert[]
+  incidents       Incident[]
+  reports         Report[]
+  auditLogs       AuditLog[]
+  teamInvitations TeamInvitation[]
 
   @@map("organizations")
 }
@@ -77,12 +78,42 @@ model Team {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  members      User[]       @relation("TeamMembers")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      User[]           @relation("TeamMembers")
+  invitations  TeamInvitation[]
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("teams")
+}
+
+enum TeamInvitationStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+model TeamInvitation {
+  id             String               @id @default(uuid())
+  tokenHash      String               @unique @map("token_hash")
+  email          String
+  status         TeamInvitationStatus @default(pending)
+  expiresAt      DateTime             @map("expires_at")
+  acceptedAt     DateTime?            @map("accepted_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  teamId         String               @map("team_id")
+  inviterUserId  String               @map("inviter_user_id")
+  organizationId String               @map("organization_id")
+
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("TeamInvitationInviters", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("team_invitations")
 }
 
 model User {
@@ -98,17 +129,18 @@ model User {
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedAt            DateTime?  @map("locked_at")
   mustChangePassword  Boolean    @default(false) @map("must_change_password")
-  tokenVersion       Int        @default(0) @map("token_version")
-  lastLogin          DateTime?  @map("last_login")
+  tokenVersion        Int        @default(0) @map("token_version")
+  lastLogin           DateTime?  @map("last_login")
   deletedAt           DateTime?  @map("deleted_at")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
-  organizationId     String     @map("organization_id")
-  teamId             String?    @map("team_id")
+  organizationId      String     @map("organization_id")
+  teamId              String?    @map("team_id")
 
-  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  team             Team?         @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
-  incidents        Incident[]
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team           Team?            @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  incidents      Incident[]
+  invitationsOut TeamInvitation[] @relation("TeamInvitationInviters")
 
   @@index([role])
   @@index([status])
@@ -142,42 +174,42 @@ model Permission {
 }
 
 model RolePermission {
-  role         String       @map("role_name")
-  permissionId String       @map("permission_id")
-  roleRelation Role         @relation(fields: [role], references: [name], onDelete: Cascade, onUpdate: Cascade)
-  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         String     @map("role_name")
+  permissionId String     @map("permission_id")
+  roleRelation Role       @relation(fields: [role], references: [name], onDelete: Cascade, onUpdate: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([role, permissionId])
   @@map("role_permissions")
 }
 
 model Camera {
-  id             String       @id @default(uuid())
-  name           String
-  url            String
-  cameraType     CameraType   @default(rtsp) @map("camera_type")
-  sourceURL      String?      @map("source_url")
-  location       String?
-  resolution     String?
-  fps            Int?
-  username       String?
-  password       String?
-  usernameEncrypted String? @map("username_encrypted")
-  passwordEncrypted String? @map("password_encrypted")
-  thumbnail      String?
-  isHealthy      Boolean      @default(true) @map("is_healthy")
-  lastHealthCheck DateTime?   @map("last_health_check")
-  lastSnapshotAt DateTime?    @map("last_snapshot_at")
-  status         CameraStatus @default(offline)
-  lastSeen       DateTime     @default(now()) @map("last_seen")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  organizationId String       @map("organization_id")
+  id                String       @id @default(uuid())
+  name              String
+  url               String
+  cameraType        CameraType   @default(rtsp) @map("camera_type")
+  sourceURL         String?      @map("source_url")
+  location          String?
+  resolution        String?
+  fps               Int?
+  username          String?
+  password          String?
+  usernameEncrypted String?      @map("username_encrypted")
+  passwordEncrypted String?      @map("password_encrypted")
+  thumbnail         String?
+  isHealthy         Boolean      @default(true) @map("is_healthy")
+  lastHealthCheck   DateTime?    @map("last_health_check")
+  lastSnapshotAt    DateTime?    @map("last_snapshot_at")
+  status            CameraStatus @default(offline)
+  lastSeen          DateTime     @default(now()) @map("last_seen")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  organizationId    String       @map("organization_id")
 
-  detections           Detection[]
-  healthLogs           CameraHealthLog[]
-  detectorAssignments  DetectorCamera[]
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  detections          Detection[]
+  healthLogs          CameraHealthLog[]
+  detectorAssignments DetectorCamera[]
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("cameras")
@@ -199,26 +231,26 @@ model CameraHealthLog {
 }
 
 model Detection {
-  id               String           @id @default(uuid())
-  cameraId         String           @map("camera_id")
-  label            String
-  confidence       Float
-  status           DetectionStatus  @default(info)
-  imageUrl         String           @map("image_url")
-  metadata         Json?
-  timestamp        DateTime         @default(now())
-  createdAt        DateTime         @default(now()) @map("created_at")
-  organizationId   String           @map("organization_id")
+  id             String          @id @default(uuid())
+  cameraId       String          @map("camera_id")
+  label          String
+  confidence     Float
+  status         DetectionStatus @default(info)
+  imageUrl       String          @map("image_url")
+  metadata       Json?
+  timestamp      DateTime        @default(now())
+  createdAt      DateTime        @default(now()) @map("created_at")
+  organizationId String          @map("organization_id")
 
   // Detector Engine v2 fields (all optional for backward compatibility).
-  detectorId       String?          @map("detector_id")
-  detectorKey      String?          @map("detector_key")
-  modelVersion     String?          @map("model_version")
-  trackId          String?          @map("track_id")
-  className        String?          @map("class_name")
-  boundingBox      Json?            @map("bounding_box")
-  snapshotUrl      String?          @map("snapshot_url")
-  processingTimeMs Int?             @map("processing_time_ms")
+  detectorId       String? @map("detector_id")
+  detectorKey      String? @map("detector_key")
+  modelVersion     String? @map("model_version")
+  trackId          String? @map("track_id")
+  className        String? @map("class_name")
+  boundingBox      Json?   @map("bounding_box")
+  snapshotUrl      String? @map("snapshot_url")
+  processingTimeMs Int?    @map("processing_time_ms")
 
   camera       Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   alert        Alert?
@@ -239,24 +271,24 @@ model Detection {
 }
 
 model Alert {
-  id                String        @id @default(uuid())
-  detectionId       String        @unique @map("detection_id")
-  severity          AlertSeverity @default(info)
-  title             String
-  message           String
-  isRead            Boolean       @default(false) @map("is_read")
-  acknowledgedAt    DateTime?     @map("acknowledged_at")
-  acknowledgedById  String?       @map("acknowledged_by_id")
-  acknowledgedByName String?      @map("acknowledged_by_name")
-  escalatedAt       DateTime?     @map("escalated_at")
-  escalatedById     String?       @map("escalated_by_id")
-  escalatedByName   String?       @map("escalated_by_name")
-  escalationNote    String?       @map("escalation_note")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  organizationId    String        @map("organization_id")
+  id                 String        @id @default(uuid())
+  detectionId        String        @unique @map("detection_id")
+  severity           AlertSeverity @default(info)
+  title              String
+  message            String
+  isRead             Boolean       @default(false) @map("is_read")
+  acknowledgedAt     DateTime?     @map("acknowledged_at")
+  acknowledgedById   String?       @map("acknowledged_by_id")
+  acknowledgedByName String?       @map("acknowledged_by_name")
+  escalatedAt        DateTime?     @map("escalated_at")
+  escalatedById      String?       @map("escalated_by_id")
+  escalatedByName    String?       @map("escalated_by_name")
+  escalationNote     String?       @map("escalation_note")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  organizationId     String        @map("organization_id")
 
-  detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
-  incident  Incident?
+  detection    Detection    @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+  incident     Incident?
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Alert list queries filter by is_read/severity and order by created_at DESC.
@@ -272,30 +304,30 @@ model Alert {
 }
 
 model Incident {
-  id               String         @id @default(uuid())
-  alertId          String         @unique @map("alert_id")
-  status           IncidentStatus @default(new)
-  priority         AlertSeverity  @default(info)
-  assignedToUserId String?        @map("assigned_to_user_id")
-  assignedToName   String?        @map("assigned_to_name")
-  title            String
-  description      String         @default("")
-  openedAt         DateTime       @default(now()) @map("opened_at")
-  acknowledgedAt   DateTime?      @map("acknowledged_at")
-  investigatingAt  DateTime?      @map("investigating_at")
-  resolvedAt       DateTime?      @map("resolved_at")
-  resolvedById     String?        @map("resolved_by_id")
-  resolvedByName   String?        @map("resolved_by_name")
-  resolutionSummary String        @default("") @map("resolution_summary")
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
-  organizationId   String         @map("organization_id")
+  id                String         @id @default(uuid())
+  alertId           String         @unique @map("alert_id")
+  status            IncidentStatus @default(new)
+  priority          AlertSeverity  @default(info)
+  assignedToUserId  String?        @map("assigned_to_user_id")
+  assignedToName    String?        @map("assigned_to_name")
+  title             String
+  description       String         @default("")
+  openedAt          DateTime       @default(now()) @map("opened_at")
+  acknowledgedAt    DateTime?      @map("acknowledged_at")
+  investigatingAt   DateTime?      @map("investigating_at")
+  resolvedAt        DateTime?      @map("resolved_at")
+  resolvedById      String?        @map("resolved_by_id")
+  resolvedByName    String?        @map("resolved_by_name")
+  resolutionSummary String         @default("") @map("resolution_summary")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  organizationId    String         @map("organization_id")
 
-  alert    Alert              @relation(fields: [alertId], references: [id], onDelete: Cascade)
-  assignedTo User?             @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  notes    IncidentNote[]
-  activity IncidentActivity[]
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  alert        Alert              @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  assignedTo   User?              @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  notes        IncidentNote[]
+  activity     IncidentActivity[]
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([priority])
@@ -361,15 +393,15 @@ enum ReportStatus {
 }
 
 model Report {
-  id          String       @id @default(uuid())
-  title       String
-  type        ReportType
-  generatedBy String       @map("generated_by")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  dateRange   Json         @map("date_range")
-  reportUrl   String?      @map("report_url")
-  status      ReportStatus @default(generating)
-  organizationId String    @map("organization_id")
+  id             String       @id @default(uuid())
+  title          String
+  type           ReportType
+  generatedBy    String       @map("generated_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  dateRange      Json         @map("date_range")
+  reportUrl      String?      @map("report_url")
+  status         ReportStatus @default(generating)
+  organizationId String       @map("organization_id")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -432,6 +464,9 @@ enum AuditLogAction {
   team_deleted
   team_member_assigned
   team_member_removed
+  team_invitation_created
+  team_invitation_revoked
+  team_invitation_accepted
 }
 
 enum AuditLogStatus {
@@ -461,22 +496,22 @@ enum ProcessorPreference {
 }
 
 model AIModel {
-  id                 String      @id @default(uuid())
-  name               String
-  version            String
-  description        String
-  detectorKey        String      @unique @map("detector_key")
-  confidenceThreshold Float      @default(50) @map("confidence_threshold")
-  enabled            Boolean     @default(true)
-  status             ModelStatus @default(disabled)
-  gpuSupported       Boolean     @default(false) @map("gpu_supported")
-  modelPath          String      @map("model_path")
-  lastRestartAt      DateTime?   @map("last_restart_at")
-  createdAt          DateTime    @default(now()) @map("created_at")
-  updatedAt          DateTime    @updatedAt @map("updated_at")
+  id                  String      @id @default(uuid())
+  name                String
+  version             String
+  description         String
+  detectorKey         String      @unique @map("detector_key")
+  confidenceThreshold Float       @default(50) @map("confidence_threshold")
+  enabled             Boolean     @default(true)
+  status              ModelStatus @default(disabled)
+  gpuSupported        Boolean     @default(false) @map("gpu_supported")
+  modelPath           String      @map("model_path")
+  lastRestartAt       DateTime?   @map("last_restart_at")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  settings           DetectorSettings?
-  cameraAssignments  DetectorCamera[]
+  settings          DetectorSettings?
+  cameraAssignments DetectorCamera[]
 
   @@index([status])
   @@index([enabled])
@@ -514,15 +549,15 @@ model DetectorCamera {
 }
 
 model SystemSetting {
-  id          String                 @id @default(uuid())
+  id          String                @id @default(uuid())
   category    SystemSettingCategory
   key         String
   label       String
-  description String                 @default("")
+  description String                @default("")
   value       Json
-  updatedBy   String?                @map("updated_by")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
-  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedBy   String?               @map("updated_by")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+  createdAt   DateTime              @default(now()) @map("created_at")
 
   @@unique([category, key])
   @@index([category])
@@ -530,20 +565,20 @@ model SystemSetting {
 }
 
 model AuditLog {
-  id          String          @id @default(uuid())
-  timestamp   DateTime        @default(now())
-  userId      String?         @map("user_id")
-  username    String          @default("")
-  email       String          @default("")
-  action      AuditLogAction
-  module      String
-  description String
-  ipAddress   String          @default("") @map("ip_address")
-  userAgent   String          @default("") @map("user_agent")
-  status      AuditLogStatus  @default(success)
-  metadata    Json?
-  hash        String?
-  organizationId String?       @map("organization_id")
+  id             String         @id @default(uuid())
+  timestamp      DateTime       @default(now())
+  userId         String?        @map("user_id")
+  username       String         @default("")
+  email          String         @default("")
+  action         AuditLogAction
+  module         String
+  description    String
+  ipAddress      String         @default("") @map("ip_address")
+  userAgent      String         @default("") @map("user_agent")
+  status         AuditLogStatus @default(success)
+  metadata       Json?
+  hash           String?
+  organizationId String?        @map("organization_id")
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 

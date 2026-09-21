@@ -514,6 +514,171 @@ async function run() {
     fail("tenant B inductee creation", orgBInductee.body);
   }
 
+  // 14. Server-side team invitation tokens.
+  const inviteTeamName = `Invite Team ${RUN_TAG}`;
+  const inviteTeam = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: inviteTeamName }) },
+    tokenA,
+  );
+  const inviteTeamId = (inviteTeam.body as { data?: { id?: string } })?.data?.id;
+  if (inviteTeam.status === 201 && inviteTeamId) {
+    ok("invitation fixture team created");
+    createdTeamIds.push(inviteTeamId);
+  } else {
+    fail("invitation fixture team", inviteTeam);
+    return;
+  }
+
+  const inviteeEmail = `invitee-${RUN_TAG}@vigilens.io`;
+  const inviteCreate = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: inviteeEmail }) },
+    tokenA,
+  );
+  const inviteData = (inviteCreate.body as {
+    data?: { token?: string; invitation?: { id?: string; status?: string } };
+  })?.data;
+  if (inviteCreate.status === 201 && inviteData?.token && inviteData.invitation?.status === "pending") {
+    ok("invitation created with a one-time token");
+  } else {
+    fail("invitation create", inviteCreate.body);
+  }
+  const invToken = inviteData?.token ?? "";
+
+  const invList = await request(`/teams/${inviteTeamId}/invitations`, {}, tokenA);
+  const invListData = (invList.body as { data?: Array<{ email: string }> })?.data ?? [];
+  if (invList.status === 200 && invListData.some((v) => v.email === inviteeEmail))
+    ok("invitations list exposes created invitation");
+  else fail("invitations list", invList.body);
+
+  const dupInv = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: inviteeEmail }) },
+    tokenA,
+  );
+  if (dupInv.status === 409) ok("duplicate pending invitation rejected (409)");
+  else fail("duplicate invitation", dupInv);
+
+  const wrongAccept = await request(
+    "/teams/invitations/accept",
+    { method: "POST", body: JSON.stringify({ token: invToken }) },
+    tokenOp,
+  );
+  if (wrongAccept.status === 403) ok("accepting with a different email is blocked (403)");
+  else fail("wrong-email accept", wrongAccept);
+
+  const inviteeCreate = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Invited User",
+        email: inviteeEmail,
+        password: "admin123",
+      }),
+    },
+    tokenA,
+  );
+  const inviteeId = (inviteeCreate.body as { data?: { id?: string } })?.data?.id;
+  if (inviteeCreate.status !== 201 || !inviteeId) {
+    fail("create invited user", inviteeCreate);
+    return;
+  }
+  createdUserIds.push(inviteeId);
+  const inviteeLogin = await login(inviteeEmail);
+  if (!inviteeLogin) {
+    fail("invitee login", null);
+    return;
+  }
+  const tokenInvitee = inviteeLogin.token;
+  const acceptRes = await request(
+    "/teams/invitations/accept",
+    { method: "POST", body: JSON.stringify({ token: invToken }) },
+    tokenInvitee,
+  );
+  const acceptedTeamId = (acceptRes.body as { data?: { teamId?: string } })?.data?.teamId;
+  if (acceptRes.status === 200 && acceptedTeamId === inviteTeamId)
+    ok("invitee accepts invitation and joins the team");
+  else fail("accept invitation", acceptRes);
+
+  const bAccept = await request(
+    "/teams/invitations/accept",
+    { method: "POST", body: JSON.stringify({ token: invToken }) },
+    tokenB,
+  );
+  if (bAccept.status === 404) ok("cross-tenant acceptance returns 404");
+  else fail("cross-tenant accept", bAccept);
+
+  const revokeEmail = `revokee-${RUN_TAG}@vigilens.io`;
+  const revokeCreate = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: revokeEmail }) },
+    tokenA,
+  );
+  const revokeInvitationId = (revokeCreate.body as {
+    data?: { invitation?: { id?: string } };
+  })?.data?.invitation?.id;
+  const revokeToken = (revokeCreate.body as { data?: { token?: string } })?.data?.token;
+  if (revokeCreate.status === 201 && revokeInvitationId && revokeToken)
+    ok("second invitation created for revoke test");
+  else {
+    fail("second invitation", revokeCreate);
+    return;
+  }
+
+  const revokeRes = await request(
+    `/teams/${inviteTeamId}/invitations/${revokeInvitationId}`,
+    { method: "DELETE" },
+    tokenA,
+  );
+  if (revokeRes.status === 200) ok("invitation revoked");
+  else fail("revoke invitation", revokeRes);
+
+  const revokedAccept = await request(
+    "/teams/invitations/accept",
+    { method: "POST", body: JSON.stringify({ token: revokeToken }) },
+    tokenInvitee,
+  );
+  if (revokedAccept.status === 400) ok("revoked invitation cannot be accepted (400)");
+  else fail("revoked accept", revokedAccept);
+
+  const opCreateInv = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: "nobody@vigilens.io" }) },
+    tokenOp,
+  );
+  if (opCreateInv.status === 403) ok("operator cannot create invitations (403)");
+  else fail("operator create invitation", opCreateInv);
+
+  const viewListInv = await request(`/teams/${inviteTeamId}/invitations`, {}, tokenView);
+  if (viewListInv.status === 200) ok("viewer can list invitations (teams.read)");
+  else fail("viewer list invitations", viewListInv);
+
+  const bCreateInv = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: "nobody@vigilens.io" }) },
+    tokenB,
+  );
+  if (bCreateInv.status === 404) ok("cross-tenant invitation create returns 404");
+  else fail("cross-tenant create invitation", bCreateInv);
+
+  const badEmail = await request(
+    `/teams/${inviteTeamId}/invitations`,
+    { method: "POST", body: JSON.stringify({ email: "not-an-email" }) },
+    tokenA,
+  );
+  if (badEmail.status === 400) ok("invalid email rejected (400)");
+  else fail("bad email invitation", badEmail);
+
+  const badToken = await request(
+    "/teams/invitations/accept",
+    { method: "POST", body: JSON.stringify({ token: "short" }) },
+    tokenInvitee,
+  );
+  if (badToken.status === 400) ok("invalid token rejected (400)");
+  else fail("bad token accept", badToken);
+
   if (failed > 0) {
     console.log(`\n${failed} team test(s) FAILED, ${passed} passed`);
     process.exitCode = 1;

@@ -4,8 +4,11 @@ import { authenticate } from "../middleware/auth";
 import { requirePermission } from "../middleware/permissions";
 import { validate } from "../middleware/validate";
 import {
+  acceptInvitationSchema,
   assignTeamMemberSchema,
+  createInvitationSchema,
   createTeamSchema,
+  invitationParamSchema,
   teamIdSchema,
   teamMemberParamSchema,
   teamQuerySchema,
@@ -53,6 +56,31 @@ router.delete(
   requirePermission("teams.manage"),
   validate(teamMemberParamSchema, "params"),
   teamController.removeMember,
+);
+router.get(
+  "/:id/invitations",
+  requirePermission("teams.read"),
+  validate(teamIdSchema, "params"),
+  teamController.listInvitations,
+);
+router.post(
+  "/:id/invitations",
+  requirePermission("teams.manage"),
+  validate(teamIdSchema, "params"),
+  validate(createInvitationSchema),
+  teamController.createInvitation,
+);
+router.delete(
+  "/:id/invitations/:invitationId",
+  requirePermission("teams.manage"),
+  validate(invitationParamSchema, "params"),
+  teamController.revokeInvitation,
+);
+router.post(
+  "/invitations/accept",
+  requirePermission("teams.read"),
+  validate(acceptInvitationSchema),
+  teamController.acceptInvitation,
 );
 router.delete(
   "/:id",

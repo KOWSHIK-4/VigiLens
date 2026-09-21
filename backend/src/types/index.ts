@@ -513,10 +513,25 @@ export const assignTeamMemberSchema = z.object({
   userId: z.string().uuid("Invalid user id"),
 });
 
+export const createInvitationSchema = z.object({
+  email: z.string().email("Invalid email address").max(254),
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(32, "Invalid invitation token").max(128),
+});
+
+export const invitationParamSchema = z.object({
+  id: z.string().uuid("Invalid team id"),
+  invitationId: z.string().uuid("Invalid invitation id"),
+});
+
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 export type TeamQueryInput = z.infer<typeof teamQuerySchema>;
 export type AssignTeamMemberInput = z.infer<typeof assignTeamMemberSchema>;
+export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 
 export const resetPasswordSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
@@ -586,6 +601,7 @@ export const auditLogQuerySchema = z.object({
     "incident_resolved",
     "team_created", "team_updated", "team_deleted",
     "team_member_assigned", "team_member_removed",
+    "team_invitation_created", "team_invitation_revoked", "team_invitation_accepted",
   ]).optional(),
   module: z.string().max(100).optional(),
   status: z.enum(["success", "failed"]).optional(),
