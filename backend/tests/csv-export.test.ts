@@ -6,6 +6,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 4961;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -130,7 +132,7 @@ async function run() {
 
   // Fixtures carrying spreadsheet formula payloads.
   const camera = await prisma.camera.create({
-    data: { name: "=cmd|'/c calc'!A1", url: "/dev/null", cameraType: "usb" },
+    data: { name: "=cmd|'/c calc'!A1", url: "/dev/null", cameraType: "usb", organizationId: DEFAULT_ORG_ID },
   });
   cameraId = camera.id;
   const detection = await prisma.detection.create({
@@ -139,6 +141,7 @@ async function run() {
       label: '=HYPERLINK("http://evil.example","pwn")',
       confidence: 0.5,
       imageUrl: "+SUM(A1:A9)",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   const auditLog = await prisma.auditLog.create({
@@ -148,6 +151,7 @@ async function run() {
       description: "=1+1",
       username: "-not-a-flag",
       status: "success",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
 
@@ -188,6 +192,7 @@ async function run() {
       label: "fixture-benign",
       confidence: 0.42,
       imageUrl: "benign.jpg",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   const benign2 = await request("/detections/export/csv?search=fixture-benign", {}, token);

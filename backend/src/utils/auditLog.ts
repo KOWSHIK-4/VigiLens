@@ -14,10 +14,30 @@ interface LogAuditParams {
   userAgent?: string;
   status?: AuditLogStatus;
   metadata?: Record<string, unknown>;
+  organizationId?: string;
 }
 
 export async function logAudit(params: LogAuditParams): Promise<void> {
   try {
+    // The tenant scope falls back to the actor's organization so unauthenticated
+    // events (failed logins by email, registrations) still land under the right
+    // organization. Row-level audit writes (see auditLog.service.create) can
+    // supply an explicit scope when no actor exists.
+    let organizationId = params.organizationId;
+    if (!organizationId && params.userId) {
+      const owner = await prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { organizationId: true },
+      });
+      organizationId = owner?.organizationId ?? undefined;
+    }
+    if (!organizationId && params.email) {
+      const owner = await prisma.user.findFirst({
+        where: { email: params.email, deletedAt: null },
+        select: { organizationId: true },
+      });
+      organizationId = owner?.organizationId ?? undefined;
+    }
     const row = await prisma.auditLog.create({
       data: {
         userId: params.userId || null,
@@ -30,6 +50,7 @@ export async function logAudit(params: LogAuditParams): Promise<void> {
         userAgent: params.userAgent || "",
         status: params.status || "success",
         metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
+        organizationId,
       },
     });
     await prisma.auditLog.update({

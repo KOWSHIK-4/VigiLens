@@ -26,11 +26,20 @@ const safeSelect = {
   lastLogin: true,
   createdAt: true,
   updatedAt: true,
+  organizationId: true,
 } as const;
 
 interface FindAllParams extends UserQueryInput {
   page: number;
   limit: number;
+}
+
+function orgWhere(id: string, organizationId?: string) {
+  return {
+    id,
+    deletedAt: null,
+    ...(organizationId ? { organizationId } : {}),
+  };
 }
 
 export const userService = {
@@ -42,8 +51,9 @@ export const userService = {
     return found;
   },
 
-  async findAll(params: FindAllParams) {
+  async findAll(params: FindAllParams, organizationId?: string) {
     const where: Prisma.UserWhereInput = { deletedAt: null };
+    if (organizationId) where.organizationId = organizationId;
 
     if (params.search) {
       where.OR = [
@@ -81,9 +91,9 @@ export const userService = {
     return { data, total };
   },
 
-  async findById(id: string) {
+  async findById(id: string, organizationId?: string) {
     const user = await prisma.user.findFirst({
-      where: { id, deletedAt: null },
+      where: orgWhere(id, organizationId),
       select: safeSelect,
     });
     if (!user) {
@@ -99,7 +109,7 @@ export const userService = {
     });
   },
 
-  async create(input: CreateUserInput) {
+  async create(input: CreateUserInput, organizationId?: string) {
     const existing = await prisma.user.findUnique({
       where: { email: input.email },
     });
@@ -112,6 +122,10 @@ export const userService = {
 
     const password = await bcrypt.hash(input.password, 12);
 
+    if (!organizationId) {
+      throw new ApiError(400, "A tenant organization is required to create a user");
+    }
+
     const user = await prisma.user.create({
       data: {
         email: input.email,
@@ -119,6 +133,7 @@ export const userService = {
         name: input.name,
         role,
         mustChangePassword: input.mustChangePassword ?? false,
+        organizationId,
       },
       select: safeSelect,
     });
@@ -127,8 +142,8 @@ export const userService = {
     return user;
   },
 
-  async update(id: string, input: UpdateUserInput) {
-    const existing = await this.findById(id);
+  async update(id: string, input: UpdateUserInput, organizationId?: string) {
+    const existing = await this.findById(id, organizationId);
 
     if (input.email && input.email !== existing.email) {
       const clash = await prisma.user.findUnique({
@@ -151,12 +166,12 @@ export const userService = {
     });
   },
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot delete your own account");
     }
 
-    const user = await this.findById(id);
+    const user = await this.findById(id, organizationId);
 
     if (user.role === "super_admin") {
       const superAdmins = await prisma.user.count({
@@ -175,14 +190,14 @@ export const userService = {
     return { success: true, id };
   },
 
-  async assignRole(id: string, role: string, actorId?: string) {
+  async assignRole(id: string, role: string, actorId?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot change your own role");
     }
 
     await this.ensureRoleExists(role);
 
-    const user = await this.findById(id);
+    const user = await this.findById(id, organizationId);
 
     if (user.role === "super_admin" && role !== "super_admin") {
       const superAdmins = await prisma.user.count({
@@ -203,12 +218,12 @@ export const userService = {
     });
   },
 
-  async setStatus(id: string, status: UserStatus, actorId?: string) {
+  async setStatus(id: string, status: UserStatus, actorId?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot change your own status");
     }
 
-    const user = await this.findById(id);
+    const user = await this.findById(id, organizationId);
 
     if (user.role === "super_admin" && status === "disabled") {
       const superAdmins = await prisma.user.count({
@@ -226,12 +241,12 @@ export const userService = {
     });
   },
 
-  async lock(id: string, actorId?: string) {
+  async lock(id: string, actorId?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot lock your own account");
     }
 
-    const user = await this.findById(id);
+    const user = await this.findById(id, organizationId);
 
     if (user.isLocked) {
       throw new ApiError(400, "This account is already locked");
@@ -248,12 +263,12 @@ export const userService = {
     });
   },
 
-  async unlock(id: string, actorId?: string) {
+  async unlock(id: string, actorId?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot unlock your own account");
     }
 
-    const user = await this.findById(id);
+    const user = await this.findById(id, organizationId);
 
     if (!user.isLocked) {
       throw new ApiError(400, "This account is not locked");
@@ -270,8 +285,8 @@ export const userService = {
     });
   },
 
-  async resetPassword(id: string, input: ResetPasswordInput) {
-    await this.findById(id);
+  async resetPassword(id: string, input: ResetPasswordInput, organizationId?: string) {
+    await this.findById(id, organizationId);
     const hashedPassword = await bcrypt.hash(input.password, 12);
     // Bump tokenVersion to revoke every outstanding session for the account.
     // An admin resetting a compromised password must not leave the attacker's
@@ -291,19 +306,23 @@ export const userService = {
     return { success: true };
   },
 
-  async stats() {
+  async stats(organizationId?: string) {
+    const scope: Prisma.UserWhereInput = {
+      deletedAt: null,
+      ...(organizationId ? { organizationId } : {}),
+    };
     const [total, active, disabled, online, locked] = await Promise.all([
-      prisma.user.count({ where: { deletedAt: null } }),
-      prisma.user.count({ where: { status: "active", deletedAt: null } }),
-      prisma.user.count({ where: { status: "disabled", deletedAt: null } }),
+      prisma.user.count({ where: scope }),
+      prisma.user.count({ where: { ...scope, status: "active" } }),
+      prisma.user.count({ where: { ...scope, status: "disabled" } }),
       prisma.user.count({
         where: {
+          ...scope,
           status: "active",
-          deletedAt: null,
           lastLogin: { gte: new Date(Date.now() - ONLINE_WINDOW_MS) },
         },
       }),
-      prisma.user.count({ where: { isLocked: true, deletedAt: null } }),
+      prisma.user.count({ where: { ...scope, isLocked: true } }),
     ]);
 
     return { total, active, disabled, online, locked };

@@ -20,6 +20,7 @@ export const cameraController = {
       const windowMs = Number(req.query.windowMs);
       const summary = await cameraFleetHealthService.summarize(
         Number.isFinite(windowMs) && windowMs > 0 ? windowMs : undefined,
+        req.organizationId,
       );
       success(res, summary);
     } catch (err) {
@@ -37,7 +38,7 @@ export const cameraController = {
         cameraType: req.query.cameraType as CameraType | undefined,
         sortBy: req.query.sortBy as string | undefined,
         sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
-      });
+      }, req.organizationId);
 
       paginated(res, result.data, result.total, result.page, result.limit);
     } catch (err) {
@@ -48,7 +49,7 @@ export const cameraController = {
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.findById(id);
+      const camera = await cameraService.findById(id, req.organizationId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -62,7 +63,7 @@ export const cameraController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const camera = await cameraService.create(req.body);
+      const camera = await cameraService.create(req.body, req.organizationId);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -84,7 +85,7 @@ export const cameraController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.update(id, req.body);
+      const camera = await cameraService.update(id, req.body, req.organizationId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -111,8 +112,8 @@ export const cameraController = {
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const existingCamera = await cameraService.findById(id);
-      const deleted = await cameraService.remove(id);
+      const existingCamera = await cameraService.findById(id, req.organizationId);
+      const deleted = await cameraService.remove(id, req.organizationId);
 
       if (!deleted) {
         return error(res, "Camera not found", 404);
@@ -139,7 +140,7 @@ export const cameraController = {
   async start(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.startCamera(id);
+      const camera = await cameraService.startCamera(id, req.organizationId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -166,7 +167,7 @@ export const cameraController = {
   async stop(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.stopCamera(id);
+      const camera = await cameraService.stopCamera(id, req.organizationId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -193,7 +194,7 @@ export const cameraController = {
   async healthCheck(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.healthCheck(id);
+      const camera = await cameraService.healthCheck(id, undefined, req.organizationId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -211,6 +212,7 @@ export const cameraController = {
       const logs = await cameraService.getHealthLogs(
         id,
         Number(req.query.limit) || 50,
+        req.organizationId,
       );
       success(res, logs);
     } catch (err) {
@@ -221,7 +223,7 @@ export const cameraController = {
   async capture(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const result = await cameraService.captureSnapshot(id);
+      const result = await cameraService.captureSnapshot(id, undefined, undefined, req.organizationId);
 
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);

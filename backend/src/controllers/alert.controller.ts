@@ -17,7 +17,7 @@ export const alertController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as AlertQueryInput;
-      const result = await alertService.findAll(q);
+      const result = await alertService.findAll(q, req.organizationId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
@@ -31,7 +31,7 @@ export const alertController = {
       await sendCsvStream(
         res,
         ["ID", "Severity", "Title", "Message", "Camera", "Location", "Timestamp", "Read"],
-        alertService.streamCSV(q),
+        alertService.streamCSV(q, 500, req.organizationId),
       );
     } catch (err) {
       if (!res.headersSent) next(err);
@@ -40,7 +40,7 @@ export const alertController = {
 
   async markAsRead(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const alert = await alertService.markAsRead(req.params.id as string);
+      const alert = await alertService.markAsRead(req.params.id as string, req.organizationId);
       success(res, alert);
     } catch (err) {
       next(err);
@@ -53,7 +53,7 @@ export const alertController = {
       const alert = await alertService.acknowledge(req.params.id as string, {
         id: req.userId!,
         name: actor?.name ?? "Unknown user",
-      });
+      }, req.organizationId);
       const info = getClientInfo(req);
       await logAudit({
         userId: req.userId,
@@ -77,7 +77,7 @@ export const alertController = {
       const alert = await alertService.escalate(req.params.id as string, {
         id: req.userId!,
         name: actor?.name ?? "Unknown user",
-      }, (req.body as { note?: string } | undefined)?.note);
+      }, (req.body as { note?: string } | undefined)?.note, req.organizationId);
       const info = getClientInfo(req);
       await logAudit({
         userId: req.userId,
@@ -97,8 +97,8 @@ export const alertController = {
 
   async markAllAsRead(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      await alertService.markAllAsRead();
-      const unreadCount = await alertService.countUnread();
+      await alertService.markAllAsRead(req.organizationId);
+      const unreadCount = await alertService.countUnread(req.organizationId);
       success(res, { unreadCount });
     } catch (err) {
       next(err);
@@ -107,7 +107,7 @@ export const alertController = {
 
   async deleteAlert(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const result = await alertService.remove(req.params.id as string);
+      const result = await alertService.remove(req.params.id as string, req.organizationId);
       success(res, result);
     } catch (err) {
       next(err);
@@ -119,8 +119,8 @@ export const alertController = {
       // Single grouped query serves both the total and the per-severity
       // breakdown, so the dashboard only needs one polling request.
       const [count, bySeverity] = await Promise.all([
-        alertService.countUnread(),
-        alertService.countUnreadBySeverity(),
+        alertService.countUnread(req.organizationId),
+        alertService.countUnreadBySeverity(req.organizationId),
       ]);
       success(res, { count, bySeverity });
     } catch (err) {

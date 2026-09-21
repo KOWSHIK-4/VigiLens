@@ -25,11 +25,12 @@ function clampWindow(windowMs: number | undefined): number {
  * rows that actually exist; alerts are loaded with their ack/escalation
  * flags so escalation patterns are measurable rather than assumed.
  */
-async function loadEventData(windowMs: number) {
+async function loadEventData(windowMs: number, organizationId?: string) {
   const from = new Date(Date.now() - windowMs);
+  const orgFilter = organizationId ? { organizationId } : {};
   const [detections, alerts, incidents] = await Promise.all([
     prisma.detection.findMany({
-      where: { timestamp: { gte: from } },
+      where: { timestamp: { gte: from }, ...orgFilter },
       select: {
         id: true,
         label: true,
@@ -46,7 +47,7 @@ async function loadEventData(windowMs: number) {
       take: INTEL_MAX_DETECTIONS,
     }),
     prisma.alert.findMany({
-      where: { createdAt: { gte: from } },
+      where: { createdAt: { gte: from }, ...orgFilter },
       select: {
         id: true,
         severity: true,
@@ -61,7 +62,7 @@ async function loadEventData(windowMs: number) {
       take: INTEL_MAX_ALERTS,
     }),
     prisma.incident.findMany({
-      where: { openedAt: { gte: from } },
+      where: { openedAt: { gte: from }, ...orgFilter },
       select: {
         id: true,
         status: true,
@@ -120,10 +121,10 @@ async function loadEventData(windowMs: number) {
 }
 
 export const intelligenceService = {
-  async analyze(windowMs?: number): Promise<IntelligenceReport> {
+  async analyze(windowMs?: number, organizationId?: string): Promise<IntelligenceReport> {
     const safeWindow = clampWindow(windowMs);
     try {
-      const data = await loadEventData(safeWindow);
+      const data = await loadEventData(safeWindow, organizationId);
       return analyzeIntelligence({ ...data, windowMs: safeWindow });
     } catch (err) {
       logger.error("Security intelligence analysis failed", {
@@ -133,9 +134,9 @@ export const intelligenceService = {
     }
   },
 
-  async context(windowMs?: number) {
+  async context(windowMs?: number, organizationId?: string) {
     const safeWindow = clampWindow(windowMs);
-    const data = await loadEventData(safeWindow);
+    const data = await loadEventData(safeWindow, organizationId);
     const report = analyzeIntelligence({ ...data, windowMs: safeWindow });
     return {
       windowMs: safeWindow,

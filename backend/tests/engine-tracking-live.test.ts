@@ -25,6 +25,8 @@ import { notifyDetectorRestart } from "../src/engine/engineHooks";
 import { alertService } from "../src/services/alert.service";
 import { prisma } from "../src/config/prisma";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 let passed = 0;
 let failed = 0;
 
@@ -73,7 +75,13 @@ async function run() {
   // provision it defensively instead of relying on external seed state.
   await prisma.camera.upsert({
     where: { id: "demo-camera-1" },
-    create: { id: "demo-camera-1", name: "Main Entrance", url: "rtsp://camera-stream", cameraType: "rtsp" },
+    create: {
+      id: "demo-camera-1",
+      name: "Main Entrance",
+      url: "rtsp://camera-stream",
+      cameraType: "rtsp",
+      organizationId: DEFAULT_ORG_ID,
+    },
     update: {},
   });
 

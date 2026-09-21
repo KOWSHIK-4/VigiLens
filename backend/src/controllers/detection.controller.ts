@@ -93,7 +93,7 @@ export const detectionController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as DetectionQueryInput;
-      const result = await detectionService.findAll(q);
+      const result = await detectionService.findAll(q, req.organizationId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
@@ -103,7 +103,7 @@ export const detectionController = {
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const detection = await detectionService.findById(id);
+      const detection = await detectionService.findById(id, req.organizationId);
       success(res, detection);
     } catch (err) {
       next(err);
@@ -125,7 +125,7 @@ export const detectionController = {
           dateTo: q.dateTo,
           confidenceMin: q.confidenceMin,
           confidenceMax: q.confidenceMax,
-        }),
+        }, 500, req.organizationId),
       );
     } catch (err) {
       if (!res.headersSent) next(err);
@@ -134,7 +134,7 @@ export const detectionController = {
 
   async getStats(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const stats = await detectionService.getStats();
+      const stats = await detectionService.getStats(req.organizationId);
       success(res, stats);
     } catch (err) {
       next(err);
@@ -151,6 +151,7 @@ export const detectionController = {
       const result = await fleetCorrelationService.analyze(
         Number.isFinite(windowMs) ? windowMs : undefined,
         cameraId,
+        req.organizationId,
       );
       success(res, result);
     } catch (err) {
@@ -161,7 +162,7 @@ export const detectionController = {
   async getRiskScore(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const risk = await riskScoreService.forDetection(id);
+      const risk = await riskScoreService.forDetection(id, req.organizationId);
       success(res, risk);
     } catch (err) {
       next(err);
@@ -171,8 +172,8 @@ export const detectionController = {
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const detection = await detectionService.findById(id);
-      const result = await detectionService.remove(id);
+      const detection = await detectionService.findById(id, req.organizationId);
+      const result = await detectionService.remove(id, req.organizationId);
       const actor = req.userId
         ? await prisma.user.findFirst({
             where: { id: req.userId },

@@ -6,7 +6,7 @@ import { success } from "../utils/apiResponse";
 export const analyticsController = {
   async getOverview(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getOverview(req.query as unknown as AnalyticsQueryInput);
+      const data = await analyticsService.getOverview(req.query as unknown as AnalyticsQueryInput, req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -15,7 +15,7 @@ export const analyticsController = {
 
   async getDaily(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getDaily((req.query as unknown as AnalyticsQueryInput));
+      const data = await analyticsService.getDaily((req.query as unknown as AnalyticsQueryInput), req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -24,7 +24,7 @@ export const analyticsController = {
 
   async getCameras(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getCameras((req.query as unknown as AnalyticsQueryInput));
+      const data = await analyticsService.getCameras((req.query as unknown as AnalyticsQueryInput), req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -33,7 +33,7 @@ export const analyticsController = {
 
   async getDetectors(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getDetectors((req.query as unknown as AnalyticsQueryInput));
+      const data = await analyticsService.getDetectors((req.query as unknown as AnalyticsQueryInput), req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -42,7 +42,7 @@ export const analyticsController = {
 
   async getTimeline(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getTimeline((req.query as unknown as AnalyticsQueryInput));
+      const data = await analyticsService.getTimeline((req.query as unknown as AnalyticsQueryInput), req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -51,7 +51,7 @@ export const analyticsController = {
 
   async getConfidenceDistribution(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await analyticsService.getConfidenceDistribution((req.query as unknown as AnalyticsQueryInput));
+      const data = await analyticsService.getConfidenceDistribution((req.query as unknown as AnalyticsQueryInput), req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);

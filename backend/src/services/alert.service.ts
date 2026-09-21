@@ -20,8 +20,12 @@ interface CreateAlertInput {
   message: string;
 }
 
-function buildAlertWhere(params: Pick<AlertQueryInput, "severity" | "isRead" | "search" | "cameraId" | "dateFrom" | "dateTo">): Prisma.AlertWhereInput {
+function buildAlertWhere(
+  params: Pick<AlertQueryInput, "severity" | "isRead" | "search" | "cameraId" | "dateFrom" | "dateTo">,
+  organizationId?: string,
+): Prisma.AlertWhereInput {
   const where: Prisma.AlertWhereInput = {};
+  if (organizationId) where.organizationId = organizationId;
 
   if (params.severity) {
     where.severity = params.severity;
@@ -76,24 +80,37 @@ export function aggregateUnreadSeverityCounts(
 }
 
 export const alertService = {
-  async create(input: CreateAlertInput) {
+  async create(input: CreateAlertInput, organizationId?: string) {
+    // Engine/ingestion path has no caller context: the tenant is inherited
+    // from the governing detection row.
+    if (!organizationId) {
+      const detection = await prisma.detection.findUnique({
+        where: { id: input.detectionId },
+        select: { organizationId: true },
+      });
+      organizationId = detection?.organizationId;
+    }
+    if (!organizationId) {
+      throw new ApiError(400, "Cannot create alert without a tenant organization");
+    }
     const alert = await prisma.alert.create({
       data: {
         detectionId: input.detectionId,
         severity: input.severity,
         title: input.title,
         message: input.message,
+        organizationId,
       },
       include: alertInclude,
     });
-    publishAlertCreated(alert);
+    publishAlertCreated(alert, organizationId);
     void webhookService.dispatchAlertCreated(alert);
     metricsService.recordEvent("alerts.created");
     return alert;
   },
 
-  async findAll(params: AlertQueryInput) {
-    const where = buildAlertWhere(params);
+  async findAll(params: AlertQueryInput, organizationId?: string) {
+    const where = buildAlertWhere(params, organizationId);
 
     const [data, total] = await Promise.all([
       prisma.alert.findMany({
@@ -109,8 +126,8 @@ export const alertService = {
     return { data, total };
   },
 
-  async *streamCSV(params: AlertQueryInput, pageSize = 500) {
-    const where = buildAlertWhere(params);
+  async *streamCSV(params: AlertQueryInput, pageSize = 500, organizationId?: string) {
+    const where = buildAlertWhere(params, organizationId);
     let skip = 0;
 
     for (;;) {
@@ -138,8 +155,10 @@ export const alertService = {
     }
   },
 
-  async markAsRead(id: string) {
-    const alert = await prisma.alert.findUnique({ where: { id } });
+  async markAsRead(id: string, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!alert) throw new ApiError(404, "Alert not found");
 
     return prisma.alert.update({
@@ -149,8 +168,10 @@ export const alertService = {
     });
   },
 
-  async acknowledge(id: string, actor: { id: string; name: string }) {
-    const alert = await prisma.alert.findUnique({ where: { id } });
+  async acknowledge(id: string, actor: { id: string; name: string }, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!alert) throw new ApiError(404, "Alert not found");
 
     return prisma.alert.update({
@@ -165,8 +186,10 @@ export const alertService = {
     });
   },
 
-  async escalate(id: string, actor: { id: string; name: string }, note?: string) {
-    const alert = await prisma.alert.findUnique({ where: { id } });
+  async escalate(id: string, actor: { id: string; name: string }, note?: string, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!alert) throw new ApiError(404, "Alert not found");
 
     return prisma.alert.update({
@@ -185,15 +208,17 @@ export const alertService = {
     });
   },
 
-  async markAllAsRead() {
+  async markAllAsRead(organizationId?: string) {
     await prisma.alert.updateMany({
-      where: { isRead: false },
+      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
       data: { isRead: true },
     });
   },
 
-  async countUnread() {
-    return prisma.alert.count({ where: { isRead: false } });
+  async countUnread(organizationId?: string) {
+    return prisma.alert.count({
+      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
+    });
   },
 
   /**
@@ -201,25 +226,28 @@ export const alertService = {
    * grouped query. The dashboard uses this instead of issuing one filtered
    * list request per severity on every polling tick.
    */
-  async countUnreadBySeverity() {
+  async countUnreadBySeverity(organizationId?: string) {
     const rows = await prisma.alert.groupBy({
       by: ["severity"],
-      where: { isRead: false },
+      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
       _count: { severity: true },
     });
     return aggregateUnreadSeverityCounts(rows);
   },
 
-  async remove(id: string) {
-    const alert = await prisma.alert.findUnique({ where: { id } });
+  async remove(id: string, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!alert) throw new ApiError(404, "Alert not found");
 
     await prisma.alert.delete({ where: { id } });
     return { id };
   },
 
-  async getLatest(limit = 10) {
+  async getLatest(limit = 10, organizationId?: string) {
     return prisma.alert.findMany({
+      where: organizationId ? { organizationId } : {},
       include: alertInclude,
       orderBy: { createdAt: "desc" },
       take: limit,

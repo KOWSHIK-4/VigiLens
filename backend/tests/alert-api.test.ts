@@ -6,6 +6,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 4931;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -130,20 +132,20 @@ async function run() {
   // Fixture: one camera, two detections, two alerts (one critical unread,
   // one warning read).
   const camera = await prisma.camera.create({
-    data: { name: "alert-api-test-cam", url: "/dev/null", cameraType: "usb" },
+    data: { name: "alert-api-test-cam", url: "/dev/null", cameraType: "usb", organizationId: DEFAULT_ORG_ID },
   });
   cameraId = camera.id;
   const detA = await prisma.detection.create({
-    data: { cameraId: camera.id, label: "person", confidence: 0.91, imageUrl: "test-a.jpg" },
+    data: { cameraId: camera.id, label: "person", confidence: 0.91, imageUrl: "test-a.jpg", organizationId: DEFAULT_ORG_ID },
   });
   const detB = await prisma.detection.create({
-    data: { cameraId: camera.id, label: "vehicle", confidence: 0.72, imageUrl: "test-b.jpg" },
+    data: { cameraId: camera.id, label: "vehicle", confidence: 0.72, imageUrl: "test-b.jpg", organizationId: DEFAULT_ORG_ID },
   });
   const alertCritical = await prisma.alert.create({
-    data: { detectionId: detA.id, severity: "critical", title: "Critical test alert", message: "critical path" },
+    data: { detectionId: detA.id, severity: "critical", title: "Critical test alert", message: "critical path", organizationId: DEFAULT_ORG_ID },
   });
   const alertWarning = await prisma.alert.create({
-    data: { detectionId: detB.id, severity: "warning", title: "Warning test alert", message: "warning path", isRead: true },
+    data: { detectionId: detB.id, severity: "warning", title: "Warning test alert", message: "warning path", isRead: true, organizationId: DEFAULT_ORG_ID },
   });
 
   // --- Query validation ---

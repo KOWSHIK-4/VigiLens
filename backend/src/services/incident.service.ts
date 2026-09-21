@@ -79,8 +79,10 @@ const incidentInclude = {
 function buildWhere(
   params: Pick<IncidentQueryInput, "status" | "priority" | "assignedTo" | "mine" | "unassigned" | "search">,
   userId?: string,
+  organizationId?: string,
 ): Prisma.IncidentWhereInput {
   const where: Prisma.IncidentWhereInput = {};
+  if (organizationId) where.organizationId = organizationId;
 
   if (params.status) {
     where.status = params.status;
@@ -147,6 +149,7 @@ async function audit(params: {
   alertId: string;
   ctx: ActorContext;
   metadata?: Record<string, unknown>;
+  organizationId?: string;
 }) {
   const author = params.ctx.userId
     ? await prisma.user.findUnique({
@@ -164,6 +167,7 @@ async function audit(params: {
     description: params.description,
     ipAddress: params.ctx.ipAddress,
     userAgent: params.ctx.userAgent,
+    organizationId: params.organizationId,
     metadata: {
       ...(params.metadata || {}),
       incidentId: params.incidentId,
@@ -192,9 +196,9 @@ async function logActivity(
 }
 
 export const incidentService = {
-  async create(input: CreateIncidentInput, ctx: ActorContext = {}) {
-    const alert = await prisma.alert.findUnique({
-      where: { id: input.alertId },
+  async create(input: CreateIncidentInput, ctx: ActorContext = {}, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id: input.alertId, ...(organizationId ? { organizationId } : {}) },
       include: {
         detection: {
           include: {
@@ -223,6 +227,7 @@ export const incidentService = {
         priority,
         title,
         description: input.description,
+        organizationId: alert.organizationId,
       },
       include: incidentInclude,
     });
@@ -241,9 +246,10 @@ export const incidentService = {
       alertId: alert.id,
       ctx,
       metadata: { alertSeverity: alert.severity, priority },
+      organizationId: alert.organizationId,
     });
 
-    publishIncidentChanged({ id: incident.id, status: incident.status, action: "created" });
+    publishIncidentChanged({ id: incident.id, status: incident.status, action: "created" }, alert.organizationId ?? undefined);
     metricsService.recordEvent("incidents.created");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
@@ -257,8 +263,8 @@ export const incidentService = {
     });
   },
 
-  async findAll(params: IncidentQueryInput, userId?: string) {
-    const where = buildWhere(params, userId);
+  async findAll(params: IncidentQueryInput, userId?: string, organizationId?: string) {
+    const where = buildWhere(params, userId, organizationId);
 
     const [data, total] = await Promise.all([
       prisma.incident.findMany({
@@ -274,8 +280,8 @@ export const incidentService = {
     return { data, total };
   },
 
-  async *streamCSV(params: IncidentQueryInput, userId?: string, pageSize = 500) {
-    const where = buildWhere(params, userId);
+  async *streamCSV(params: IncidentQueryInput, userId?: string, organizationId?: string, pageSize = 500) {
+    const where = buildWhere(params, userId, organizationId);
     let skip = 0;
 
     for (;;) {
@@ -314,9 +320,9 @@ export const incidentService = {
     }
   },
 
-  async findById(id: string) {
-    const incident = await prisma.incident.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
       include: incidentInclude,
     });
     if (!incident) {
@@ -325,9 +331,9 @@ export const incidentService = {
     return incident;
   },
 
-  async getRelatedDetections(id: string, windowMin = 30) {
-    const incident = await prisma.incident.findUnique({
-      where: { id },
+  async getRelatedDetections(id: string, windowMin = 30, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
       include: {
         alert: {
           include: {
@@ -366,8 +372,10 @@ export const incidentService = {
     return { detection: base, related };
   },
 
-  async updateResolutionSummary(id: string, summary: string, ctx: ActorContext = {}) {
-    const incident = await prisma.incident.findUnique({ where: { id } });
+  async updateResolutionSummary(id: string, summary: string, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!incident) {
       throw new ApiError(404, "Incident not found");
     }
@@ -389,19 +397,22 @@ export const incidentService = {
       incidentId: incident.id,
       alertId: incident.alertId,
       ctx,
+      organizationId,
     });
 
     return updated;
   },
 
-  async changeStatus(id: string, input: UpdateIncidentStatusInput, ctx: ActorContext = {}) {
-    const incident = await prisma.incident.findUnique({ where: { id } });
+  async changeStatus(id: string, input: UpdateIncidentStatusInput, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!incident) {
       throw new ApiError(404, "Incident not found");
     }
 
     if (incident.status === input.status) {
-      return prisma.incident.findUnique({ where: { id }, include: incidentInclude });
+      return prisma.incident.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: incidentInclude });
     }
 
     const allowed = ALLOWED_TRANSITIONS[incident.status];
@@ -448,9 +459,10 @@ export const incidentService = {
       alertId: incident.alertId,
       ctx,
       metadata: { previousStatus: incident.status, nextStatus: input.status },
+      organizationId,
     });
 
-    publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed" });
+    publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed" }, organizationId);
     metricsService.recordEvent("incidents.changed");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
@@ -461,14 +473,16 @@ export const incidentService = {
     return updated;
   },
 
-  async changePriority(id: string, priority: AlertSeverity, ctx: ActorContext = {}) {
-    const incident = await prisma.incident.findUnique({ where: { id } });
+  async changePriority(id: string, priority: AlertSeverity, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!incident) {
       throw new ApiError(404, "Incident not found");
     }
 
     if (incident.priority === priority) {
-      return prisma.incident.findUnique({ where: { id }, include: incidentInclude });
+      return prisma.incident.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: incidentInclude });
     }
 
     const author = await authorFrom(ctx);
@@ -489,13 +503,16 @@ export const incidentService = {
       alertId: incident.alertId,
       ctx,
       metadata: { previousPriority: incident.priority, nextPriority: priority },
+      organizationId,
     });
 
     return updated;
   },
 
-  async assign(id: string, input: AssignIncidentInput, ctx: ActorContext = {}) {
-    const incident = await prisma.incident.findUnique({ where: { id } });
+  async assign(id: string, input: AssignIncidentInput, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!incident) {
       throw new ApiError(404, "Incident not found");
     }
@@ -506,8 +523,8 @@ export const incidentService = {
 
     let assignedToName: string | undefined;
     if (input.assigneeId) {
-      const assignee = await prisma.user.findUnique({
-        where: { id: input.assigneeId },
+      const assignee = await prisma.user.findFirst({
+        where: { id: input.assigneeId, ...(organizationId ? { organizationId } : {}) },
         select: { id: true, name: true, status: true, deletedAt: true },
       });
       if (!assignee || assignee.deletedAt) {
@@ -520,7 +537,7 @@ export const incidentService = {
     }
 
     if ((incident.assignedToUserId ?? null) === (input.assigneeId ?? null)) {
-      return prisma.incident.findUnique({ where: { id }, include: incidentInclude });
+      return prisma.incident.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: incidentInclude });
     }
 
     const author = await authorFrom(ctx);
@@ -557,13 +574,16 @@ export const incidentService = {
         nextAssigneeId: input.assigneeId,
         nextAssigneeName: assignedToName,
       },
+      organizationId,
     });
 
     return updated;
   },
 
-  async addNote(id: string, input: AddIncidentNoteInput, ctx: ActorContext = {}) {
-    const incident = await prisma.incident.findUnique({ where: { id } });
+  async addNote(id: string, input: AddIncidentNoteInput, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!incident) {
       throw new ApiError(404, "Incident not found");
     }
@@ -589,19 +609,22 @@ export const incidentService = {
       alertId: incident.alertId,
       ctx,
       metadata: { noteId: note.id },
+      organizationId,
     });
 
-    return prisma.incident.findUnique({ where: { id }, include: incidentInclude });
+    return prisma.incident.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: incidentInclude });
   },
 
-  async summary() {
+  async summary(organizationId?: string) {
+    const orgWhere = organizationId ? { organizationId } : {};
     const [grouped, totalOpen, totalResolved] = await Promise.all([
       prisma.incident.groupBy({
         by: ["status"],
+        where: orgWhere,
         _count: { _all: true },
       }),
-      prisma.incident.count({ where: { status: { not: "resolved" } } }),
-      prisma.incident.count({ where: { status: "resolved" } }),
+      prisma.incident.count({ where: { ...orgWhere, status: { not: "resolved" } } }),
+      prisma.incident.count({ where: { ...orgWhere, status: "resolved" } }),
     ]);
 
     const byStatus = Object.fromEntries(grouped.map((g) => [g.status, g._count._all]));

@@ -2,11 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
-import type {
-  AlertSeverity,
-  DetectionStatus,
-  Prisma,
-} from "@prisma/client";
+import { Prisma, type AlertSeverity, type DetectionStatus } from "@prisma/client";
 import { logAudit } from "../utils/auditLog";
 import { computeAuditHash } from "../utils/auditChain";
 import { sharedAlertCooldownRegistry } from "../engine/alerts";
@@ -114,8 +110,12 @@ interface FindAllParams {
   sortOrder?: string;
 }
 
-function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhereInput {
+function buildWhereClause(
+  params: Partial<FindAllParams>,
+  organizationId?: string,
+): Prisma.DetectionWhereInput {
   const where: Prisma.DetectionWhereInput = {};
+  if (organizationId) where.organizationId = organizationId;
 
   if (params.status) {
     where.status = params.status as DetectionStatus;
@@ -157,9 +157,15 @@ function buildWhereClause(params: Partial<FindAllParams>): Prisma.DetectionWhere
 }
 
 const STATS_CACHE_TTL_MS = 5_000;
-let cachedStats: { data: unknown; expiresAt: number } | null = null;
+const statsCache = new Map<string, { data: unknown; expiresAt: number }>();
 
-async function computeDetectionStats() {
+async function computeDetectionStats(organizationId?: string) {
+  const scope: Prisma.DetectionWhereInput = organizationId ? { organizationId } : {};
+  const camScope: Prisma.CameraWhereInput = organizationId ? { organizationId } : {};
+  const orgCond: Prisma.Sql = organizationId
+    ? Prisma.sql`AND organization_id = ${organizationId}`
+    : Prisma.empty;
+
   const [
     totalDetections,
     criticalAlerts,
@@ -168,10 +174,11 @@ async function computeDetectionStats() {
     detectionsOverTime,
     alertsByType,
   ] = await Promise.all([
-    prisma.detection.count(),
-    prisma.detection.count({ where: { status: "critical" } }),
-    prisma.camera.count({ where: { status: "online" } }),
+    prisma.detection.count({ where: scope }),
+    prisma.detection.count({ where: { ...scope, status: "critical" } }),
+    prisma.camera.count({ where: { ...camScope, status: "online" } }),
     prisma.detection.findMany({
+      where: scope,
       include: { camera: cameraView },
       orderBy: { timestamp: "desc" },
       take: 10,
@@ -180,6 +187,7 @@ async function computeDetectionStats() {
       SELECT DATE(timestamp) as date, COUNT(*)::int as count
       FROM detections
       WHERE timestamp >= NOW() - INTERVAL '7 days'
+        ${orgCond}
       GROUP BY DATE(timestamp)
       ORDER BY date ASC
     `,
@@ -187,6 +195,7 @@ async function computeDetectionStats() {
       SELECT label, COUNT(*)::int as count
       FROM detections
       WHERE timestamp >= NOW() - INTERVAL '30 days'
+        ${orgCond}
       GROUP BY label
       ORDER BY count DESC
       LIMIT 10
@@ -196,7 +205,7 @@ async function computeDetectionStats() {
   const avgConfidence =
     totalDetections > 0
       ? await prisma.detection
-          .aggregate({ _avg: { confidence: true } })
+          .aggregate({ _avg: { confidence: true }, where: scope })
           .then((r: { _avg: { confidence: number | null } }) => r._avg.confidence ?? 0)
       : 0;
 
@@ -224,6 +233,21 @@ export const detectionService = {
   async createMany(inputs: Array<Omit<CreateDetectionInput, "skipAlert" | "applyAlertCooldown">>) {
     if (inputs.length === 0) return [];
 
+    // Engine-path tenancy: every row inherits the organization of its camera.
+    // Unknown cameras fail the whole batch so no orphaned row can ever be
+    // written without a tenant.
+    const cameraIds = Array.from(new Set(inputs.map((input) => input.cameraId)));
+    const cameras = await prisma.camera.findMany({
+      where: { id: { in: cameraIds } },
+      select: { id: true, organizationId: true },
+    });
+    const orgByCamera = new Map(cameras.map((camera) => [camera.id, camera.organizationId]));
+    for (const cameraId of cameraIds) {
+      if (!orgByCamera.has(cameraId)) {
+        throw new ApiError(404, `Unknown camera: ${cameraId}`);
+      }
+    }
+
     const rows = await prisma.$transaction(
       inputs.map((input) =>
         prisma.detection.create({
@@ -242,6 +266,7 @@ export const detectionService = {
             ...(input.boundingBox ? { boundingBox: input.boundingBox as Prisma.InputJsonValue } : {}),
             snapshotUrl: input.snapshotUrl,
             processingTimeMs: input.processingTimeMs,
+            organizationId: orgByCamera.get(input.cameraId)!,
           },
           include: { camera: true },
         }),
@@ -267,6 +292,7 @@ export const detectionService = {
           detectorKey: inputs[index].detectorKey ?? undefined,
           source: "detector-engine",
         },
+        organizationId: row.organizationId,
       } satisfies Prisma.AuditLogCreateManyInput;
       return { ...audit, hash: computeAuditHash(audit) };
     });
@@ -278,7 +304,22 @@ export const detectionService = {
     return rows;
   },
 
-  async create(input: CreateDetectionInput) {
+  async create(input: CreateDetectionInput, callerOrganizationId?: string) {
+    // The camera is the tenant root for detections. On authenticated paths
+    // the caller's organization must match the camera's; engine paths (no
+    // caller) simply inherit the camera organization.
+    const camera = await prisma.camera.findFirst({
+      where: {
+        id: input.cameraId,
+        ...(callerOrganizationId ? { organizationId: callerOrganizationId } : {}),
+      },
+      select: { id: true, name: true, organizationId: true },
+    });
+    if (!camera) {
+      throw new ApiError(404, "Camera not found");
+    }
+    const organizationId = camera.organizationId;
+
     const detection = await prisma.detection.create({
       data: {
         cameraId: input.cameraId,
@@ -295,6 +336,7 @@ export const detectionService = {
         ...(input.boundingBox ? { boundingBox: input.boundingBox as Prisma.InputJsonValue } : {}),
         snapshotUrl: input.snapshotUrl,
         processingTimeMs: input.processingTimeMs,
+        organizationId,
       },
       include: { camera: true },
     });
@@ -355,6 +397,7 @@ export const detectionService = {
         severity,
         title,
         message,
+        organizationId,
       },
     });
 
@@ -363,9 +406,10 @@ export const detectionService = {
       module: "alerts",
       description: `Alert created: ${title}`,
       metadata: { alertId: alert.id, detectionId: detection.id, severity },
+      organizationId,
     });
 
-    publishAlertCreated(alert);
+    publishAlertCreated(alert, organizationId);
     void webhookService.dispatchAlertCreated(alert);
     metricsService.recordEvent("alerts.created");
 
@@ -377,8 +421,8 @@ export const detectionService = {
     return detection;
   },
 
-  async findAll(params: FindAllParams) {
-    const where = buildWhereClause(params);
+  async findAll(params: FindAllParams, organizationId?: string) {
+    const where = buildWhereClause(params, organizationId);
 
     const orderBy: Prisma.DetectionOrderByWithRelationInput = {};
     const sortField = params.sortBy || "timestamp";
@@ -398,18 +442,18 @@ export const detectionService = {
     return { data, total };
   },
 
-  async findRecentByDetectorKey(detectorKey: string, limit = 25) {
+  async findRecentByDetectorKey(detectorKey: string, limit = 25, organizationId?: string) {
     return prisma.detection.findMany({
-      where: { detectorKey },
+      where: { detectorKey, ...(organizationId ? { organizationId } : {}) },
       include: { camera: cameraView },
       orderBy: { timestamp: "desc" },
       take: limit,
     });
   },
 
-  async findById(id: string) {
-    const detection = await prisma.detection.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string) {
+    const detection = await prisma.detection.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
       include: { camera: cameraView, alert: true },
     });
 
@@ -420,8 +464,10 @@ export const detectionService = {
     return detection;
   },
 
-  async remove(id: string) {
-    const detection = await prisma.detection.findUnique({ where: { id } });
+  async remove(id: string, organizationId?: string) {
+    const detection = await prisma.detection.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!detection) {
       throw new ApiError(404, "Detection not found");
     }
@@ -435,8 +481,8 @@ export const detectionService = {
    * the caller (controller) can write them incrementally instead of loading
    * the whole result set into memory.
    */
-  async *streamCSV(params: Partial<FindAllParams>, pageSize = 500) {
-    const where = buildWhereClause(params);
+  async *streamCSV(params: Partial<FindAllParams>, pageSize = 500, organizationId?: string) {
+    const where = buildWhereClause(params, organizationId);
     let skip = 0;
 
     for (;;) {
@@ -464,12 +510,15 @@ export const detectionService = {
     }
   },
 
-  async getStats() {
-    if (cachedStats && cachedStats.expiresAt > Date.now()) {
-      return cachedStats.data as Awaited<ReturnType<typeof computeDetectionStats>>;
+  async getStats(organizationId?: string) {
+    const cached = organizationId ? statsCache.get(organizationId) : undefined;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as Awaited<ReturnType<typeof computeDetectionStats>>;
     }
-    const data = await computeDetectionStats();
-    cachedStats = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    const data = await computeDetectionStats(organizationId);
+    if (organizationId) {
+      statsCache.set(organizationId, { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
+    }
     return data;
   },
 };

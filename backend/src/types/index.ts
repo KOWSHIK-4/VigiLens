@@ -4,6 +4,7 @@ import type { Request } from "express";
 export interface AuthRequest extends Request {
   userId?: string;
   userRole?: string;
+  organizationId?: string;
   permissions?: Set<string>;
 }
 

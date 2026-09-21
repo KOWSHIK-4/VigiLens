@@ -9,6 +9,8 @@ import { cameraService, cameraHealthReporter } from "../src/services/camera.serv
 import { AiServiceError } from "../src/engine/aiClient";
 import { ApiError } from "../src/utils/errors";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 5681;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -55,7 +57,7 @@ async function runServiceTests() {
   const ids: string[] = [];
 
   const cam = await prisma.camera.create({
-    data: { name: "Capture Unit Test", url: "rtsp://unit-stream", cameraType: "rtsp" },
+    data: { name: "Capture Unit Test", url: "rtsp://unit-stream", cameraType: "rtsp", organizationId: DEFAULT_ORG_ID },
   });
   ids.push(cam.id);
 
@@ -168,7 +170,12 @@ async function runServiceTests() {
 
   {
     const rtspCam = await prisma.camera.create({
-      data: { name: "Health Probe RTSP", url: "rtsp://probe-stream", cameraType: "rtsp" },
+      data: {
+        name: "Health Probe RTSP",
+        url: "rtsp://probe-stream",
+        cameraType: "rtsp",
+        organizationId: DEFAULT_ORG_ID,
+      },
     });
     ids.push(rtspCam.id);
 
@@ -215,7 +222,7 @@ async function runServiceTests() {
 
   {
     const ipCam = await prisma.camera.create({
-      data: { name: "Health Probe IP", url: "http://127.0.0.1:9", cameraType: "ip" },
+      data: { name: "Health Probe IP", url: "http://127.0.0.1:9", cameraType: "ip", organizationId: DEFAULT_ORG_ID },
     });
     ids.push(ipCam.id);
 
@@ -241,6 +248,7 @@ async function runServiceTests() {
         cameraType: "rtsp",
         status: "connecting",
         isHealthy: false,
+        organizationId: DEFAULT_ORG_ID,
       },
     });
     ids.push(reporterCam.id);

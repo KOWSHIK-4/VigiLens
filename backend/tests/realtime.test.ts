@@ -7,6 +7,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 5401;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -245,6 +247,7 @@ async function run() {
       url: "rtsp://localhost/none",
       cameraType: "rtsp",
       location: "realtime-test",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdCameraId = camera.id;

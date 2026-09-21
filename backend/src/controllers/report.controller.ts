@@ -21,6 +21,7 @@ export const reportController = {
         type,
         generatedBy: req.userId!,
         dateRange,
+        organizationId: req.organizationId,
       });
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -31,6 +32,7 @@ export const reportController = {
         action: "report_generated",
         module: "reports",
         description: `Report generated: ${title} (${type})`,
+        organizationId: req.organizationId,
         ...info,
         metadata: { reportId: report.id, title, type, dateRange },
       });
@@ -59,7 +61,7 @@ export const reportController = {
         status,
         sortBy,
         sortOrder,
-      });
+      }, req.organizationId);
       paginated(res, result.data, result.total, parseInt(page), parseInt(limit));
     } catch (err) {
       next(err);
@@ -68,7 +70,7 @@ export const reportController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const report = await reportService.findById(req.params.id as string);
+      const report = await reportService.findById(req.params.id as string, req.organizationId);
       success(res, report);
     } catch (err) {
       next(err);
@@ -77,7 +79,7 @@ export const reportController = {
 
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const result = await reportService.remove(req.params.id as string);
+      const result = await reportService.remove(req.params.id as string, req.organizationId);
       success(res, result);
     } catch (err) {
       next(err);
@@ -90,6 +92,7 @@ export const reportController = {
       const { content, filename, mimeType } = await reportService.getDownloadData(
         req.params.id as string,
         format,
+        req.organizationId,
       );
       res.setHeader("Content-Type", mimeType);
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

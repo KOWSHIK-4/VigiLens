@@ -292,10 +292,11 @@ export async function loadCameraCredentials(
 }
 
 export const cameraService = {
-  async findAll(params: FindAllParams) {
+  async findAll(params: FindAllParams, organizationId?: string) {
     const { page, limit, search, status, cameraType, sortBy, sortOrder } = params;
 
     const where: Prisma.CameraWhereInput = {};
+    if (organizationId) where.organizationId = organizationId;
 
     if (search) {
       where.OR = [
@@ -329,9 +330,9 @@ export const cameraService = {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
-  async findById(id: string) {
-    const camera = await prisma.camera.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string) {
+    const camera = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
       include: {
         detections: {
           orderBy: { timestamp: "desc" },
@@ -346,7 +347,11 @@ export const cameraService = {
     return camera ? toApiCamera(camera) : null;
   },
 
-  async create(data: CreateCameraInput) {
+  async create(data: CreateCameraInput, organizationId?: string) {
+    if (!organizationId) {
+      throw new ApiError(400, "A tenant organization is required to create a camera");
+    }
+
     const username = (data.username ?? "").trim();
     const password = data.password ?? "";
     const hasCredentialInput = username.length > 0 || password.length > 0;
@@ -369,17 +374,18 @@ export const cameraService = {
         passwordEncrypted: hasCredentialInput ? encryptSecret(password) : null,
         username: null,
         password: null,
+        organizationId,
       },
     });
     return toApiCamera(camera);
   },
 
-  async update(id: string, data: UpdateCameraInput) {
+  async update(id: string, data: UpdateCameraInput, organizationId?: string) {
     // Credential fields are read separately, without `cameraType`, so the
     // prisma redaction scrub (keyed on cameraType + password) lets them
     // through — matching the loadCameraCredentials convention.
-    const existing = await prisma.camera.findUnique({
-      where: { id },
+    const existing = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
       select: { name: true, cameraType: true, url: true },
     });
     if (!existing) return null;
@@ -435,16 +441,20 @@ export const cameraService = {
     return toApiCamera(camera);
   },
 
-  async remove(id: string) {
-    const existing = await prisma.camera.findUnique({ where: { id } });
+  async remove(id: string, organizationId?: string) {
+    const existing = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!existing) return false;
 
     await prisma.camera.delete({ where: { id } });
     return true;
   },
 
-  async startCamera(id: string) {
-    const camera = await prisma.camera.findUnique({ where: { id } });
+  async startCamera(id: string, organizationId?: string) {
+    const camera = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!camera) return null;
 
     // Start is idempotent: cameras that are already online or still in the
@@ -464,8 +474,10 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async stopCamera(id: string) {
-    const camera = await prisma.camera.findUnique({ where: { id } });
+  async stopCamera(id: string, organizationId?: string) {
+    const camera = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!camera) return null;
 
     // Stop is idempotent: an already-offline camera is returned unchanged.
@@ -482,8 +494,10 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async healthCheck(id: string, client: AiServiceClient = aiServiceClient) {
-    const camera = await prisma.camera.findUnique({ where: { id } });
+  async healthCheck(id: string, client: AiServiceClient = aiServiceClient, organizationId?: string) {
+    const camera = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!camera) return null;
 
     const start = Date.now();
@@ -564,7 +578,14 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async getHealthLogs(cameraId: string, limit = 50) {
+  async getHealthLogs(cameraId: string, limit = 50, organizationId?: string) {
+    // Parent-table tenant check: only cameras of the caller's organization
+    // expose health history.
+    const camera = await prisma.camera.findFirst({
+      where: { id: cameraId, ...(organizationId ? { organizationId } : {}) },
+      select: { id: true },
+    });
+    if (!camera) return [];
     return prisma.cameraHealthLog.findMany({
       where: { cameraId },
       orderBy: { checkedAt: "desc" },
@@ -576,8 +597,11 @@ export const cameraService = {
     id: string,
     client: AiServiceClient = aiServiceClient,
     snapshotDir?: string,
+    organizationId?: string,
   ) {
-    const camera = await prisma.camera.findUnique({ where: { id } });
+    const camera = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
     if (!camera) {
       throw new ApiError(404, "Camera not found");
     }

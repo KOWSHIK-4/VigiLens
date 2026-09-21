@@ -24,7 +24,7 @@ export const incidentController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as IncidentQueryInput;
-      const result = await incidentService.findAll(q, req.userId);
+      const result = await incidentService.findAll(q, req.userId, req.organizationId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
@@ -41,7 +41,7 @@ export const incidentController = {
           "ID", "Status", "Priority", "Title", "Source Camera", "Assignee",
           "Opened At", "Resolved At", "Description",
         ],
-        incidentService.streamCSV(q, req.userId),
+        incidentService.streamCSV(q, req.userId, req.organizationId),
       );
     } catch (err) {
       if (!res.headersSent) next(err);
@@ -50,7 +50,7 @@ export const incidentController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const incident = await incidentService.findById(req.params.id as string);
+      const incident = await incidentService.findById(req.params.id as string, req.organizationId);
       success(res, incident);
     } catch (err) {
       next(err);
@@ -62,6 +62,7 @@ export const incidentController = {
       const incident = await incidentService.create(
         req.body as CreateIncidentInput,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident, 201);
     } catch (err) {
@@ -75,6 +76,7 @@ export const incidentController = {
         req.params.id as string,
         req.body as UpdateIncidentStatusInput,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident);
     } catch (err) {
@@ -88,6 +90,7 @@ export const incidentController = {
         req.params.id as string,
         (req.body as UpdateIncidentPriorityInput).priority,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident);
     } catch (err) {
@@ -101,6 +104,7 @@ export const incidentController = {
         req.params.id as string,
         req.body as AssignIncidentInput,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident);
     } catch (err) {
@@ -114,6 +118,7 @@ export const incidentController = {
         req.params.id as string,
         req.body as AddIncidentNoteInput,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident, 201);
     } catch (err) {
@@ -123,7 +128,7 @@ export const incidentController = {
 
   async getSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const summary = await incidentService.summary();
+      const summary = await incidentService.summary(req.organizationId);
       success(res, summary);
     } catch (err) {
       next(err);
@@ -132,7 +137,7 @@ export const incidentController = {
 
   async getRelatedDetections(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const related = await incidentService.getRelatedDetections(req.params.id as string);
+      const related = await incidentService.getRelatedDetections(req.params.id as string, 30, req.organizationId);
       success(res, related);
     } catch (err) {
       next(err);
@@ -145,6 +150,7 @@ export const incidentController = {
         req.params.id as string,
         (req.body as { resolutionSummary: string }).resolutionSummary,
         actorFrom(req),
+        req.organizationId,
       );
       success(res, incident);
     } catch (err) {

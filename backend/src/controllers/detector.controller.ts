@@ -52,7 +52,7 @@ async function audit(
 export const detectorController = {
   async getMarketplace(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await detectorService.getMarketplace();
+      const data = await detectorService.getMarketplace(req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);
@@ -80,7 +80,7 @@ export const detectorController = {
         category: q.category,
         sortBy: q.sortBy,
         sortOrder: q.sortOrder,
-      });
+      }, req.organizationId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
@@ -89,7 +89,7 @@ export const detectorController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const detector = await detectorService.getById(req.params.id as string);
+      const detector = await detectorService.getById(req.params.id as string, req.organizationId);
       success(res, detector);
     } catch (err) {
       next(err);
@@ -198,7 +198,7 @@ export const detectorController = {
   async assignCameras(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const body = req.body as DetectorCamerasInput;
-      const detector = await detectorService.assignCameras(req.params.id as string, body);
+      const detector = await detectorService.assignCameras(req.params.id as string, body, req.organizationId);
       const count = body.cameraIds?.length ?? body.assignments?.length ?? 0;
       await audit(
         req,

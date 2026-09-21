@@ -29,16 +29,16 @@ export const userController = {
         status: q.status,
         sortBy: q.sortBy,
         sortOrder: q.sortOrder,
-      });
+      }, req.organizationId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
     }
   },
 
-  async getStats(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getStats(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const stats = await userService.stats();
+      const stats = await userService.stats(req.organizationId);
       success(res, stats);
     } catch (err) {
       next(err);
@@ -47,7 +47,7 @@ export const userController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const user = await userService.findById(req.params.id as string);
+      const user = await userService.findById(req.params.id as string, req.organizationId);
       success(res, user);
     } catch (err) {
       next(err);
@@ -56,7 +56,7 @@ export const userController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const user = await userService.create(req.body as CreateUserInput);
+      const user = await userService.create(req.body as CreateUserInput, req.organizationId);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -80,6 +80,7 @@ export const userController = {
       const user = await userService.update(
         req.params.id as string,
         req.body as UpdateUserInput,
+        req.organizationId,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -105,6 +106,7 @@ export const userController = {
       const result = await userService.remove(
         req.params.id as string,
         req.userId,
+        req.organizationId,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -131,6 +133,7 @@ export const userController = {
         req.params.id as string,
         req.body.role as string,
         req.userId,
+        req.organizationId,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -156,6 +159,7 @@ export const userController = {
         req.params.id as string,
         req.body.status as "active" | "disabled",
         req.userId,
+        req.organizationId,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -178,7 +182,7 @@ export const userController = {
   async lock(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const targetUser = await userService.findById(req.params.id as string).catch(() => null);
-      const user = await userService.lock(req.params.id as string, req.userId);
+      const user = await userService.lock(req.params.id as string, req.userId, req.organizationId);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -200,7 +204,7 @@ export const userController = {
   async unlock(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const targetUser = await userService.findById(req.params.id as string).catch(() => null);
-      const user = await userService.unlock(req.params.id as string, req.userId);
+      const user = await userService.unlock(req.params.id as string, req.userId, req.organizationId);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -224,6 +228,7 @@ export const userController = {
       const result = await userService.resetPassword(
         req.params.id as string,
         req.body as ResetPasswordInput,
+        req.organizationId,
       );
       const info = getClientInfo(req);
       const targetUser = await userService.findById(req.params.id as string).catch(() => null);

@@ -20,7 +20,7 @@ export const auditLogController = {
         dateTo: req.query.dateTo as string | undefined,
         sortBy: req.query.sortBy as "timestamp" | "action" | "module" | "status" | "username" | "email" | undefined,
         sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
-      });
+      }, req.organizationId);
 
       paginated(res, result.data, result.total, result.page, result.limit);
     } catch (err) {
@@ -33,7 +33,7 @@ export const auditLogController = {
       const id = req.params.id as string;
       const log = await auditLogService.findById(id);
 
-      if (!log) {
+      if (!log || (req.organizationId && log.organizationId !== req.organizationId)) {
         return error(res, "Audit log not found", 404);
       }
 
@@ -59,25 +59,25 @@ export const auditLogController = {
           status: req.query.status as "success" | "failed" | undefined,
           dateFrom: req.query.dateFrom as string | undefined,
           dateTo: req.query.dateTo as string | undefined,
-        }),
+        }, 500, req.organizationId),
       );
     } catch (err) {
       if (!res.headersSent) next(err);
     }
   },
 
-  async getStats(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getStats(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const stats = await auditLogService.getStats();
+      const stats = await auditLogService.getStats(req.organizationId);
       success(res, stats);
     } catch (err) {
       next(err);
     }
   },
 
-  async getChartData(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getChartData(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await auditLogService.getChartData();
+      const data = await auditLogService.getChartData(req.organizationId);
       success(res, data);
     } catch (err) {
       next(err);

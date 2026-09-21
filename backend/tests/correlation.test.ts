@@ -25,6 +25,8 @@ import { alertService } from "../src/services/alert.service";
 import { detectionService } from "../src/services/detection.service";
 import { prisma } from "../src/config/prisma";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 let passed = 0;
 let failed = 0;
 
@@ -107,12 +109,24 @@ async function run() {
   try {
     await prisma.camera.upsert({
       where: { id: "demo-camera-1" },
-      create: { id: "demo-camera-1", name: "Main Entrance", url: "rtsp://camera-stream", cameraType: "rtsp" },
+      create: {
+        id: "demo-camera-1",
+        name: "Main Entrance",
+        url: "rtsp://camera-stream",
+        cameraType: "rtsp",
+        organizationId: DEFAULT_ORG_ID,
+      },
       update: {},
     });
     await prisma.camera.upsert({
       where: { id: "demo-camera-2" },
-      create: { id: "demo-camera-2", name: "Parking Lot", url: "rtsp://parking-cam", cameraType: "rtsp" },
+      create: {
+        id: "demo-camera-2",
+        name: "Parking Lot",
+        url: "rtsp://parking-cam",
+        cameraType: "rtsp",
+        organizationId: DEFAULT_ORG_ID,
+      },
       update: {},
     });
 
@@ -208,7 +222,12 @@ async function run() {
 
     // ---- Service (internal/machine-to-machine) path ----
     const cam3 = await prisma.camera.create({
-      data: { name: "correlation-m2m-cam", url: "/dev/null", cameraType: "usb" },
+      data: {
+        name: "correlation-m2m-cam",
+        url: "/dev/null",
+        cameraType: "usb",
+        organizationId: DEFAULT_ORG_ID,
+      },
     });
     trackCamera(cam3.id);
 

@@ -49,6 +49,25 @@ enum CameraType {
   video_file
 }
 
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users      User[]
+  cameras    Camera[]
+  detections Detection[]
+  alerts     Alert[]
+  incidents  Incident[]
+  reports    Report[]
+  auditLogs  AuditLog[]
+
+  @@map("organizations")
+}
+
 model User {
   id                  String     @id @default(uuid())
   email               String     @unique
@@ -67,13 +86,16 @@ model User {
   deletedAt           DateTime?  @map("deleted_at")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
+  organizationId     String     @map("organization_id")
 
-  incidents Incident[]
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  incidents        Incident[]
 
   @@index([role])
   @@index([status])
   @@index([lastLogin])
   @@index([deletedAt])
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -130,11 +152,14 @@ model Camera {
   lastSeen       DateTime     @default(now()) @map("last_seen")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
+  organizationId String       @map("organization_id")
 
-  detections     Detection[]
-  healthLogs     CameraHealthLog[]
-  detectorAssignments DetectorCamera[]
+  detections           Detection[]
+  healthLogs           CameraHealthLog[]
+  detectorAssignments  DetectorCamera[]
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("cameras")
 }
 
@@ -163,6 +188,7 @@ model Detection {
   metadata         Json?
   timestamp        DateTime         @default(now())
   createdAt        DateTime         @default(now()) @map("created_at")
+  organizationId   String           @map("organization_id")
 
   // Detector Engine v2 fields (all optional for backward compatibility).
   detectorId       String?          @map("detector_id")
@@ -174,14 +200,16 @@ model Detection {
   snapshotUrl      String?          @map("snapshot_url")
   processingTimeMs Int?             @map("processing_time_ms")
 
-  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  alert  Alert?
+  camera       Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  alert        Alert?
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([cameraId])
   @@index([status])
   @@index([timestamp])
   @@index([detectorKey])
   @@index([trackId])
+  @@index([organizationId])
   // Per-camera and per-detector history queries filter by the leading
   // column and order by timestamp DESC; composites avoid a sort step.
   @@index([cameraId, timestamp(sort: Desc)])
@@ -205,14 +233,17 @@ model Alert {
   escalatedByName   String?       @map("escalated_by_name")
   escalationNote    String?       @map("escalation_note")
   createdAt         DateTime      @default(now()) @map("created_at")
+  organizationId    String        @map("organization_id")
 
   detection Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
   incident  Incident?
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Alert list queries filter by is_read/severity and order by created_at DESC.
   @@index([severity])
   @@index([isRead])
   @@index([createdAt])
+  @@index([organizationId])
   @@index([isRead, createdAt(sort: Desc)], map: "alerts_is_read_created_at_idx")
   @@index([severity, createdAt(sort: Desc)], map: "alerts_severity_created_at_idx")
   @@index([acknowledgedAt])
@@ -238,17 +269,20 @@ model Incident {
   resolutionSummary String        @default("") @map("resolution_summary")
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
+  organizationId   String         @map("organization_id")
 
   alert    Alert              @relation(fields: [alertId], references: [id], onDelete: Cascade)
   assignedTo User?             @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
   notes    IncidentNote[]
   activity IncidentActivity[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([priority])
   @@index([assignedToUserId])
   @@index([openedAt])
   @@index([createdAt])
+  @@index([organizationId])
   // Incident list queries filter by status/priority/assignee and default to
   // opened_at DESC ordering; composites avoid a sort step per filtered list.
   @@index([status, openedAt(sort: Desc)], map: "incidents_status_opened_at_idx")
@@ -315,10 +349,14 @@ model Report {
   dateRange   Json         @map("date_range")
   reportUrl   String?      @map("report_url")
   status      ReportStatus @default(generating)
+  organizationId String    @map("organization_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([type])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
   @@map("reports")
 }
 
@@ -480,6 +518,9 @@ model AuditLog {
   status      AuditLogStatus  @default(success)
   metadata    Json?
   hash        String?
+  organizationId String?       @map("organization_id")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([action])
@@ -487,6 +528,7 @@ model AuditLog {
   @@index([status])
   @@index([timestamp])
   @@index([email])
+  @@index([organizationId])
   // Audit log lists filter by action/user/status and order by timestamp DESC.
   @@index([action, timestamp(sort: Desc)], map: "audit_logs_action_timestamp_idx")
   @@index([userId, timestamp(sort: Desc)], map: "audit_logs_user_id_timestamp_idx")

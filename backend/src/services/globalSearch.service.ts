@@ -1,6 +1,6 @@
 import { prisma } from "../config/prisma";
 
-import type { SearchEntityType, SearchSection, SearchResult } from "./globalSearch.definitions";
+import type { SearchEntityType, SearchSection, SearchResult, SearchWhere } from "./globalSearch.definitions";
 import {
   SEARCH_ENTITIES,
   buildSearchWhere,
@@ -37,10 +37,16 @@ async function queryEntity(
   entity: SearchEntityType,
   term: string,
   limit: number,
+  organizationId?: string,
 ): Promise<{ count: number; results: SearchResult[] }> {
   const take = clampLimit(limit);
   const spec = SEARCH_ENTITIES[entity];
-  const where = buildSearchWhere(spec, term);
+  // DB-backed tenant isolation: every searchable entity carries an
+  // organization id, so results on all scopes are AND'd against the caller's.
+  const where: SearchWhere & { organizationId?: string } = {
+    ...buildSearchWhere(spec, term),
+    ...(organizationId ? { organizationId } : {}),
+  };
   const { model, orderField } = LOOKUPS[entity];
   const delegate = (prisma as unknown as Record<string, unknown>)[model] as {
     findMany: (opts: unknown) => Promise<Array<Record<string, unknown>>>;
@@ -79,6 +85,7 @@ export const globalSearchService = {
     type?: string;
     limit?: number;
     permissions?: Set<string>;
+    organizationId?: string;
   }): Promise<GlobalSearchResult> {
     const term = params.term.trim();
     const limit = clampLimit(params.limit ?? 10);
@@ -90,7 +97,7 @@ export const globalSearchService = {
 
     const sectionEntries: SearchSection[] = await Promise.all(
       types.map(async (entity) => {
-        const { count, results } = await queryEntity(entity, term, limit);
+        const { count, results } = await queryEntity(entity, term, limit, params.organizationId);
         return {
           type: entity,
           label: SEARCH_TYPE_LABELS[entity],

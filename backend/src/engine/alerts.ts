@@ -117,6 +117,7 @@ export class CooldownAlertStage implements AlertEvaluationStage {
           module: "alerts",
           description: `Alert created: ${title}`,
           metadata: { alertId: alert.id, detectionId: d.id, severity },
+          organizationId: alert.organizationId ?? undefined,
         });
         this.registry.record(key, now);
       } catch (err) {

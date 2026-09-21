@@ -69,6 +69,20 @@ function enforcePasswordPolicy(
 
 export const REALTIME_TICKET_TTL_SECONDS = 30;
 
+/**
+ * Resolves the tenant every authenticated route derives its scope from.
+ * Registration assigns the deterministic default organization so self-signed
+ * accounts are never left without a tenant.
+ */
+export async function resolveDefaultOrganizationId(): Promise<string> {
+  const org = await prisma.organization.upsert({
+    where: { slug: "default" },
+    update: {},
+    create: { name: "Default Organization", slug: "default", description: "" },
+  });
+  return org.id;
+}
+
 export const authService = {
   async register(input: RegisterInput) {
     const existing = await prisma.user.findUnique({
@@ -90,6 +104,7 @@ export const authService = {
         password,
         name: input.name,
         role: "operator",
+        organizationId: await resolveDefaultOrganizationId(),
       },
     });
 
@@ -240,6 +255,7 @@ export const authService = {
       mustChangePassword: boolean;
       lastLogin: Date | null;
       createdAt: Date;
+      organizationId: string;
     },
     permissions: Set<string>,
   ) {
@@ -254,6 +270,7 @@ export const authService = {
       mustChangePassword: user.mustChangePassword,
       lastLogin: user.lastLogin,
       createdAt: user.createdAt,
+      organizationId: user.organizationId,
       permissions: Array.from(permissions),
     };
   },
@@ -282,12 +299,13 @@ export const authService = {
   ): Promise<string> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { tokenVersion: true },
+      select: { tokenVersion: true, organizationId: true },
     });
     const tokenVersion = user?.tokenVersion ?? 0;
+    const organizationId = user?.organizationId;
     const expiresIn =
       expirationHours !== undefined ? `${expirationHours}h` : config.jwt.expiresIn;
-    return jwt.sign({ userId, role, tokenVersion }, config.jwt.secret, {
+    return jwt.sign({ userId, role, tokenVersion, organizationId }, config.jwt.secret, {
       algorithm: "HS256",
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
@@ -301,9 +319,9 @@ export const authService = {
    * any other endpoint and expires quickly so leaked access logs or
    * proxy caches contain only a low-value token.
    */
-  issueRealtimeTicket(userId: string, role: string) {
+  issueRealtimeTicket(userId: string, role: string, organizationId?: string) {
     const ticket = jwt.sign(
-      { userId, role, type: "realtime" },
+      { userId, role, organizationId, type: "realtime" },
       config.jwt.secret,
       {
         algorithm: "HS256",

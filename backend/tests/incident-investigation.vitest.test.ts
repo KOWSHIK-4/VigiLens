@@ -4,6 +4,7 @@ import { incidentService } from "../src/services/incident.service";
 
 const FIXTURE_EMAIL = "incident-investigation-fixture@vigilens.test";
 const FIXTURE_CAMERA_KEY = "incident-investigation-vitest-camera";
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 async function cleanup() {
   await prisma.incidentActivity.deleteMany({
@@ -37,6 +38,7 @@ async function seedIncident(overrides: { offsetMinutes: number }[]) {
       password: "unused-hash",
       role: "admin",
       status: "active",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
 
@@ -45,6 +47,7 @@ async function seedIncident(overrides: { offsetMinutes: number }[]) {
       name: FIXTURE_CAMERA_KEY,
       url: "rtsp://invalid.invalid/feed",
       cameraType: "rtsp",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
 
@@ -58,6 +61,7 @@ async function seedIncident(overrides: { offsetMinutes: number }[]) {
       status: "critical",
       imageUrl: "/uploads/detections/base.jpg",
       timestamp: baseTime,
+      organizationId: DEFAULT_ORG_ID,
     },
   });
 
@@ -67,6 +71,7 @@ async function seedIncident(overrides: { offsetMinutes: number }[]) {
       severity: "critical",
       title: "Person detected",
       message: "Critical detection for investigation fixture",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
 
@@ -81,6 +86,7 @@ async function seedIncident(overrides: { offsetMinutes: number }[]) {
         status: "warning",
         imageUrl: `/uploads/detections/other-${o.offsetMinutes}.jpg`,
         timestamp: new Date(baseTime.getTime() + o.offsetMinutes * 60_000),
+        organizationId: DEFAULT_ORG_ID,
       },
     });
   }

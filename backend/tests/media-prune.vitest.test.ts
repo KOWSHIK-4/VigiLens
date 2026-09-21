@@ -5,6 +5,8 @@ import path from "node:path";
 import { pruneMedia, isSafeStorageBasePath, SNAPSHOT_SUBDIR, RECORDINGS_SUBDIR } from "../src/services/mediaPrune.service";
 import { prisma } from "../src/config/prisma";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 let baseDir: string;
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0); // 2026-06-15 noon UTC
 
@@ -140,7 +142,13 @@ describe("purgeExpiredDetections", () => {
   it("purges detection rows older than the retention cutoff", async () => {
     await prisma.camera.upsert({
       where: { id: "prune-fixture-camera" },
-      create: { id: "prune-fixture-camera", name: "Prune Fixture", url: "rtsp://prune-cam", cameraType: "rtsp" },
+      create: {
+        id: "prune-fixture-camera",
+        name: "Prune Fixture",
+        url: "rtsp://prune-cam",
+        cameraType: "rtsp",
+        organizationId: DEFAULT_ORG_ID,
+      },
       update: {},
     });
     const oldFrame = Date.UTC(2026, 4, 1, 12, 0, 0);
@@ -153,6 +161,7 @@ describe("purgeExpiredDetections", () => {
         confidence: 0.9,
         imageUrl: "/snapshot/prune-old.jpg",
         timestamp: new Date(oldFrame),
+        organizationId: DEFAULT_ORG_ID,
       },
     });
     const freshDetection = await prisma.detection.create({
@@ -162,6 +171,7 @@ describe("purgeExpiredDetections", () => {
         confidence: 0.8,
         imageUrl: "/snapshot/prune-new.jpg",
         timestamp: new Date(freshFrame),
+        organizationId: DEFAULT_ORG_ID,
       },
     });
 

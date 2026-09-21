@@ -18,9 +18,9 @@ const RISK_MAX_DETECTIONS = 2000;
  * zeroed factor contributions with an explanation saying the factor was not
  * observed.
  */
-async function loadRiskContext(detectionId: string): Promise<RiskContext> {
-  const base = await prisma.detection.findUnique({
-    where: { id: detectionId },
+async function loadRiskContext(detectionId: string, organizationId?: string): Promise<RiskContext> {
+  const base = await prisma.detection.findFirst({
+    where: { id: detectionId, ...(organizationId ? { organizationId } : {}) },
     include: { camera: { select: { id: true, name: true } } },
   });
   if (!base) {
@@ -29,11 +29,13 @@ async function loadRiskContext(detectionId: string): Promise<RiskContext> {
 
   const from = new Date(base.timestamp.getTime() - RISK_WINDOW_MS);
   const to = new Date(base.timestamp.getTime() + RISK_WINDOW_MS);
+  const orgWhere = organizationId ? { organizationId } : {};
   const className = base.className ?? base.label;
 
   const [sameClass, windowDetections, recentAlerts, activeIncidents] = await Promise.all([
     prisma.detection.findMany({
       where: {
+        ...orgWhere,
         id: { not: detectionId },
         OR: [
           { className },
@@ -45,7 +47,7 @@ async function loadRiskContext(detectionId: string): Promise<RiskContext> {
       take: RISK_MAX_DETECTIONS,
     }),
     prisma.detection.findMany({
-      where: { timestamp: { gte: from, lte: to } },
+      where: { ...orgWhere, timestamp: { gte: from, lte: to } },
       select: {
         id: true,
         className: true,
@@ -58,11 +60,12 @@ async function loadRiskContext(detectionId: string): Promise<RiskContext> {
       take: RISK_MAX_DETECTIONS,
     }),
     prisma.alert.findMany({
-      where: { createdAt: { gte: from, lte: to } },
+      where: { ...orgWhere, createdAt: { gte: from, lte: to } },
       select: { severity: true },
     }),
     prisma.incident.count({
       where: {
+        ...orgWhere,
         status: { not: "resolved" },
         alert: { detection: { OR: [{ className }, { label: className }] } },
       },
@@ -136,9 +139,9 @@ async function loadRiskContext(detectionId: string): Promise<RiskContext> {
 }
 
 export const riskScoreService = {
-  async forDetection(detectionId: string): Promise<RiskScore> {
+  async forDetection(detectionId: string, organizationId?: string): Promise<RiskScore> {
     try {
-      const context = await loadRiskContext(detectionId);
+      const context = await loadRiskContext(detectionId, organizationId);
       return computeRiskScore(context);
     } catch (err) {
       if (err instanceof ApiError) throw err;

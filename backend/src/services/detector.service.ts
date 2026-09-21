@@ -20,7 +20,10 @@ const restartTimers = new Map<string, NodeJS.Timeout>();
 
 interface ModelWithRelations extends AIModel {
   settings: DetectorSettings | null;
-  cameraAssignments: Array<{ enabled: boolean; camera: { id: string; name: string } }>;
+  cameraAssignments: Array<{
+    enabled: boolean;
+    camera: { id: string; name: string; organizationId: string };
+  }>;
 }
 
 export interface DetectorAssignmentInput {
@@ -65,7 +68,9 @@ function detectorInclude() {
   return {
     settings: true,
     cameraAssignments: {
-      include: { camera: true },
+      include: {
+        camera: { select: { id: true, name: true, organizationId: true } },
+      },
     },
   } satisfies Prisma.AIModelInclude;
 }
@@ -115,10 +120,16 @@ function runtimeLifecycleOf(
   };
 }
 
-function serialize(model: ModelWithRelations) {
+function serialize(model: ModelWithRelations, organizationId?: string) {
   const def = getDetectorDefinition(model.detectorKey);
   const status = detectorStatusOf(model);
   const lifecycle = runtimeLifecycleOf(model, def?.availability);
+  // Detector catalog is platform-wide, but camera assignments reference
+  // tenant-scoped cameras: a caller only sees the cameras of its own org.
+  const cameraAssignments =
+    organizationId !== undefined
+      ? model.cameraAssignments.filter((a) => a.camera.organizationId === organizationId)
+      : model.cameraAssignments;
   return {
     id: model.id,
     name: model.name,
@@ -153,12 +164,12 @@ function serialize(model: ModelWithRelations) {
           preferredProcessor: model.settings.preferredProcessor,
         }
       : null,
-    cameras: model.cameraAssignments.map((a) => ({
+    cameras: cameraAssignments.map((a) => ({
       id: a.camera.id,
       name: a.camera.name,
       enabled: a.enabled,
     })),
-    cameraCount: model.cameraAssignments.length,
+    cameraCount: cameraAssignments.length,
     // Raw model load status ("loaded" | "loading" | "disabled" | "error") —
     // distinct from the serialized `status` which collapses to running/stopped.
     modelStatus: model.status,
@@ -217,7 +228,7 @@ export interface MarketplaceItem {
 export const detectorService = {
   detectorStatusOf,
 
-  async getMarketplace(): Promise<MarketplaceItem[]> {
+async getMarketplace(organizationId?: string): Promise<MarketplaceItem[]> {
     const definitions = getDetectorDefinitions();
     const installed = await prisma.aIModel.findMany({
       include: detectorInclude(),
@@ -228,7 +239,7 @@ export const detectorService = {
       .map((def) => {
         const model = installedByKey.get(def.key);
         const settings = model?.settings;
-        const lifecycle = model ? runtimeLifecycleOf(model, def.availability) : null;
+        const serialized = model ? serialize(model, organizationId) : null;
         return {
           key: def.key,
           name: def.name,
@@ -246,14 +257,14 @@ export const detectorService = {
           id: model?.id ?? null,
           enabled: model?.enabled ?? null,
           status: model ? detectorStatusOf(model) : null,
-          runtimeStatus: lifecycle?.status ?? null,
-          lastInferenceAt: lifecycle?.lastInferenceAt ?? null,
+          runtimeStatus: serialized?.runtimeStatus ?? null,
+          lastInferenceAt: serialized?.lastInferenceAt ?? null,
           confidenceThreshold: model?.confidenceThreshold ?? null,
           alertSeverity: settings?.alertSeverity ?? null,
           detectionIntervalMs: settings?.detectionIntervalMs ?? null,
           alertCooldownMs: settings?.alertCooldownMs ?? null,
           preferredProcessor: settings?.preferredProcessor ?? null,
-          cameraCount: model?.cameraAssignments.length ?? 0,
+          cameraCount: serialized?.cameraCount ?? 0,
         };
       });
   },
@@ -262,7 +273,7 @@ export const detectorService = {
     return getDetectorCategories();
   },
 
-  async getAll(params: {
+async getAll(params: {
     page: number;
     limit: number;
     search?: string;
@@ -272,12 +283,12 @@ export const detectorService = {
     category?: string;
     sortBy?: string;
     sortOrder?: "asc" | "desc";
-  }) {
+  }, organizationId?: string) {
     const models = await prisma.aIModel.findMany({
       include: detectorInclude(),
     });
 
-    let rows = models.map(serialize);
+    let rows = models.map((model) => serialize(model, organizationId));
 
     if (params.search) {
       const q = params.search.toLowerCase();
@@ -326,9 +337,9 @@ export const detectorService = {
     return { data, total };
   },
 
-  async getById(id: string) {
+async getById(id: string, organizationId?: string) {
     const model = await findModelOrThrow(id);
-    return serialize(model);
+    return serialize(model, organizationId);
   },
 
   async install(detectorKey: string) {
@@ -459,7 +470,7 @@ const model = await findModelOrThrow(id);
     });
   },
 
-  async assignCameras(id: string, input: { cameraIds?: string[]; assignments?: DetectorAssignmentInput[] }) {
+async assignCameras(id: string, input: { cameraIds?: string[]; assignments?: DetectorAssignmentInput[] }, organizationId?: string) {
     const model = await findModelOrThrow(id);
     const def = getDetectorDefinition(model.detectorKey);
 
@@ -472,8 +483,13 @@ const model = await findModelOrThrow(id);
       throw new ApiError(400, "Camera ids must be unique");
     }
 
+    // Tenant isolation: camera assignment only ever references cameras that
+    // belong to the caller's organization.
     const cameras = await prisma.camera.findMany({
-      where: { id: { in: rows.map((r) => r.cameraId) } },
+      where: {
+        id: { in: rows.map((r) => r.cameraId) },
+        ...(organizationId ? { organizationId } : {}),
+      },
       select: { id: true, name: true, cameraType: true },
     });
     if (cameras.length !== rows.length) {

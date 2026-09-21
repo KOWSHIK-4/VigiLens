@@ -7,6 +7,8 @@ import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 4941;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -155,6 +157,7 @@ async function run() {
       name: "Incident Assignee",
       role: "operator",
       status: "active",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdUserIds.push(activeUser.id);
@@ -168,6 +171,7 @@ async function run() {
       name: "Incident Disabled",
       role: "viewer",
       status: "disabled",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdUserIds.push(disabledUser.id);
@@ -184,16 +188,23 @@ async function run() {
 
   // Fixture: camera + detections + alerts to turn into incidents.
   const camera = await prisma.camera.create({
-    data: { name: "incident-api-test-cam", url: "/dev/null", cameraType: "usb" },
+    data: {
+      name: "incident-api-test-cam",
+      url: "/dev/null",
+      cameraType: "usb",
+      organizationId: DEFAULT_ORG_ID,
+    },
   });
   cameraId = camera.id;
 
   const makeDetection = (label: string, confidence: number) =>
     prisma.detection.create({
-      data: { cameraId: camera.id, label, confidence, imageUrl: "incident.jpg" },
+      data: { cameraId: camera.id, label, confidence, imageUrl: "incident.jpg", organizationId: DEFAULT_ORG_ID },
     });
   const makeAlert = (detection: Awaited<ReturnType<typeof makeDetection>>, severity: "critical" | "warning", title: string, message: string) =>
-    prisma.alert.create({ data: { detectionId: detection.id, severity, title, message } });
+    prisma.alert.create({
+      data: { detectionId: detection.id, severity, title, message, organizationId: DEFAULT_ORG_ID },
+    });
 
   const detA = await makeDetection("incident-person-a", 0.91);
   const detB = await makeDetection("incident-person-b", 0.9);

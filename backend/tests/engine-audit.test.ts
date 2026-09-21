@@ -15,6 +15,8 @@ import { alertService } from "../src/services/alert.service";
 import { prisma } from "../src/config/prisma";
 import type { PipelineContext, NormalizedDetection } from "../src/engine/types";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 let passed = 0;
 let failed = 0;
 
@@ -116,6 +118,7 @@ async function run() {
         name: "Audit Fixture Camera",
         url: "/dev/null",
         cameraType: "usb",
+        organizationId: DEFAULT_ORG_ID,
       },
       update: {},
     });

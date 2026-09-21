@@ -122,16 +122,21 @@ export function summarizeFleetHealth(
 
 async function loadFleetHealth(
   windowMs: number,
+  organizationId?: string,
 ): Promise<CameraFleetHealth[]> {
   const from = new Date(Date.now() - windowMs);
 
   const [cameras, healthLogs] = await Promise.all([
     prisma.camera.findMany({
       select: { id: true, name: true, location: true, status: true },
+      where: organizationId ? { organizationId } : {},
       orderBy: { name: "asc" },
     }),
     prisma.cameraHealthLog.findMany({
-      where: { checkedAt: { gte: from } },
+      where: {
+        checkedAt: { gte: from },
+        ...(organizationId ? { camera: { organizationId } } : {}),
+      },
       select: {
         cameraId: true,
         status: true,
@@ -167,10 +172,10 @@ async function loadFleetHealth(
 }
 
 export const cameraFleetHealthService = {
-  async summarize(windowMs?: number): Promise<CameraFleetHealthSummary> {
+  async summarize(windowMs?: number, organizationId?: string): Promise<CameraFleetHealthSummary> {
     const bounded = clampWindow(windowMs ?? FLEET_HEALTH_DEFAULT_WINDOW_MS);
     try {
-      const fleet = await loadFleetHealth(bounded);
+      const fleet = await loadFleetHealth(bounded, organizationId);
       return summarizeFleetHealth(fleet, bounded);
     } catch (err) {
       logger.error("Camera fleet health failed", {

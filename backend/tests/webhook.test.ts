@@ -8,6 +8,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 5601;
 const TEST_PORT_RANGE = 400;
 const RECEIVER_PORT_BASE = 6101;
@@ -236,6 +238,7 @@ async function run() {
       url: "rtsp://localhost/none",
       cameraType: "rtsp",
       location: "webhook-test",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdCameraIds.push(camera.id);
@@ -349,6 +352,7 @@ async function run() {
       url: "rtsp://localhost/none",
       cameraType: "rtsp",
       location: "webhook-test-b",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdCameraIds.push(cameraB.id);
@@ -407,6 +411,7 @@ async function run() {
       url: "rtsp://localhost/none",
       cameraType: "rtsp",
       location: "webhook-test-c",
+      organizationId: DEFAULT_ORG_ID,
     },
   });
   createdCameraIds.push(cameraC.id);

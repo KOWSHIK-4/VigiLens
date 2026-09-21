@@ -7,6 +7,7 @@ import {
 } from "../src/services/securityDashboard.service";
 
 const FIXTURE_EMAIL = "sec-dash-fixture@vigilens.test";
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 beforeEach(async () => {
   const existing = await prisma.user.findUnique({ where: { email: FIXTURE_EMAIL } });
@@ -33,6 +34,7 @@ describe("securityDashboardService", () => {
         isLocked: true,
         failedLoginAttempts: 5,
         lockedAt: new Date(),
+        organizationId: DEFAULT_ORG_ID,
       },
     });
 
@@ -78,6 +80,7 @@ describe("securityDashboardService", () => {
         status: "active",
         isLocked: false,
         failedLoginAttempts: 3,
+        organizationId: DEFAULT_ORG_ID,
       },
     });
 

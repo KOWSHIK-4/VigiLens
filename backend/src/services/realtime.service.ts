@@ -9,12 +9,14 @@ export interface RealtimeEvent {
   id: string;
   timestamp: string;
   data: Record<string, unknown>;
+  organizationId?: string;
 }
 
 interface Subscriber {
   id: string;
   res: Response;
   userId: string;
+  organizationId?: string;
   subscribedAt: number;
 }
 
@@ -74,7 +76,7 @@ export function removeSubscriber(id: string) {
   });
 }
 
-export function subscribe(userId: string, res: Response): string {
+export function subscribe(userId: string, res: Response, organizationId?: string): string {
   const id = `sse-${++nextSubId}`;
 
   res.writeHead(200, {
@@ -85,7 +87,7 @@ export function subscribe(userId: string, res: Response): string {
   });
   res.write(`:connected\n\n`);
 
-  const sub: Subscriber = { id, res, userId, subscribedAt: Date.now() };
+  const sub: Subscriber = { id, res, userId, organizationId, subscribedAt: Date.now() };
   addSubscriber(sub);
 
   res.on("close", () => removeSubscriber(id));
@@ -97,6 +99,12 @@ export function publishEvent(event: RealtimeEvent) {
   const payload = `data: ${JSON.stringify(event)}\n\n`;
   let sent = 0;
   for (const [id, sub] of subscribers) {
+    // Tenant isolation on the SSE fan-out: a subscriber only receives events
+    // for its organization (events without a scope are platform-global and
+    // reach everyone).
+    if (event.organizationId && event.organizationId !== sub.organizationId) {
+      continue;
+    }
     try {
       sub.res.write(payload);
       sent++;
@@ -118,19 +126,24 @@ export function getSubscriberCount(): number {
   return subscribers.size;
 }
 
-export function getSubscriberSnapshot(): Array<{ id: string; userId: string; subscribedAt: number }> {
-  return Array.from(subscribers.values()).map(({ id, userId, subscribedAt }) => ({
+export function getSubscriberSnapshot(): Array<{ id: string; userId: string; organizationId?: string; subscribedAt: number }> {
+  return Array.from(subscribers.values()).map(({ id, userId, organizationId, subscribedAt }) => ({
     id,
     userId,
+    organizationId,
     subscribedAt,
   }));
 }
 
-export function publishAlertCreated(alert: { id: string; severity: string; title: string; message: string; createdAt: Date }) {
+export function publishAlertCreated(
+  alert: { id: string; severity: string; title: string; message: string; createdAt: Date },
+  organizationId?: string,
+) {
   publishEvent({
     type: "alert",
     id: alert.id,
     timestamp: alert.createdAt.toISOString(),
+    organizationId,
     data: {
       event: "alert_created",
       severity: alert.severity,
@@ -140,11 +153,15 @@ export function publishAlertCreated(alert: { id: string; severity: string; title
   });
 }
 
-export function publishIncidentChanged(incident: { id: string; status: string; action: string; timestamp?: Date }) {
+export function publishIncidentChanged(
+  incident: { id: string; status: string; action: string; timestamp?: Date },
+  organizationId?: string,
+) {
   publishEvent({
     type: "incident",
     id: incident.id,
     timestamp: (incident.timestamp ?? new Date()).toISOString(),
+    organizationId,
     data: {
       event: `incident_${incident.action}`,
       status: incident.status,

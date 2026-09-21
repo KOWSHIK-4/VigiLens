@@ -3,6 +3,7 @@ import { logger } from "../config/logger";
 import { metricsService } from "./metrics.service";
 import { buildPdfDocument } from "../utils/pdf";
 import { toCsv } from "../utils/csv";
+import { ApiError } from "../utils/errors";
 import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
 
 interface GenerateReportInput {
@@ -10,6 +11,7 @@ interface GenerateReportInput {
   type: ReportType;
   generatedBy: string;
   dateRange: { from: string; to: string };
+  organizationId?: string;
 }
 
 interface FindAllParams {
@@ -58,10 +60,14 @@ async function buildReportData(
   type: string,
   dateRange: { from: string; to: string },
   format: "pdf" | "csv",
+  organizationId?: string,
 ): Promise<string | Buffer> {
   const from = new Date(dateRange.from);
   const to = new Date(dateRange.to);
-  const where: Prisma.DetectionWhereInput = { timestamp: { gte: from, lte: to } };
+  const where: Prisma.DetectionWhereInput = {
+    timestamp: { gte: from, lte: to },
+    ...(organizationId ? { organizationId } : {}),
+  };
 
   switch (type) {
     case "daily":
@@ -77,6 +83,7 @@ async function buildReportData(
     }
     case "camera": {
       const cameras = await prisma.camera.findMany({
+        where: organizationId ? { organizationId } : {},
         include: { _count: { select: { detections: { where: { timestamp: { gte: from, lte: to } } } } } },
       });
       return format === "csv" ? buildCameraCsv(cameras) : buildCameraPdf(cameras);
@@ -91,7 +98,7 @@ async function buildReportData(
     }
     case "alert": {
       const alerts = await prisma.alert.findMany({
-        where: { createdAt: { gte: from, lte: to } },
+        where: { createdAt: { gte: from, lte: to }, ...(organizationId ? { organizationId } : {}) },
         include: { detection: { include: { camera: { select: { id: true, name: true, location: true } } } } },
         orderBy: { createdAt: "desc" },
       });
@@ -202,6 +209,9 @@ export function sanitizeReportFilename(title: string): string {
 
 export const reportService = {
   async generate(input: GenerateReportInput) {
+    if (!input.organizationId) {
+      throw new ApiError(400, "Organization is required to generate a report");
+    }
     const report = await prisma.report.create({
       data: {
         title: input.title,
@@ -209,13 +219,14 @@ export const reportService = {
         generatedBy: input.generatedBy,
         dateRange: input.dateRange,
         status: "generating",
+        organizationId: input.organizationId,
       },
     });
 
     process.nextTick(async () => {
       try {
         const format: "pdf" | "csv" = "pdf";
-        await buildReportData(input.type, input.dateRange, format);
+        await buildReportData(input.type, input.dateRange, format, input.organizationId);
         const reportUrl = generateReportUrl(input.type, report.id, format);
 
         await prisma.report.update({
@@ -237,8 +248,9 @@ export const reportService = {
     return report;
   },
 
-  async findAll(params: FindAllParams) {
+  async findAll(params: FindAllParams, organizationId?: string) {
     const where: Prisma.ReportWhereInput = {};
+    if (organizationId) where.organizationId = organizationId;
 
     if (params.search) {
       where.OR = [
@@ -274,23 +286,29 @@ export const reportService = {
     return { data, total };
   },
 
-  async findById(id: string) {
-    const report = await prisma.report.findUnique({ where: { id } });
-    if (!report) throw new Error("Report not found");
+  async findById(id: string, organizationId?: string) {
+    const report = await prisma.report.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!report) throw new ApiError(404, "Report not found");
     return report;
   },
 
-  async remove(id: string) {
-    const report = await prisma.report.findUnique({ where: { id } });
-    if (!report) throw new Error("Report not found");
+  async remove(id: string, organizationId?: string) {
+    const report = await prisma.report.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!report) throw new ApiError(404, "Report not found");
     await prisma.report.delete({ where: { id } });
     return { id };
   },
 
-  async getDownloadData(id: string, format: "pdf" | "csv") {
-    const report = await prisma.report.findUnique({ where: { id } });
-    if (!report) throw new Error("Report not found");
-    if (report.status !== "completed") throw new Error("Report not yet completed");
+  async getDownloadData(id: string, format: "pdf" | "csv", organizationId?: string) {
+    const report = await prisma.report.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!report) throw new ApiError(404, "Report not found");
+    if (report.status !== "completed") throw new ApiError(400, "Report not yet completed");
 
     const dateRange = report.dateRange as { from: string; to: string };
     const content = await buildReportData(report.type, dateRange, format);

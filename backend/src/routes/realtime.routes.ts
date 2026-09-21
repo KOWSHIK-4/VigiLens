@@ -13,7 +13,7 @@ router.get("/events", authenticate, (req, res) => {
     res.end(JSON.stringify({ success: false, error: "Authentication required" }));
     return;
   }
-  subscribe(authReq.userId, res);
+  subscribe(authReq.userId, res, authReq.organizationId);
 });
 
 router.get("/subscribers", authenticate, (_req, res) => {

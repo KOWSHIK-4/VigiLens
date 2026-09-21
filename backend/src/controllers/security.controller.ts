@@ -6,9 +6,9 @@ import { intelligenceService } from "../services/intelligenceLoader.service";
 import { success } from "../utils/apiResponse";
 
 export const securityController = {
-  async getDashboard(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getDashboard(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const dashboard = await securityDashboardService.getDashboard();
+      const dashboard = await securityDashboardService.getDashboard(req.organizationId);
       success(res, dashboard);
     } catch (err) {
       next(err);
@@ -29,6 +29,7 @@ export const securityController = {
       const windowMs = Number(req.query.windowMs);
       const report = await intelligenceService.analyze(
         Number.isFinite(windowMs) ? windowMs : undefined,
+        req.organizationId,
       );
       success(res, report);
     } catch (err) {
@@ -41,6 +42,7 @@ export const securityController = {
       const windowMs = Number(req.query.windowMs);
       const context = await intelligenceService.context(
         Number.isFinite(windowMs) ? windowMs : undefined,
+        req.organizationId,
       );
       success(res, context);
     } catch (err) {

@@ -14,6 +14,7 @@ export interface User {
   lockedAt: string | null;
   mustChangePassword: boolean;
   deletedAt: string | null;
+  organizationId?: string;
   permissions?: Permission[] | string[];
   createdAt: string;
   updatedAt: string;

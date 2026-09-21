@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { settingsService } from "./settings.service";
 
@@ -69,10 +70,12 @@ export const securityDashboardService = {
    * dashboard. Every figure is computed from live database rows; nothing
    * is cached so the view always reflects the current state.
    */
-  async getDashboard() {
+  async getDashboard(organizationId?: string) {
     const now = new Date();
     const recent24h = new Date(now.getTime() - DAY_MS);
     const recent7d = new Date(now.getTime() - 7 * DAY_MS);
+    const orgUserWhere = { deletedAt: null, ...(organizationId ? { organizationId } : {}) };
+    const orgAuditWhere = organizationId ? { organizationId } : {};
 
     const [
       totalAccounts,
@@ -85,25 +88,25 @@ export const securityDashboardService = {
       atRiskAccounts,
       recentFailedLogins,
     ] = await Promise.all([
-      prisma.user.count({ where: { deletedAt: null } }),
-      prisma.user.count({ where: { deletedAt: null, status: "active" } }),
-      prisma.user.count({ where: { deletedAt: null, status: "disabled" } }),
-      prisma.user.count({ where: { deletedAt: null, isLocked: true } }),
+      prisma.user.count({ where: orgUserWhere }),
+      prisma.user.count({ where: { ...orgUserWhere, status: "active" } }),
+      prisma.user.count({ where: { ...orgUserWhere, status: "disabled" } }),
+      prisma.user.count({ where: { ...orgUserWhere, isLocked: true } }),
       prisma.user.count({
-        where: { deletedAt: null, failedLoginAttempts: { gt: 0 } },
+        where: { ...orgUserWhere, failedLoginAttempts: { gt: 0 } },
       }),
       prisma.user.count({
-        where: { deletedAt: null, mustChangePassword: true },
+        where: { ...orgUserWhere, mustChangePassword: true },
       }),
       prisma.user.findMany({
-        where: { deletedAt: null, isLocked: true },
+        where: { ...orgUserWhere, isLocked: true },
         select: accountSelect,
         orderBy: { lockedAt: "desc" },
         take: 10,
       }),
       prisma.user.findMany({
         where: {
-          deletedAt: null,
+          ...orgUserWhere,
           isLocked: false,
           status: "active",
           failedLoginAttempts: { gt: 0 },
@@ -114,6 +117,7 @@ export const securityDashboardService = {
       }),
       prisma.auditLog.findMany({
         where: {
+          ...orgAuditWhere,
           module: "auth",
           action: "user_login",
           status: "failed",
@@ -135,6 +139,7 @@ export const securityDashboardService = {
     const [failedLogins24h, failedLogins7d, failedLogins30d, failedLoginRows] = await Promise.all([
       prisma.auditLog.count({
         where: {
+          ...orgAuditWhere,
           module: "auth",
           action: "user_login",
           status: "failed",
@@ -143,6 +148,7 @@ export const securityDashboardService = {
       }),
       prisma.auditLog.count({
         where: {
+          ...orgAuditWhere,
           module: "auth",
           action: "user_login",
           status: "failed",
@@ -151,6 +157,7 @@ export const securityDashboardService = {
       }),
       prisma.auditLog.count({
         where: {
+          ...orgAuditWhere,
           module: "auth",
           action: "user_login",
           status: "failed",
@@ -163,6 +170,7 @@ export const securityDashboardService = {
         WHERE module = 'auth'
           AND action = 'user_login'
           AND status = 'failed'
+          ${organizationId ? Prisma.sql`AND organization_id = ${organizationId}` : Prisma.empty}
           AND timestamp >= NOW() - INTERVAL '14 days'
         GROUP BY DATE(timestamp)
         ORDER BY date ASC

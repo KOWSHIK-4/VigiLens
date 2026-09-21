@@ -11,6 +11,7 @@ interface JwtPayload {
   userId: string;
   role: string;
   tokenVersion?: number;
+  organizationId?: string;
 }
 
 const ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED = new Set([
@@ -68,6 +69,7 @@ export async function authenticate(
         isLocked: true,
         mustChangePassword: true,
         tokenVersion: true,
+        organizationId: true,
       },
     });
 
@@ -119,6 +121,11 @@ export async function authenticate(
     }
 
     req.userRole = user.role;
+    // The tenant scope is always derived from the database row -- never from
+    // the JWT claim -- so a stale or forged org in a token cannot move a user
+    // into another tenant. The token claim is only used by the realtime
+    // ticket flow, which re-validates against the DB here as well.
+    req.organizationId = user.organizationId;
     req.permissions = await permissionService.getPermissionsForRole(user.role);
     next();
   } catch {

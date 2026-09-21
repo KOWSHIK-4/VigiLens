@@ -67,7 +67,7 @@ export const engineController = {
         Math.max(parseInt((req.query.limit as string) || "25", 10) || 25, 1),
         100,
       );
-      const detections = await detectionService.findRecentByDetectorKey(key, limit);
+      const detections = await detectionService.findRecentByDetectorKey(key, limit, req.organizationId);
       success(res, {
         key,
         count: detections.length,

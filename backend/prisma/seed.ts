@@ -134,6 +134,17 @@ export const roleDefinitions: Array<{
 async function main() {
   const password = await bcrypt.hash("admin123", 12);
 
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: "default" },
+    update: {},
+    create: {
+      id: "00000000-0000-0000-0000-000000000001",
+      name: "Default Organization",
+      slug: "default",
+      description: "",
+    },
+  });
+
   const permissionIds = new Map<string, string>();
   for (const def of permissionDefinitions) {
     const permission = await prisma.permission.upsert({
@@ -161,63 +172,68 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@vigilens.io" },
-    update: { role: "admin", status: "active" },
+    update: { role: "admin", status: "active", organizationId: defaultOrg.id },
     create: {
       email: "admin@vigilens.io",
       password,
       name: "Admin User",
       role: "admin",
+      organizationId: defaultOrg.id,
     },
   });
 
   const superAdmin = await prisma.user.upsert({
     where: { email: "super@vigilens.io" },
-    update: { role: "super_admin", status: "active" },
+    update: { role: "super_admin", status: "active", organizationId: defaultOrg.id },
     create: {
       email: "super@vigilens.io",
       password,
       name: "Super Admin",
       role: "super_admin",
+      organizationId: defaultOrg.id,
     },
   });
 
   const operator = await prisma.user.upsert({
     where: { email: "operator@vigilens.io" },
-    update: { role: "operator", status: "active" },
+    update: { role: "operator", status: "active", organizationId: defaultOrg.id },
     create: {
       email: "operator@vigilens.io",
       password,
       name: "Operator User",
       role: "operator",
+      organizationId: defaultOrg.id,
     },
   });
 
   const viewer = await prisma.user.upsert({
     where: { email: "viewer@vigilens.io" },
-    update: { role: "viewer", status: "active" },
+    update: { role: "viewer", status: "active", organizationId: defaultOrg.id },
     create: {
       email: "viewer@vigilens.io",
       password,
       name: "Viewer User",
       role: "viewer",
+      organizationId: defaultOrg.id,
     },
   });
 
   const disabled = await prisma.user.upsert({
     where: { email: "disabled@vigilens.io" },
-    update: { role: "viewer", status: "disabled" },
+    update: { role: "viewer", status: "disabled", organizationId: defaultOrg.id },
     create: {
       email: "disabled@vigilens.io",
       password,
       name: "Disabled User",
       role: "viewer",
       status: "disabled",
+      organizationId: defaultOrg.id,
     },
   });
 
   const entrance = await prisma.camera.upsert({
     where: { id: "demo-camera-1" },
-    update: {},
+    update: { organizationId: defaultOrg.id },
     create: {
       id: "demo-camera-1",
       name: "Main Entrance",
@@ -229,12 +245,13 @@ async function main() {
       isHealthy: true,
       status: "online",
       lastSeen: new Date(),
+      organizationId: defaultOrg.id,
     },
   });
 
   const parking = await prisma.camera.upsert({
     where: { id: "demo-camera-2" },
-    update: {},
+    update: { organizationId: defaultOrg.id },
     create: {
       id: "demo-camera-2",
       name: "Parking Lot",
@@ -246,12 +263,13 @@ async function main() {
       isHealthy: true,
       status: "online",
       lastSeen: new Date(),
+      organizationId: defaultOrg.id,
     },
   });
 
   const lobby = await prisma.camera.upsert({
     where: { id: "demo-camera-3" },
-    update: {},
+    update: { organizationId: defaultOrg.id },
     create: {
       id: "demo-camera-3",
       name: "Lobby USB",
@@ -262,12 +280,13 @@ async function main() {
       fps: 30,
       isHealthy: false,
       status: "error",
+      organizationId: defaultOrg.id,
     },
   });
 
   const warehouse = await prisma.camera.upsert({
     where: { id: "demo-camera-4" },
-    update: {},
+    update: { organizationId: defaultOrg.id },
     create: {
       id: "demo-camera-4",
       name: "Warehouse IP",
@@ -278,12 +297,13 @@ async function main() {
       fps: 15,
       isHealthy: true,
       status: "connecting",
+      organizationId: defaultOrg.id,
     },
   });
 
   const demoFile = await prisma.camera.upsert({
     where: { id: "demo-camera-5" },
-    update: {},
+    update: { organizationId: defaultOrg.id },
     create: {
       id: "demo-camera-5",
       name: "Demo Recording",
@@ -294,6 +314,7 @@ async function main() {
       fps: 24,
       isHealthy: true,
       status: "offline",
+      organizationId: defaultOrg.id,
     },
   });
 

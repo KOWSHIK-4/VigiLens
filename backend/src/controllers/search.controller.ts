@@ -16,6 +16,7 @@ export const searchController = {
         type: req.query.type as string | undefined,
         limit: Number(req.query.limit) || 10,
         permissions: req.permissions,
+        organizationId: req.organizationId,
       });
 
       return success(res, {

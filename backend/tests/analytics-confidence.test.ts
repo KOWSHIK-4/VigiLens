@@ -6,6 +6,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 const TEST_PORT_BASE = 4951;
 const TEST_PORT_RANGE = 500;
 let TEST_PORT = TEST_PORT_BASE + (process.pid % TEST_PORT_RANGE);
@@ -135,7 +137,7 @@ async function run() {
 
   // Fixture: known confidence spread across all six buckets.
   const camera = await prisma.camera.create({
-    data: { name: "confidence-test-cam", url: "/dev/null", cameraType: "usb" },
+    data: { name: "confidence-test-cam", url: "/dev/null", cameraType: "usb", organizationId: DEFAULT_ORG_ID },
   });
   cameraId = camera.id;
   const confidences = [
@@ -152,6 +154,7 @@ async function run() {
       label: `fixture-${i}`,
       confidence,
       imageUrl: `fixture-${i}.jpg`,
+      organizationId: DEFAULT_ORG_ID,
     })),
   });
 

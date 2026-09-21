@@ -1,5 +1,5 @@
 import { prisma } from "../config/prisma";
-import type { AuditLogAction, AuditLogStatus, Prisma } from "@prisma/client";
+import { Prisma, type AuditLogAction, type AuditLogStatus } from "@prisma/client";
 import type { AuditLogQueryInput } from "../types";
 import { auditRowMatchesHash, computeAuditHash } from "../utils/auditChain";
 
@@ -14,6 +14,7 @@ interface CreateAuditLogInput {
   userAgent?: string;
   status?: AuditLogStatus;
   metadata?: Record<string, unknown>;
+  organizationId?: string;
 }
 
 interface FindAllParams extends AuditLogQueryInput {
@@ -22,8 +23,10 @@ interface FindAllParams extends AuditLogQueryInput {
 }
 
 const STATS_CACHE_TTL_MS = 5_000;
-let cachedStats: { data: unknown; expiresAt: number } | null = null;
-let cachedCharts: { data: unknown; expiresAt: number } | null = null;
+// The stats/charts caches are keyed per organization so one tenant's queries
+// never serve another tenant's data.
+const statsCache = new Map<string, { data: unknown; expiresAt: number }>();
+const chartsCache = new Map<string, { data: unknown; expiresAt: number }>();
 
 export const auditLogService = {
   async create(input: CreateAuditLogInput) {
@@ -39,6 +42,7 @@ export const auditLogService = {
         userAgent: input.userAgent || "",
         status: input.status || "success",
         metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : undefined,
+        organizationId: input.organizationId ?? null,
       },
     });
     return prisma.auditLog.update({
@@ -47,10 +51,12 @@ export const auditLogService = {
     });
   },
 
-  async findAll(params: FindAllParams) {
+  async findAll(params: FindAllParams, organizationId?: string) {
     const { page, limit, search, userId, action, module, status, dateFrom, dateTo, sortBy, sortOrder } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
+
+    if (organizationId) where.organizationId = organizationId;
 
     if (search) {
       where.OR = [
@@ -108,10 +114,12 @@ export const auditLogService = {
    * Streaming CSV export. Walks the full filter scope in bounded pages so the
    * controller can write incrementally instead of buffering every row.
    */
-  async *streamCSV(params: FindAllParams, pageSize = 500) {
+  async *streamCSV(params: FindAllParams, pageSize = 500, organizationId?: string) {
     const { search, userId, action, module, status, dateFrom, dateTo } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
+
+    if (organizationId) where.organizationId = organizationId;
 
     if (search) {
       where.OR = [
@@ -166,19 +174,25 @@ export const auditLogService = {
     }
   },
 
-  async getStats() {
-    if (cachedStats && cachedStats.expiresAt > Date.now()) {
-      return cachedStats.data;
+  async getStats(organizationId?: string) {
+    const cached = organizationId ? statsCache.get(organizationId) : undefined;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
     }
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+    const orgFilter: Prisma.AuditLogWhereInput = organizationId
+      ? { organizationId }
+      : {};
+
     const [totalLogs, todayLogs, failedLogs, activeUsers] = await Promise.all([
-      prisma.auditLog.count(),
-      prisma.auditLog.count({ where: { timestamp: { gte: startOfDay } } }),
-      prisma.auditLog.count({ where: { status: "failed" } }),
+      prisma.auditLog.count({ where: { ...orgFilter } }),
+      prisma.auditLog.count({ where: { ...orgFilter, timestamp: { gte: startOfDay } } }),
+      prisma.auditLog.count({ where: { ...orgFilter, status: "failed" } }),
       prisma.auditLog.findMany({
         where: {
+          ...orgFilter,
           timestamp: { gte: startOfDay },
           userId: { not: null },
         },
@@ -193,22 +207,32 @@ export const auditLogService = {
       failedLogs,
       activeUsers: activeUsers.length,
     };
-    cachedStats = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    if (organizationId) {
+      statsCache.set(organizationId, { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
+    }
     return data;
   },
 
-  async getChartData() {
-    if (cachedCharts && cachedCharts.expiresAt > Date.now()) {
-      return cachedCharts.data;
+  async getChartData(organizationId?: string) {
+    const cached = organizationId ? chartsCache.get(organizationId) : undefined;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
     }
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // All chart queries are parameterized (bound parameters, never string
+    // interpolation) and org-scoped via a conditional AND clause.
+    const orgCond: Prisma.Sql = organizationId
+      ? Prisma.sql`AND organization_id = ${organizationId}`
+      : Prisma.empty;
 
     const [actionsPerDay, moduleUsage, statusDistribution, topUsers] = await Promise.all([
       prisma.$queryRaw`
         SELECT DATE(timestamp) as date, COUNT(*)::int as count
         FROM audit_logs
         WHERE timestamp >= ${thirtyDaysAgo}
+          ${orgCond}
         GROUP BY DATE(timestamp)
         ORDER BY date ASC
       `,
@@ -216,6 +240,7 @@ export const auditLogService = {
         SELECT module, COUNT(*)::int as count
         FROM audit_logs
         WHERE timestamp >= ${thirtyDaysAgo}
+          ${orgCond}
         GROUP BY module
         ORDER BY count DESC
         LIMIT 10
@@ -224,12 +249,14 @@ export const auditLogService = {
         SELECT status, COUNT(*)::int as count
         FROM audit_logs
         WHERE timestamp >= ${thirtyDaysAgo}
+          ${orgCond}
         GROUP BY status
       `,
       prisma.$queryRaw`
         SELECT username, email, COUNT(*)::int as count
         FROM audit_logs
         WHERE timestamp >= ${thirtyDaysAgo} AND user_id IS NOT NULL AND username != ''
+          ${orgCond}
         GROUP BY username, email
         ORDER BY count DESC
         LIMIT 10
@@ -242,7 +269,9 @@ export const auditLogService = {
       statusDistribution: statusDistribution as { status: string; count: number }[],
       topUsers: topUsers as { username: string; email: string; count: number }[],
     };
-    cachedCharts = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    if (organizationId) {
+      chartsCache.set(organizationId, { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
+    }
     return data;
   },
 
