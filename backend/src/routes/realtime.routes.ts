@@ -13,7 +13,12 @@ router.get("/events", authenticate, (req, res) => {
     res.end(JSON.stringify({ success: false, error: "Authentication required" }));
     return;
   }
-  subscribe(authReq.userId, res, authReq.organizationId);
+  const rawTeamIds = typeof req.query.teamIds === "string" ? req.query.teamIds : "";
+  const teamIds = rawTeamIds
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t));
+  subscribe(authReq.userId, res, authReq.organizationId, teamIds.length > 0 ? teamIds : undefined);
 });
 
 router.get("/subscribers", authenticate, (_req, res) => {

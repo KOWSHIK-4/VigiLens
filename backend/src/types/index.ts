@@ -5,6 +5,7 @@ export interface AuthRequest extends Request {
   userId?: string;
   userRole?: string;
   organizationId?: string;
+  teamId?: string;
   permissions?: Set<string>;
 }
 

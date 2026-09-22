@@ -10,6 +10,7 @@ export interface RealtimeEvent {
   timestamp: string;
   data: Record<string, unknown>;
   organizationId?: string;
+  teamId?: string;
 }
 
 interface Subscriber {
@@ -17,6 +18,7 @@ interface Subscriber {
   res: Response;
   userId: string;
   organizationId?: string;
+  teamIds?: Set<string>;
   subscribedAt: number;
 }
 
@@ -76,7 +78,7 @@ export function removeSubscriber(id: string) {
   });
 }
 
-export function subscribe(userId: string, res: Response, organizationId?: string): string {
+export function subscribe(userId: string, res: Response, organizationId?: string, teamIds?: string[]): string {
   const id = `sse-${++nextSubId}`;
 
   res.writeHead(200, {
@@ -87,7 +89,14 @@ export function subscribe(userId: string, res: Response, organizationId?: string
   });
   res.write(`:connected\n\n`);
 
-  const sub: Subscriber = { id, res, userId, organizationId, subscribedAt: Date.now() };
+  const sub: Subscriber = {
+    id,
+    res,
+    userId,
+    organizationId,
+    teamIds: teamIds && teamIds.length > 0 ? new Set(teamIds) : undefined,
+    subscribedAt: Date.now(),
+  };
   addSubscriber(sub);
 
   res.on("close", () => removeSubscriber(id));
@@ -103,6 +112,12 @@ export function publishEvent(event: RealtimeEvent) {
     // for its organization (events without a scope are platform-global and
     // reach everyone).
     if (event.organizationId && event.organizationId !== sub.organizationId) {
+      continue;
+    }
+    // Per-team routing: when an event is scoped to a team, it only reaches
+    // subscribers that asked for that team. Subscribers that did not scope
+    // their stream to any team remain org-wide (backwards compatible).
+    if (event.teamId && sub.teamIds && !sub.teamIds.has(event.teamId)) {
       continue;
     }
     try {
@@ -126,17 +141,18 @@ export function getSubscriberCount(): number {
   return subscribers.size;
 }
 
-export function getSubscriberSnapshot(): Array<{ id: string; userId: string; organizationId?: string; subscribedAt: number }> {
-  return Array.from(subscribers.values()).map(({ id, userId, organizationId, subscribedAt }) => ({
+export function getSubscriberSnapshot(): Array<{ id: string; userId: string; organizationId?: string; teamIds?: string[]; subscribedAt: number }> {
+  return Array.from(subscribers.values()).map(({ id, userId, organizationId, teamIds, subscribedAt }) => ({
     id,
     userId,
     organizationId,
+    teamIds: teamIds ? Array.from(teamIds) : undefined,
     subscribedAt,
   }));
 }
 
 export function publishAlertCreated(
-  alert: { id: string; severity: string; title: string; message: string; createdAt: Date },
+  alert: { id: string; severity: string; title: string; message: string; createdAt: Date; teamId?: string | null },
   organizationId?: string,
 ) {
   publishEvent({
@@ -144,6 +160,7 @@ export function publishAlertCreated(
     id: alert.id,
     timestamp: alert.createdAt.toISOString(),
     organizationId,
+    teamId: alert.teamId ?? undefined,
     data: {
       event: "alert_created",
       severity: alert.severity,
@@ -154,7 +171,7 @@ export function publishAlertCreated(
 }
 
 export function publishIncidentChanged(
-  incident: { id: string; status: string; action: string; timestamp?: Date },
+  incident: { id: string; status: string; action: string; timestamp?: Date; teamId?: string | null },
   organizationId?: string,
 ) {
   publishEvent({
@@ -162,6 +179,7 @@ export function publishIncidentChanged(
     id: incident.id,
     timestamp: (incident.timestamp ?? new Date()).toISOString(),
     organizationId,
+    teamId: incident.teamId ?? undefined,
     data: {
       event: `incident_${incident.action}`,
       status: incident.status,

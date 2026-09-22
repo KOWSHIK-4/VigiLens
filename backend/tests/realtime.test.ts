@@ -18,6 +18,8 @@ let server: ChildProcess | null = null;
 let passed = 0;
 let failed = 0;
 let createdCameraId: string | null = null;
+const createdCameraIds: string[] = [];
+const createdTeamIds: string[] = [];
 
 function ok(name: string, detail?: unknown) {
   passed += 1;
@@ -328,6 +330,106 @@ async function run() {
   if (after === 0) ok("closing the stream unregisters the subscriber");
   else fail("closing the stream unregisters the subscriber", { count: after });
 
+  // 5b) Per-team routing: an event scoped to a team reaches only subscribers
+  // that subscribed with that teamId (org-wide streams still receive it).
+  const teamTag = `Realtime Team ${Date.now()}`;
+  const teamA = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: `${teamTag} A` }) },
+    adminToken,
+  );
+  const teamB = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: `${teamTag} B` }) },
+    adminToken,
+  );
+  const teamAId = (teamA.body as { data?: { id?: string } })?.data?.id;
+  const teamBId = (teamB.body as { data?: { id?: string } })?.data?.id;
+  if (teamA.status === 201 && teamB.status === 201 && teamAId && teamBId) {
+    createdTeamIds.push(teamAId, teamBId);
+    ok("teams created for realtime routing test");
+  } else {
+    fail("realtime routing team creation", { teamA, teamB });
+  }
+
+  const ticketARes = await request("/auth/realtime-ticket", { method: "POST" }, adminToken);
+  const ticketBRes = await request("/auth/realtime-ticket", { method: "POST" }, adminToken);
+  const ticketA = (ticketARes.body as { data?: { ticket: string } }).data?.ticket;
+  const ticketB = (ticketBRes.body as { data?: { ticket: string } }).data?.ticket;
+  if (ticketA && ticketB) ok("realtime tickets minted for per-team streams");
+  else fail("realtime per-team ticket issuance", { ticketARes, ticketBRes });
+
+  if (ticketA && ticketB && teamAId && teamBId) {
+    const sseA = await openSse(`/api/realtime/events?ticket=${ticketA}&teamIds=${teamAId}`);
+    const sseB = await openSse(`/api/realtime/events?ticket=${ticketB}&teamIds=${teamBId}`);
+    await sleep(300);
+    ok("per-team SSE streams opened (teamA + teamB scoped)");
+
+    const ingest2 = await request(
+      "/detections/internal",
+      {
+        method: "POST",
+        headers: { "X-Internal-Key": internalKey },
+        body: JSON.stringify({
+          camera_id: camera.id,
+          label: "vehicle",
+          confidence: 0.93,
+          detector_key: "vehicle",
+          class_name: "vehicle",
+          image_url: "",
+          skip_alert: false,
+        }),
+      },
+      adminToken,
+    );
+
+    const secondAlert = await prisma.alert.findFirst({
+      where: { detection: { cameraId: camera.id }, incident: null },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (ingest2.status === 201 && secondAlert?.id) {
+      await request(
+        `/alerts/${secondAlert.id}/team`,
+        { method: "PATCH", body: JSON.stringify({ teamId: teamAId }) },
+        adminToken,
+      );
+      const created2 = await request(
+        "/incidents",
+        { method: "POST", body: JSON.stringify({ alertId: secondAlert.id }) },
+        adminToken,
+      );
+      if (created2.status === 201) {
+        const evA = await waitForEvent(sseA, "incident");
+        await sleep(700);
+        const teamABEvents = (sseB.buffer.match(/data: .*\n/g) ?? [])
+          .map((line) => {
+            try {
+              return JSON.parse(line.slice(6)) as Record<string, unknown>;
+            } catch {
+              return null;
+            }
+          })
+          .filter((e) => e !== null && e.type === "incident" && e.teamId === teamAId);
+        if (evA) ok("team-scoped incident event delivered to teamA subscriber");
+        else fail("team-scoped incident event delivered to teamA subscriber", "no incident event");
+        if (teamABEvents.length === 0)
+          ok("team-scoped incident event withheld from teamB subscriber");
+        else fail("team-scoped incident event withheld from teamB", teamABEvents);
+      } else {
+        fail("per-team incident creation", created2);
+      }
+    } else {
+      fail("per-team ingestion/alert lookup", { ingest2, secondAlert });
+    }
+
+    sseA.close();
+    sseB.close();
+    await sleep(800);
+  } else {
+    fail("per-team SSE setup", "missing ticket or team id");
+  }
+
   // 6) Realtime endpoints are protected by auth.
   const noAuth = await request("/realtime/subscribers");
   if (noAuth.status === 401) ok("realtime endpoints require authentication (401)");
@@ -343,6 +445,12 @@ run()
       } catch {
         // cascade may have removed it already
       }
+    }
+    if (createdCameraIds.length > 0) {
+      await prisma.camera.deleteMany({ where: { id: { in: createdCameraIds } } }).catch(() => null);
+    }
+    if (createdTeamIds.length > 0) {
+      await prisma.team.deleteMany({ where: { id: { in: createdTeamIds } } }).catch(() => null);
     }
     if (server) killProcessTree(server);
     await prisma.$disconnect();

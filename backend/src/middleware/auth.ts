@@ -70,6 +70,7 @@ export async function authenticate(
         mustChangePassword: true,
         tokenVersion: true,
         organizationId: true,
+        teamId: true,
       },
     });
 
@@ -126,6 +127,7 @@ export async function authenticate(
     // into another tenant. The token claim is only used by the realtime
     // ticket flow, which re-validates against the DB here as well.
     req.organizationId = user.organizationId;
+    req.teamId = user.teamId ?? undefined;
     req.permissions = await permissionService.getPermissionsForRole(user.role);
     next();
   } catch {

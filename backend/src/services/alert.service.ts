@@ -231,11 +231,22 @@ export const alertService = {
       return prisma.alert.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: alertInclude });
     }
 
-    return prisma.alert.update({
+    const updated = await prisma.alert.update({
       where: { id },
       data: { teamId },
       include: alertInclude,
     });
+
+    publishAlertCreated({
+      id: updated.id,
+      severity: updated.severity,
+      title: updated.title,
+      message: updated.message,
+      createdAt: updated.createdAt,
+      teamId: updated.teamId,
+    }, organizationId);
+
+    return updated;
   },
 
   async markAllAsRead(organizationId?: string) {

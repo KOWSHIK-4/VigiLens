@@ -265,7 +265,7 @@ export const incidentService = {
       organizationId: alert.organizationId,
     });
 
-    publishIncidentChanged({ id: incident.id, status: incident.status, action: "created" }, alert.organizationId ?? undefined);
+    publishIncidentChanged({ id: incident.id, status: incident.status, action: "created", teamId: incident.teamId }, alert.organizationId ?? undefined);
     metricsService.recordEvent("incidents.created");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
@@ -478,7 +478,7 @@ export const incidentService = {
       organizationId,
     });
 
-    publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed" }, organizationId);
+    publishIncidentChanged({ id: incident.id, status: input.status, action: "status_changed", teamId: updated.teamId }, organizationId);
     metricsService.recordEvent("incidents.changed");
     void webhookService.dispatchIncidentChanged({
       id: incident.id,
@@ -629,6 +629,11 @@ export const incidentService = {
       data: { teamId },
       include: incidentInclude,
     });
+
+    publishIncidentChanged(
+      { id: incident.id, status: updated.status, action: "team_assigned", teamId: updated.teamId },
+      organizationId,
+    );
 
     if (incident.teamId || teamId) {
       await logActivity(
