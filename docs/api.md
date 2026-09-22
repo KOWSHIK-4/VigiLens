@@ -849,6 +849,61 @@ for resolved incidents). Resolving an incident records an
 Changes are broadcast over the realtime stream (`incident_*` events) and
 drive webhooks.
 
+## Teams & Resource Grouping
+
+Organisational groups with a designated lead ("team lead", `Team.leadId`),
+first-class memberships and invitations. Team leads administer their own
+teams (edit, set leads, manage members, revoke invitations, delete) and can
+assign alerts, incidents and cameras to their team.
+
+```bash
+GET    /teams                       # paginated team list, owns + canAdmin (teams.read)
+POST   /teams                       # create a team (teams.manage)
+GET    /teams/:id                   # team with members and lead (teams.read)
+PATCH  /teams/:id                   # update name/description/leadId (teams.manage or team lead)
+DELETE /teams/:id                   # delete team; memberships cascade (teams.manage or team lead)
+GET    /teams/:id/members           # team members (teams.read)
+POST   /teams/:id/members           # add a member { userId } (teams.manage or team lead)
+DELETE /teams/:id/members/:userId   # remove a member (teams.manage or team lead)
+POST   /teams/:id/invitations       # invite by email { email } (teams.manage or team lead)
+POST   /teams/invitations/accept    # accept invitation by token (no roles required)
+DELETE /teams/:id/invitations/:invitationId  # revoke pending invitation
+```
+
+Team-scoped assignment — the platform version has `team_id` columns on
+alerts, incidents and cameras (all `ON DELETE SET NULL`), so deleting a team
+never orphans its resources, only unbinds them:
+
+```bash
+PATCH /alerts/:id/team             # body { teamId: uuid | null } (alerts.manage)
+PATCH /incidents/:id/team          # body { teamId: uuid | null } (incidents.manage)
+PATCH /cameras/:id/team            # body { teamId: uuid | null } (cameras.manage)
+```
+
+Assigning `null` clears the team; assigning a team from another tenant
+returns `404`. Assigning to an already-resolved incident returns `422`.
+
+Team-scoped filters — every read surface below accepts `?teamId=uuid`:
+
+```bash
+GET /cameras?teamId=...       # only that team's cameras (each CameraApiView includes team: { id, name })
+GET /alerts?teamId=...        # alerts routed to the team
+GET /incidents?teamId=...     # incidents routed to the team
+GET /analytics/...?teamId=... # KPIs over that team's cameras/detections
+GET /audit-logs?teamId=...    # audit rows whose metadata records a team assignment (metadata.teamId)
+```
+
+For team leads, `GET /teams` composes access in the same response: `owns`
+(teams where `leadId` is you) and `canAdmin` (teams where you are a member),
+so the UI can render "your teams" and "teams you can administer" without
+extra round trips.
+
+New audit actions introduced with teams: `team_created`, `team_updated`,
+`team_deleted`, `team_member_assigned`, `team_member_removed`,
+`team_invitation_created`, `team_invitation_revoked`,
+`team_invitation_accepted`, `alert_team_assigned`, `incident_team_assigned`
+and `camera_team_assigned` (all carrying `metadata.teamId` when set).
+
 ## Analytics
 
 Dashboard aggregates computed from the detections store. Every endpoint
@@ -864,9 +919,11 @@ GET /analytics/confidence  # confidence distribution in 6 buckets
 ```
 
 All accept the same query filters: `period` (`7`|`30`|`90`), explicit
-`from`/`to` date bounds (which override `period`), and an optional `tz` IANA
+`from`/`to` date bounds (which override `period`), an optional `tz` IANA
 time zone (e.g. `tz=Asia/Kolkata`) that shifts day/hour bucketing to the
-reporter's clock. Without `tz`, the database server's time zone is used.
+reporter's clock, and an optional `teamId` that narrows every metric to a
+single team's cameras and their detections. Without `tz`, the database
+server's time zone is used.
 Results are cached briefly (30–120 s depending on the metric), so they are
 snapshots rather than live counters.
 
@@ -903,7 +960,8 @@ GET   /audit-logs/:id
 
 `GET /audit-logs` supports `search` (matches user/email/description/ip),
 `userId`, `action`, `module`, `status` (`success`|`failed`), `dateFrom` /
-`dateTo`, and `sortBy` (`timestamp|action|module|status|username|email`).
+`dateTo`, `teamId` (rows whose metadata records `metadata.teamId` — i.e.
+team assignments), and `sortBy` (`timestamp|action|module|status|username|email`).
 Rows are immutable; there is no update or delete endpoint. Export streams the
 same filters as a CSV attachment named `audit-logs.csv`.
 
@@ -945,15 +1003,19 @@ stream authenticates with a short-lived, purpose-limited ticket:
 
 ```bash
 POST /auth/realtime-ticket          # -> { "ticket": "...", "expiresInSeconds": 30 }
-GET  /realtime/events?ticket=...    # open the SSE stream
+GET  /realtime/events?ticket=...    # open the SSE stream (optional teamIds=id1,id2)
 GET  /realtime/subscribers          # { count, subscribers } (any authenticated JWT)
 ```
 
 The ticket is a 30-second, `type: "realtime"` JWT that is rejected by every
 other endpoint. `GET /realtime/events` emits `:connected`, keeps the connection
 alive with `:heartbeat` comments every 25 s, and pushes frames shaped as
-`data: {"type":"alert"|"incident","id":"...","timestamp":"...","data":{...}}`.
-The subscriber pool is capped at 200 connections (oldest evicted first);
+`data: {"type":"alert"|"incident","id":"...","timestamp":"...","data":{...}}`,
+optionally carrying a `teamId` on the frame when the event is team-scoped.
+Pass `?teamIds=id1,id2` to subscribe to only those teams: frames whose `teamId`
+is set are delivered only to subscribers whose `teamIds` contains it (unset
+team frames reach everyone). The subscriber pool is capped at 200 connections
+(oldest evicted first);
 `GET /realtime/subscribers` reports the connected count.
 
 ## Rate Limits
