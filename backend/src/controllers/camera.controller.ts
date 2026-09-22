@@ -36,6 +36,7 @@ export const cameraController = {
         search: req.query.search as string | undefined,
         status: req.query.status as CameraStatus | undefined,
         cameraType: req.query.cameraType as CameraType | undefined,
+        teamId: req.query.teamId as string | undefined,
         sortBy: req.query.sortBy as string | undefined,
         sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
       }, req.organizationId);
@@ -132,6 +133,36 @@ export const cameraController = {
         metadata: { cameraId: id, name: existingCamera?.name },
       });
       success(res, { message: "Camera deleted successfully" });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async assignTeam(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const { teamId } = req.body as { teamId?: string | null };
+      const camera = await cameraService.assignTeam(id, teamId ?? null, req.organizationId);
+
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
+
+      const info = getClientInfo(req);
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "camera_updated",
+        module: "cameras",
+        description: teamId
+          ? `Camera assigned to team: ${camera.team?.name || teamId}`
+          : "Camera team cleared",
+        ...info,
+        metadata: { cameraId: id, teamId: teamId ?? null },
+      });
+      success(res, camera);
     } catch (err) {
       next(err);
     }

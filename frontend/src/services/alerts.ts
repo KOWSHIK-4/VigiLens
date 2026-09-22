@@ -9,6 +9,7 @@ export const alertService = {
     isRead?: string;
     search?: string;
     cameraId?: string;
+    teamId?: string;
     dateFrom?: string;
     dateTo?: string;
   }) {

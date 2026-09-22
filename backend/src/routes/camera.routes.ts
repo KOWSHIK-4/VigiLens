@@ -8,6 +8,7 @@ import {
   cameraQuerySchema,
   createCameraSchema,
   updateCameraSchema,
+  assignCameraTeamSchema,
 } from "../types";
 
 const router = Router();
@@ -32,6 +33,7 @@ router.patch(
 router.delete("/:id", requirePermission("cameras.manage"), validate(cameraIdSchema, "params"), cameraController.remove);
 router.post("/:id/start", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.start);
 router.post("/:id/stop", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.stop);
+router.patch("/:id/team", requirePermission("cameras.manage"), validate(cameraIdSchema, "params"), validate(assignCameraTeamSchema), cameraController.assignTeam);
 router.post("/:id/capture", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.capture);
 router.get(
   "/:id/thumbnail",

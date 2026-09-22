@@ -17,6 +17,7 @@ export const cameraService = {
       if (filters.search) params.set("search", filters.search);
       if (filters.status) params.set("status", filters.status);
       if (filters.cameraType) params.set("cameraType", filters.cameraType);
+      if (filters.teamId) params.set("teamId", filters.teamId);
       if (filters.sortBy) params.set("sortBy", filters.sortBy);
       if (filters.sortOrder) params.set("sortOrder", filters.sortOrder);
     }

@@ -123,6 +123,7 @@ interface FindAllParams {
   search?: string;
   status?: CameraStatus;
   cameraType?: CameraType;
+  teamId?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
 }
@@ -157,7 +158,10 @@ type CameraApiView = Omit<
 > & {
   hasCredentials: boolean;
   displayStatus: CameraDisplayStatus;
+  team?: { id: string; name: string } | null;
 };
+
+type CameraRowWithTeam = Camera & { team?: { id: string; name: string } | null };
 
 /**
  * Redacts credentials and enriches the row with the derived display status
@@ -165,8 +169,8 @@ type CameraApiView = Omit<
  * the global Prisma scrub (`config/prisma.ts`) to guarantee credential
  * material never rides a camera API payload.
  */
-function toApiCamera(camera: Camera): CameraApiView {
-  const rest = { ...camera } as Partial<Camera>;
+function toApiCamera(camera: CameraRowWithTeam): CameraApiView {
+  const rest = { ...camera } as Partial<CameraRowWithTeam>;
   delete rest.username;
   delete rest.password;
   delete rest.usernameEncrypted;
@@ -178,6 +182,7 @@ function toApiCamera(camera: Camera): CameraApiView {
     ...(rest as Camera),
     hasCredentials: hasStoredCredential(camera),
     displayStatus: deriveDisplayStatus(camera),
+    team: camera.team ?? null,
   };
 }
 
@@ -293,7 +298,7 @@ export async function loadCameraCredentials(
 
 export const cameraService = {
   async findAll(params: FindAllParams, organizationId?: string) {
-    const { page, limit, search, status, cameraType, sortBy, sortOrder } = params;
+    const { page, limit, search, status, cameraType, teamId, sortBy, sortOrder } = params;
 
     const where: Prisma.CameraWhereInput = {};
     if (organizationId) where.organizationId = organizationId;
@@ -308,6 +313,7 @@ export const cameraService = {
 
     if (status) where.status = status;
     if (cameraType) where.cameraType = cameraType;
+    if (teamId) where.teamId = teamId;
 
     const orderBy: Prisma.CameraOrderByWithRelationInput = {};
     if (sortBy && ["name", "status", "cameraType", "location", "lastSeen", "createdAt"].includes(sortBy)) {
@@ -322,6 +328,7 @@ export const cameraService = {
         orderBy,
         skip: (page - 1) * limit,
         take: limit,
+        include: { team: { select: { id: true, name: true } } },
       }),
       prisma.camera.count({ where }),
     ]);
@@ -334,6 +341,7 @@ export const cameraService = {
     const camera = await prisma.camera.findFirst({
       where: { id, ...(organizationId ? { organizationId } : {}) },
       include: {
+        team: { select: { id: true, name: true } },
         detections: {
           orderBy: { timestamp: "desc" },
           take: 20,
@@ -361,6 +369,14 @@ export const cameraService = {
       });
     }
 
+    if (data.teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: data.teamId, organizationId },
+        select: { id: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+    }
+
     const camera = await prisma.camera.create({
       data: {
         name: data.name,
@@ -374,8 +390,10 @@ export const cameraService = {
         passwordEncrypted: hasCredentialInput ? encryptSecret(password) : null,
         username: null,
         password: null,
+        teamId: data.teamId ?? null,
         organizationId,
       },
+      include: { team: { select: { id: true, name: true } } },
     });
     return toApiCamera(camera);
   },
@@ -423,6 +441,14 @@ export const cameraService = {
       }
     }
 
+    if (data.teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: data.teamId, ...(organizationId ? { organizationId } : {}) },
+        select: { id: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+    }
+
     const camera = await prisma.camera.update({
       where: { id },
       data: {
@@ -435,10 +461,42 @@ export const cameraService = {
         ...(data.location !== undefined && { location: data.location }),
         ...(data.resolution !== undefined && { resolution: data.resolution }),
         ...(data.fps !== undefined && { fps: data.fps }),
+        ...(data.teamId !== undefined && { teamId: data.teamId }),
         ...credentialUpdate,
       },
+      include: { team: { select: { id: true, name: true } } },
     });
     return toApiCamera(camera);
+  },
+
+  async assignTeam(id: string, teamId: string | null, organizationId?: string) {
+    const existing = await prisma.camera.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!existing) return null;
+
+    if (teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: teamId, ...(organizationId ? { organizationId } : {}) },
+        select: { id: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+    }
+
+    if ((existing.teamId ?? null) === teamId) {
+      const unchanged = await prisma.camera.findFirst({
+        where: { id },
+        include: { team: { select: { id: true, name: true } } },
+      });
+      return unchanged ? toApiCamera(unchanged) : null;
+    }
+
+    const updated = await prisma.camera.update({
+      where: { id },
+      data: { teamId },
+      include: { team: { select: { id: true, name: true } } },
+    });
+    return toApiCamera(updated);
   },
 
   async remove(id: string, organizationId?: string) {

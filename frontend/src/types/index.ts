@@ -65,6 +65,8 @@ export interface Team {
   name: string;
   description: string;
   organizationId: string;
+  leadId?: string | null;
+  lead?: { id: string; name: string; email: string | null } | null;
   createdAt: string;
   updatedAt: string;
   _count?: { members: number };
@@ -204,6 +206,8 @@ export interface Camera {
   lastSeen: string;
   createdAt: string;
   updatedAt: string;
+  teamId?: string | null;
+  team?: { id: string; name: string } | null;
   detections?: DetectionWithCamera[];
   healthLogs?: CameraHealthLog[];
 }
@@ -235,6 +239,7 @@ export interface CameraFilters {
   search?: string;
   status?: CameraStatus;
   cameraType?: CameraType;
+  teamId?: string;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -256,6 +261,8 @@ export interface Alert {
   escalatedByName: string | null;
   escalationNote: string | null;
   createdAt: string;
+  teamId?: string | null;
+  team?: { id: string; name: string } | null;
   detection?: DetectionWithCamera;
   incident?: Pick<Incident, "id" | "status"> | null;
 }
@@ -306,6 +313,8 @@ export interface Incident {
   resolutionSummary: string;
   createdAt: string;
   updatedAt: string;
+  teamId?: string | null;
+  team?: { id: string; name: string } | null;
   alert?: Alert;
   notes?: IncidentNote[];
   activity?: IncidentActivity[];
@@ -325,6 +334,7 @@ export interface IncidentFilters {
   assignedTo?: string;
   mine?: boolean;
   unassigned?: boolean;
+  teamId?: string;
   search?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";

@@ -114,6 +114,7 @@ const cameraBaseSchema = z.object({
   fps: z.number().int().min(1).max(120).optional().nullable(),
   username: z.string().max(100).optional().nullable(),
   password: z.string().max(100).optional().nullable(),
+  teamId: z.string().uuid("Invalid team id").optional().nullable(),
 });
 
 export const createCameraSchema = cameraBaseSchema.refine(
@@ -137,9 +138,16 @@ export const cameraQuerySchema = z.object({
   search: z.string().max(200).optional(),
   status: z.enum(["online", "offline", "connecting", "error"]).optional(),
   cameraType: z.enum(["usb", "rtsp", "ip", "video_file"]).optional(),
+  teamId: z.string().uuid().optional(),
   sortBy: z.enum(["name", "status", "cameraType", "location", "lastSeen", "createdAt"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
+
+export const assignCameraTeamSchema = z.object({
+  teamId: z.string().uuid("Invalid team id").nullable(),
+});
+
+export type AssignCameraTeamInput = z.infer<typeof assignCameraTeamSchema>;
 
 export const reportTypeSchema = z.enum(["daily", "weekly", "monthly", "camera", "detection", "alert"]);
 export const reportStatusSchema = z.enum(["generating", "completed", "failed"]);

@@ -4,14 +4,21 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BellRing,
+  Camera,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   RefreshCw,
   Search,
   ShieldX,
   Users,
+  X,
 } from "lucide-react";
 import { teamsService } from "@/services/teams";
+import { cameraService } from "@/services/cameras";
+import { alertService } from "@/services/alerts";
+import { incidentService } from "@/services/incidents";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import type { Team } from "@/types";
@@ -58,6 +65,7 @@ export default function TeamsPage() {
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
   const canView = hasPermission(currentUser, "teams.read");
 
@@ -96,6 +104,27 @@ export default function TeamsPage() {
       <ArrowDown className="w-3.5 h-3.5 text-brand-600" />
     );
   };
+
+  const canViewCameras = hasPermission(currentUser, "cameras.read");
+  const canViewAlerts = hasPermission(currentUser, "alerts.read");
+
+  const teamCameras = useQuery({
+    queryKey: ["cameras", { teamId: selectedTeam?.id }],
+    queryFn: () => cameraService.getAll({ teamId: selectedTeam?.id, page: 1, limit: 5 }),
+    enabled: Boolean(selectedTeam) && canViewCameras,
+  });
+
+  const teamAlerts = useQuery({
+    queryKey: ["alerts", { teamId: selectedTeam?.id }],
+    queryFn: () => alertService.getAll({ teamId: selectedTeam?.id, page: 1, limit: 5 }),
+    enabled: Boolean(selectedTeam) && canViewAlerts,
+  });
+
+  const teamIncidents = useQuery({
+    queryKey: ["incidents", { teamId: selectedTeam?.id }],
+    queryFn: () => incidentService.getAll({ teamId: selectedTeam?.id, page: 1, limit: 5 }),
+    enabled: Boolean(selectedTeam) && canViewAlerts,
+  });
 
   if (!canView) {
     return (
@@ -194,7 +223,11 @@ export default function TeamsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {teams.map((team: Team) => (
-                  <tr key={team.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                      key={team.id}
+                      onClick={() => setSelectedTeam(team)}
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
                     <td className="px-4 py-3">
                       <p className="font-semibold text-gray-900 truncate">{team.name}</p>
                     </td>
@@ -272,6 +305,123 @@ export default function TeamsPage() {
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedTeam && (
+        <div className="card p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">{selectedTeam.name}</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedTeam.description || "No description"} ·{" "}
+                <span className="inline-flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" />
+                  {selectedTeam._count?.members ?? 0} members
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedTeam(null)}
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label="Close team details"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-5">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <Camera className="w-4 h-4 text-brand-600" />
+                Cameras
+              </h3>
+              {!canViewCameras ? (
+                <p className="text-sm text-gray-400">Requires cameras.read</p>
+              ) : teamCameras.isLoading ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : (teamCameras.data?.data ?? []).length === 0 ? (
+                <p className="text-sm text-gray-400">No cameras assigned</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                  {(teamCameras.data?.data ?? []).map((cam) => (
+                    <li key={cam.id} className="px-3 py-2 flex items-center justify-between text-sm">
+                      <span className="font-medium text-gray-800 truncate">{cam.name}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          cam.displayStatus === "online"
+                            ? "bg-green-50 text-green-700"
+                            : cam.displayStatus === "offline" || cam.displayStatus === "error"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {cam.displayStatus ?? cam.status ?? "unknown"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <BellRing className="w-4 h-4 text-brand-600" />
+                Alerts
+              </h3>
+              {!canViewAlerts ? (
+                <p className="text-sm text-gray-400">Requires alerts.read</p>
+              ) : teamAlerts.isLoading ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : (teamAlerts.data?.data ?? []).length === 0 ? (
+                <p className="text-sm text-gray-400">No alerts assigned</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                  {(teamAlerts.data?.data ?? []).map((alert) => (
+                    <li key={alert.id} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-800 truncate">{alert.title}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap capitalize ${
+                          alert.severity === "critical"
+                            ? "bg-red-50 text-red-700"
+                            : alert.severity === "warning"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-blue-50 text-blue-700"
+                        }`}
+                      >
+                        {alert.severity}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <ClipboardList className="w-4 h-4 text-brand-600" />
+                Incidents
+              </h3>
+              {!canViewAlerts ? (
+                <p className="text-sm text-gray-400">Requires alerts.read</p>
+              ) : teamIncidents.isLoading ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : (teamIncidents.data?.data ?? []).length === 0 ? (
+                <p className="text-sm text-gray-400">No incidents assigned</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                  {(teamIncidents.data?.data ?? []).map((incident) => (
+                    <li key={incident.id} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-800 truncate">{incident.title}</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap capitalize bg-gray-100 text-gray-600">
+                        {incident.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

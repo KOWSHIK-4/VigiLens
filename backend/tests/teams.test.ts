@@ -943,6 +943,53 @@ async function run() {
     ok("alert team cleared via teamId null");
   else fail("clear alert team", clearAlertTeam);
 
+  const teamCam = await request(
+    "/cameras",
+    { method: "POST", body: JSON.stringify({ name: `Team Cam ${RUN_TAG}`, url: "rtsp://team.invalid/cam", cameraType: "rtsp" }) },
+    tokenA,
+  );
+  const teamCamId = (teamCam.body as { data?: { id?: string } })?.data?.id;
+  if (teamCam.status === 201 && teamCamId) ok("team-assignable camera created");
+  else fail("create team camera", teamCam);
+
+  if (teamCamId) {
+    const camAssign = await request(
+      `/cameras/${teamCamId}/team`,
+      { method: "PATCH", body: JSON.stringify({ teamId: scopeTeamId }) },
+      tokenA,
+    );
+    const camAssigned = camAssign.body as { data?: { team?: { id?: string; name?: string } | null } };
+    if (camAssign.status === 200 && camAssigned.data?.team?.id === scopeTeamId)
+      ok("camera assigned to a team (team preview returned)");
+    else fail("assign camera team", camAssign);
+
+    const camCrossTeam = await request(
+      `/cameras/${teamCamId}/team`,
+      { method: "PATCH", body: JSON.stringify({ teamId: orgBTeamId }) },
+      tokenA,
+    );
+    if (camCrossTeam.status === 404) ok("cross-tenant team assignment on camera returns 404");
+    else fail("camera cross-tenant team", camCrossTeam);
+
+    const teamFilteredCams = await request(`/cameras?teamId=${scopeTeamId}`, {}, tokenA);
+    const teamCamHits = (teamFilteredCams.body as { data?: Array<{ id: string }> })?.data ?? [];
+    if (teamFilteredCams.status === 200 && teamCamHits.some((c) => c.id === teamCamId))
+      ok("cameras filtered by teamId return the assigned camera");
+    else fail("cameras team filter", teamFilteredCams.body);
+
+    const clearCamTeam = await request(
+      `/cameras/${teamCamId}/team`,
+      { method: "PATCH", body: JSON.stringify({ teamId: null }) },
+      tokenA,
+    );
+    const clearedCam = clearCamTeam.body as { data?: { team?: unknown } };
+    if (clearCamTeam.status === 200 && (clearedCam.data?.team ?? null) === null)
+      ok("camera team cleared via teamId null");
+    else fail("clear camera team", clearCamTeam);
+
+    await prisma.camera.delete({ where: { id: teamCamId } }).catch(() => null);
+  }
+
   await prisma.camera.delete({ where: { id: scopeCamera.id } }).catch(() => null);
   ok("alert/incident team fixtures cleaned up");
 

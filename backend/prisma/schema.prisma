@@ -82,6 +82,7 @@ model Team {
   members      User[]           @relation("TeamMembers")
   invitations  TeamInvitation[]
   lead         User?            @relation("TeamLeads", fields: [leadId], references: [id], onDelete: SetNull)
+  cameras      Camera[]         @relation("CameraTeams")
   alerts       Alert[]          @relation("AlertTeams")
   incidents    Incident[]       @relation("IncidentTeams")
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -211,13 +212,16 @@ model Camera {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
   organizationId    String       @map("organization_id")
+  teamId            String?      @map("team_id")
 
   detections          Detection[]
   healthLogs          CameraHealthLog[]
   detectorAssignments DetectorCamera[]
-  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team                Team?               @relation("CameraTeams", fields: [teamId], references: [id], onDelete: SetNull)
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+  @@index([teamId])
   @@map("cameras")
 }
 
