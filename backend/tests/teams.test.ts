@@ -987,6 +987,40 @@ async function run() {
       ok("camera team cleared via teamId null");
     else fail("clear camera team", clearCamTeam);
 
+    const reassignForScope = await request(
+      `/cameras/${teamCamId}/team`,
+      { method: "PATCH", body: JSON.stringify({ teamId: scopeTeamId }) },
+      tokenA,
+    );
+    if (reassignForScope.status === 200) ok("camera returned to team for scoped analytics");
+    else fail("reassign camera team for analytics", reassignForScope);
+
+    const analyticsCams = await request(`/analytics/cameras?teamId=${scopeTeamId}`, {}, tokenA);
+    const anCams = (analyticsCams.body as { data?: Array<{ id: string }> })?.data ?? [];
+    if (
+      analyticsCams.status === 200 &&
+      anCams.some((c) => c.id === teamCamId) &&
+      !anCams.some((c) => c.id === scopeCamera.id)
+    )
+      ok("analytics cameras scoped to a team exclude unassigned cameras");
+    else fail("analytics team-scoped cameras", analyticsCams.body);
+
+    const overviewTeam = await request(`/analytics/overview?teamId=${scopeTeamId}`, {}, tokenA);
+    const ov = overviewTeam.body as { data?: { totalCameras?: number } };
+    if (overviewTeam.status === 200 && (ov.data?.totalCameras ?? 0) >= 1)
+      ok("analytics overview honors teamId");
+    else fail("analytics team-scoped overview", overviewTeam.body);
+
+    const teamAudit = await request(`/audit-logs?teamId=${scopeTeamId}`, {}, tokenA);
+    const taData =
+      (teamAudit.body as { data?: Array<{ action?: string; metadata?: Record<string, unknown> }> })?.data ?? [];
+    if (
+      teamAudit.status === 200 &&
+      taData.some((r) => r.action === "camera_team_assigned" && r.metadata?.teamId === scopeTeamId)
+    )
+      ok("audit logs filterable by teamId (camera_team_assigned trail)");
+    else fail("audit teamId filter", teamAudit.body);
+
     await prisma.camera.delete({ where: { id: teamCamId } }).catch(() => null);
   }
 

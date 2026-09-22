@@ -656,6 +656,7 @@ export const incidentService = {
         previousTeamId: incident.teamId,
         nextTeamId: teamId,
         nextTeamName: teamName,
+        teamId,
       },
       organizationId,
     });

@@ -154,7 +154,7 @@ export const cameraController = {
         userId: req.userId,
         username: actor?.name || "",
         email: actor?.email || "",
-        action: "camera_updated",
+        action: "camera_team_assigned",
         module: "cameras",
         description: teamId
           ? `Camera assigned to team: ${camera.team?.name || teamId}`

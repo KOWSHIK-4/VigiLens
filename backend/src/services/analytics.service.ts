@@ -6,6 +6,7 @@ interface PeriodParams {
   to?: string;
   period?: "7" | "30" | "90";
   tz?: string;
+  teamId?: string;
 }
 
 export interface OverviewResult {
@@ -222,12 +223,27 @@ function dateWhereSql(filter: { gte?: Date; lte?: Date } | undefined): Prisma.Sq
 export function dateAndOrgWhereSql(
   filter: { gte?: Date; lte?: Date } | undefined,
   organizationId?: string,
+  teamId?: string,
 ): Prisma.Sql {
-  const dateClause = dateWhereSql(filter);
-  if (!organizationId) return dateClause;
-  const orgClause = Prisma.sql`organization_id = ${organizationId}`;
-  if (filter) return Prisma.sql`${dateClause} AND ${orgClause}`;
-  return Prisma.sql`WHERE ${orgClause}`;
+  let clause = dateWhereSql(filter);
+  if (organizationId) {
+    const orgClause = Prisma.sql`organization_id = ${organizationId}`;
+    clause = filter
+      ? Prisma.sql`${clause} AND ${orgClause}`
+      : Prisma.sql`WHERE ${orgClause}`;
+  }
+  if (teamId) {
+    const teamClause = Prisma.sql`camera_id IN (SELECT id FROM cameras WHERE team_id = ${teamId})`;
+    clause = clause
+      ? Prisma.sql`${clause} AND ${teamClause}`
+      : Prisma.sql`WHERE ${teamClause}`;
+  }
+  return clause;
+}
+
+/** Prisma relation filter narrowing detections to a team's cameras. */
+function teamDetectionWhere(teamId?: string) {
+  return teamId ? { camera: { teamId } } : {};
 }
 
 /** Number of days spanned by the active period/from/to filter (for rates). */
@@ -243,8 +259,8 @@ function windowDaysFor(params: PeriodParams): number | undefined {
 }
 
 export const analyticsService = {
-  async getOverview(params: PeriodParams = {}, organizationId?: string): Promise<OverviewResult> {
-    const cacheKey = `analytics:overview:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getOverview(params: PeriodParams = {}, organizationId?: string, teamId = params.teamId): Promise<OverviewResult> {
+    const cacheKey = `analytics:overview:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<OverviewResult>(cacheKey);
     if (cached) return cached;
 
@@ -259,7 +275,9 @@ export const analyticsService = {
         })();
     const filter = periodDateFilter(params);
     const base = organizationId ? { organizationId } : {};
-    const scopeWhere = { ...base, ...(filter ? { timestamp: filter } : {}) };
+    const teamScope = teamId ? { teamId } : {};
+    const camBase = { ...base, ...teamScope };
+    const scopeWhere = { ...base, ...(filter ? { timestamp: filter } : {}), ...teamDetectionWhere(teamId) };
     const windowDays = windowDaysFor(params);
 
     const [
@@ -273,8 +291,8 @@ export const analyticsService = {
       severityCounts,
     ] = await Promise.all([
       prisma.detection.count({ where: scopeWhere }),
-      prisma.detection.count({ where: { timestamp: { gte: todayStart }, ...base } }),
-      prisma.camera.groupBy({ by: ["status"], _count: { id: true }, where: base }),
+      prisma.detection.count({ where: { timestamp: { gte: todayStart }, ...base, ...teamDetectionWhere(teamId) } }),
+      prisma.camera.groupBy({ by: ["status"], _count: { id: true }, where: camBase }),
       prisma.detection.aggregate({
         _avg: { confidence: true },
         where: scopeWhere,
@@ -293,14 +311,14 @@ export const analyticsService = {
         orderBy: { _count: { id: "desc" } },
         take: 1,
       }),
-      prisma.camera.count({ where: base }),
+      prisma.camera.count({ where: camBase }),
       prisma.detection.groupBy({ by: ["status"], _count: { id: true }, where: scopeWhere }),
     ]);
 
     let mostActiveCamera: { name: string; count: number } = { name: "N/A", count: 0 };
     if (topCamera.length > 0) {
       const cam = await prisma.camera.findFirst({
-        where: { id: topCamera[0].cameraId, ...base },
+        where: { id: topCamera[0].cameraId, ...camBase },
       });
       if (cam) mostActiveCamera = { name: cam.name, count: topCamera[0]._count.id };
     }
@@ -318,7 +336,7 @@ export const analyticsService = {
     } else {
       const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
       const sevenDayCount = await prisma.detection.count({
-        where: { timestamp: { gte: sevenDaysAgo }, ...base },
+        where: { timestamp: { gte: sevenDaysAgo }, ...base, ...teamDetectionWhere(teamId) },
       });
       detectionRate = sevenDayCount / 7;
     }
@@ -343,12 +361,12 @@ export const analyticsService = {
     return result;
   },
 
-  async getDaily(params: PeriodParams, organizationId?: string): Promise<DailyResult[]> {
-    const cacheKey = `analytics:daily:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getDaily(params: PeriodParams, organizationId?: string, teamId = params.teamId): Promise<DailyResult[]> {
+    const cacheKey = `analytics:daily:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<DailyResult[]>(cacheKey);
     if (cached) return cached;
 
-    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId);
+    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId, teamId);
     // When a time zone is requested, bucket calendar days in that zone
     // instead of the database's server time zone.
     const dayExpr = params.tz
@@ -382,15 +400,15 @@ export const analyticsService = {
     return result;
   },
 
-  async getCameras(params: PeriodParams, organizationId?: string): Promise<CameraAnalyticsResult[]> {
-    const cacheKey = `analytics:cameras:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getCameras(params: PeriodParams, organizationId?: string, teamId = params.teamId): Promise<CameraAnalyticsResult[]> {
+    const cacheKey = `analytics:cameras:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<CameraAnalyticsResult[]>(cacheKey);
     if (cached) return cached;
 
     const dateFilter = periodDateFilter(params);
 
     const cameraStats = await prisma.camera.findMany({
-      where: organizationId ? { organizationId } : {},
+      where: { ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}) },
       include: {
         _count: {
           select: {
@@ -420,14 +438,14 @@ export const analyticsService = {
     return result;
   },
 
-  async getDetectors(params: PeriodParams, organizationId?: string): Promise<DetectorResult[]> {
-    const cacheKey = `analytics:detectors:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getDetectors(params: PeriodParams, organizationId?: string, teamId = params.teamId): Promise<DetectorResult[]> {
+    const cacheKey = `analytics:detectors:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<DetectorResult[]>(cacheKey);
     if (cached) return cached;
 
     const dateFilter = periodDateFilter(params);
 
-    const where = { ...(dateFilter ? { timestamp: dateFilter } : {}), ...(organizationId ? { organizationId } : {}) };
+    const where = { ...(dateFilter ? { timestamp: dateFilter } : {}), ...(organizationId ? { organizationId } : {}), ...teamDetectionWhere(teamId) };
 
     const labelStats = await prisma.detection.groupBy({
       by: ["label"],
@@ -454,12 +472,12 @@ export const analyticsService = {
     return result;
   },
 
-  async getTimeline(params: PeriodParams, organizationId?: string): Promise<TimelineResult[]> {
-    const cacheKey = `analytics:timeline:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getTimeline(params: PeriodParams, organizationId?: string, teamId = params.teamId): Promise<TimelineResult[]> {
+    const cacheKey = `analytics:timeline:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<TimelineResult[]>(cacheKey);
     if (cached) return cached;
 
-    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId);
+    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId, teamId);
     // Hour-of-day distribution in the requested zone (e.g. DST-aware local
     // time) rather than the database server's time zone.
     const hourExpr = params.tz
@@ -486,12 +504,12 @@ export const analyticsService = {
     return result;
   },
 
-  async getConfidenceDistribution(params: PeriodParams, organizationId?: string): Promise<ConfidenceBucket[]> {
-    const cacheKey = `analytics:confidence:${organizationId ?? "global"}:${rangeKeyFor(params)}`;
+  async getConfidenceDistribution(params: PeriodParams, organizationId?: string, teamId = params.teamId): Promise<ConfidenceBucket[]> {
+    const cacheKey = `analytics:confidence:${organizationId ?? "global"}:${teamId ?? "all"}:${rangeKeyFor(params)}`;
     const cached = cacheGet<ConfidenceBucket[]>(cacheKey);
     if (cached) return cached;
 
-    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId);
+    const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId, teamId);
 
     // Single-pass aggregation in PostgreSQL instead of loading every
     // detection row into Node memory.

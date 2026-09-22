@@ -90,6 +90,7 @@ export const analyticsQuerySchema = z.object({
   from: dateStringSchema.optional(),
   to: dateStringSchema.optional(),
   tz: timeZoneSchema.optional(),
+  teamId: z.string().uuid("Invalid team id").optional(),
 });
 
 export type AnalyticsQueryInput = z.infer<typeof analyticsQuerySchema>;
@@ -610,6 +611,7 @@ export const auditLogQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().max(200).optional(),
   userId: z.string().uuid().optional(),
+  teamId: z.string().uuid("Invalid team id").optional(),
   action: z.enum([
     "user_login", "user_logout", "password_reset", "password_changed",
     "user_created", "user_updated", "user_deleted", "user_locked",
@@ -629,6 +631,7 @@ export const auditLogQuerySchema = z.object({
     "team_created", "team_updated", "team_deleted",
     "team_member_assigned", "team_member_removed",
     "team_invitation_created", "team_invitation_revoked", "team_invitation_accepted",
+    "camera_team_assigned",
   ]).optional(),
   module: z.string().max(100).optional(),
   status: z.enum(["success", "failed"]).optional(),

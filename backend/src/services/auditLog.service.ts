@@ -52,11 +52,13 @@ export const auditLogService = {
   },
 
   async findAll(params: FindAllParams, organizationId?: string) {
-    const { page, limit, search, userId, action, module, status, dateFrom, dateTo, sortBy, sortOrder } = params;
+    const { page, limit, search, userId, action, module, status, dateFrom, dateTo, teamId, sortBy, sortOrder } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
 
     if (organizationId) where.organizationId = organizationId;
+
+    if (teamId) where.metadata = { path: ["teamId"], equals: teamId };
 
     if (search) {
       where.OR = [
@@ -115,11 +117,13 @@ export const auditLogService = {
    * controller can write incrementally instead of buffering every row.
    */
   async *streamCSV(params: FindAllParams, pageSize = 500, organizationId?: string) {
-    const { search, userId, action, module, status, dateFrom, dateTo } = params;
+    const { search, userId, action, module, status, dateFrom, dateTo, teamId } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
 
     if (organizationId) where.organizationId = organizationId;
+
+    if (teamId) where.metadata = { path: ["teamId"], equals: teamId };
 
     if (search) {
       where.OR = [

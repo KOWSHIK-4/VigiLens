@@ -485,6 +485,7 @@ enum AuditLogAction {
   team_invitation_created
   team_invitation_revoked
   team_invitation_accepted
+  camera_team_assigned
 }
 
 enum AuditLogStatus {
