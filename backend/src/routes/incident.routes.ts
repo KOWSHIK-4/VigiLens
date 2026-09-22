@@ -10,6 +10,7 @@ import {
   updateIncidentStatusSchema,
   updateIncidentPrioritySchema,
   assignIncidentSchema,
+  assignIncidentTeamSchema,
   addIncidentNoteSchema,
   updateIncidentResolutionSchema,
 } from "../types";
@@ -26,6 +27,7 @@ router.post("/", requirePermission("alerts.manage"), validate(createIncidentSche
 router.patch("/:id/status", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(updateIncidentStatusSchema, "body"), incidentController.updateStatus);
 router.patch("/:id/priority", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(updateIncidentPrioritySchema, "body"), incidentController.updatePriority);
 router.patch("/:id/assign", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(assignIncidentSchema, "body"), incidentController.assign);
+router.patch("/:id/team", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(assignIncidentTeamSchema, "body"), incidentController.assignTeam);
 router.post("/:id/notes", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(addIncidentNoteSchema, "body"), incidentController.addNote);
 router.get("/:id/related-detections", requirePermission("alerts.read"), validate(incidentIdSchema, "params"), incidentController.getRelatedDetections);
 router.patch("/:id/resolution", requirePermission("alerts.manage"), validate(incidentIdSchema, "params"), validate(updateIncidentResolutionSchema, "body"), incidentController.updateResolutionSummary);

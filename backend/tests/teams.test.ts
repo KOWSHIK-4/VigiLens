@@ -816,6 +816,136 @@ async function run() {
   if (leadDelete.status === 200) ok("team lead can delete their own team (delegated manage)");
   else fail("lead delete own team", leadDelete);
 
+  // 16. Team-scoped alert/incident assignment.
+  const ORG_A_ID = "00000000-0000-0000-0000-000000000001";
+  const scopeCamera = await prisma.camera.create({
+    data: {
+      name: `Scope Camera ${RUN_TAG}`,
+      url: "rtsp://scope.invalid/cam",
+      organizationId: ORG_A_ID,
+    },
+  });
+  const scopeDetection = await prisma.detection.create({
+    data: {
+      cameraId: scopeCamera.id,
+      label: "person",
+      confidence: 0.94,
+      imageUrl: "http://localhost/scope.jpg",
+      organizationId: ORG_A_ID,
+    },
+  });
+  const scopeAlert = await prisma.alert.create({
+    data: {
+      detectionId: scopeDetection.id,
+      severity: "critical",
+      title: `Scope Alert ${RUN_TAG}`,
+      message: "Team routing fixture",
+      organizationId: ORG_A_ID,
+    },
+  });
+
+  const assignAlertTeam = await request(
+    `/alerts/${scopeAlert.id}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: inviteTeamId }) },
+    tokenA,
+  );
+  const assignAlertData = assignAlertTeam.body as { data?: { team?: { id?: string; name?: string } | null } };
+  if (assignAlertTeam.status === 200 && assignAlertData.data?.team?.id === inviteTeamId)
+    ok("alert assigned to a team (team preview returned)");
+  else fail("assign alert team", assignAlertTeam);
+
+  const alertInvalidTeam = await request(
+    `/alerts/${scopeAlert.id}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: "11111111-1111-4111-8111-111111111111" }) },
+    tokenA,
+  );
+  if (alertInvalidTeam.status === 404) ok("alert team assignment to unknown team returns 404");
+  else fail("alert unknown team", alertInvalidTeam);
+
+  const alertCrossTeam = await request(
+    `/alerts/${scopeAlert.id}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: orgBTeamId }) },
+    tokenA,
+  );
+  if (alertCrossTeam.status === 404) ok("cross-tenant team assignment on alert returns 404");
+  else fail("alert cross-tenant team", alertCrossTeam);
+
+  const teamFilteredAlerts = await request(`/alerts?teamId=${inviteTeamId}`, {}, tokenA);
+  const teamAlertHits = (teamFilteredAlerts.body as { data?: Array<{ id: string }> })?.data ?? [];
+  if (teamFilteredAlerts.status === 200 && teamAlertHits.some((a) => a.id === scopeAlert.id))
+    ok("alerts filtered by teamId return the assigned alert");
+  else fail("alerts team filter", teamFilteredAlerts.body);
+
+  const scopeIncident = await request(
+    "/incidents",
+    { method: "POST", body: JSON.stringify({ alertId: scopeAlert.id }) },
+    tokenA,
+  );
+  const scopeIncidentId = (scopeIncident.body as { data?: { id?: string } })?.data?.id;
+  const scopeIncidentTeam = (scopeIncident.body as { data?: { team?: { id?: string } | null } })?.data?.team;
+  if (scopeIncident.status === 201 && scopeIncidentId && scopeIncidentTeam?.id === inviteTeamId)
+    ok("incident inherits the alert's team on creation");
+  else fail("incident inherits alert team", scopeIncident);
+
+  const scopeTeam = await request(
+    "/teams",
+    { method: "POST", body: JSON.stringify({ name: `Routing Team ${RUN_TAG}` }) },
+    tokenA,
+  );
+  const scopeTeamId = (scopeTeam.body as { data?: { id?: string } })?.data?.id;
+  if (scopeTeam.status !== 201 || !scopeTeamId) {
+    fail("create routing team", scopeTeam);
+    return;
+  }
+  createdTeamIds.push(scopeTeamId);
+
+  const reassignIncident = await request(
+    `/incidents/${scopeIncidentId}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: scopeTeamId }) },
+    tokenA,
+  );
+  const reassigned = reassignIncident.body as { data?: { team?: { id?: string } | null } };
+  if (reassignIncident.status === 200 && reassigned.data?.team?.id === scopeTeamId)
+    ok("incident reassigned to another team");
+  else fail("incident reassign team", reassignIncident);
+
+  const teamFilteredIncidents = await request(`/incidents?teamId=${scopeTeamId}`, {}, tokenA);
+  const teamIncidentHits = (teamFilteredIncidents.body as { data?: Array<{ id: string }> })?.data ?? [];
+  if (teamFilteredIncidents.status === 200 && teamIncidentHits.some((i) => i.id === scopeIncidentId))
+    ok("incidents filtered by teamId return the assigned incident");
+  else fail("incidents team filter", teamFilteredIncidents.body);
+
+  const incidentCrossTeam = await request(
+    `/incidents/${scopeIncidentId}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: orgBTeamId }) },
+    tokenA,
+  );
+  if (incidentCrossTeam.status === 404) ok("cross-tenant team assignment on incident returns 404");
+  else fail("incident cross-tenant team", incidentCrossTeam);
+
+  const clearIncidentTeam = await request(
+    `/incidents/${scopeIncidentId}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: null }) },
+    tokenA,
+  );
+  const cleared = clearIncidentTeam.body as { data?: { team?: unknown } };
+  if (clearIncidentTeam.status === 200 && (cleared.data?.team ?? null) === null)
+    ok("incident team cleared via teamId null");
+  else fail("clear incident team", clearIncidentTeam);
+
+  const clearAlertTeam = await request(
+    `/alerts/${scopeAlert.id}/team`,
+    { method: "PATCH", body: JSON.stringify({ teamId: null }) },
+    tokenA,
+  );
+  const clearedAlert = clearAlertTeam.body as { data?: { team?: unknown } };
+  if (clearAlertTeam.status === 200 && (clearedAlert.data?.team ?? null) === null)
+    ok("alert team cleared via teamId null");
+  else fail("clear alert team", clearAlertTeam);
+
+  await prisma.camera.delete({ where: { id: scopeCamera.id } }).catch(() => null);
+  ok("alert/incident team fixtures cleaned up");
+
   if (failed > 0) {
     console.log(`\n${failed} team test(s) FAILED, ${passed} passed`);
     process.exitCode = 1;

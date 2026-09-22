@@ -74,10 +74,11 @@ const incidentInclude = {
       email: true,
     },
   },
+  team: { select: { id: true, name: true } },
 } satisfies Prisma.IncidentInclude;
 
 function buildWhere(
-  params: Pick<IncidentQueryInput, "status" | "priority" | "assignedTo" | "mine" | "unassigned" | "search">,
+  params: Pick<IncidentQueryInput, "status" | "priority" | "assignedTo" | "mine" | "unassigned" | "teamId" | "search">,
   userId?: string,
   organizationId?: string,
 ): Prisma.IncidentWhereInput {
@@ -102,6 +103,10 @@ function buildWhere(
 
   if (params.unassigned === "true") {
     where.assignedToUserId = null;
+  }
+
+  if (params.teamId) {
+    where.teamId = params.teamId;
   }
 
   if (params.search) {
@@ -217,6 +222,16 @@ export const incidentService = {
       throw new ApiError(409, "An incident already exists for this alert");
     }
 
+    let teamId = alert.teamId;
+    if (input.teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: input.teamId, ...(organizationId ? { organizationId } : {}) },
+        select: { id: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+      teamId = input.teamId;
+    }
+
     const author = await authorFrom(ctx);
     const title = alert.title;
     const priority = input.priority ?? alert.severity;
@@ -228,6 +243,7 @@ export const incidentService = {
         title,
         description: input.description,
         organizationId: alert.organizationId,
+        teamId,
       },
       include: incidentInclude,
     });
@@ -573,6 +589,68 @@ export const incidentService = {
         previousAssigneeId: incident.assignedToUserId,
         nextAssigneeId: input.assigneeId,
         nextAssigneeName: assignedToName,
+      },
+      organizationId,
+    });
+
+    return updated;
+  },
+
+  async assignTeam(id: string, teamId: string | null, ctx: ActorContext = {}, organizationId?: string) {
+    const incident = await prisma.incident.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!incident) {
+      throw new ApiError(404, "Incident not found");
+    }
+
+    if (incident.status === "resolved") {
+      throw new ApiError(422, "Cannot reassign a resolved incident");
+    }
+
+    let teamName: string | undefined;
+    if (teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: teamId, ...(organizationId ? { organizationId } : {}) },
+        select: { id: true, name: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+      teamName = team.name;
+    }
+
+    if ((incident.teamId ?? null) === teamId) {
+      return prisma.incident.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: incidentInclude });
+    }
+
+    const author = await authorFrom(ctx);
+
+    const updated = await prisma.incident.update({
+      where: { id },
+      data: { teamId },
+      include: incidentInclude,
+    });
+
+    if (incident.teamId || teamId) {
+      await logActivity(
+        incident.id,
+        "team_assigned",
+        author,
+        incident.teamId ?? null,
+        teamId,
+      );
+    }
+
+    await audit({
+      action: "incident_team_assigned",
+      module: "incidents",
+      description: teamId ? `Incident assigned to team: ${teamName || teamId}` : "Incident team cleared",
+      incidentId: incident.id,
+      alertId: incident.alertId,
+      ctx,
+      metadata: {
+        previousTeamId: incident.teamId,
+        nextTeamId: teamId,
+        nextTeamName: teamName,
       },
       organizationId,
     });

@@ -6,6 +6,7 @@ import type {
   UpdateIncidentStatusInput,
   UpdateIncidentPriorityInput,
   AssignIncidentInput,
+  AssignIncidentTeamInput,
   AddIncidentNoteInput,
 } from "../types";
 import { incidentService } from "../services/incident.service";
@@ -103,6 +104,20 @@ export const incidentController = {
       const incident = await incidentService.assign(
         req.params.id as string,
         req.body as AssignIncidentInput,
+        actorFrom(req),
+        req.organizationId,
+      );
+      success(res, incident);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async assignTeam(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const incident = await incidentService.assignTeam(
+        req.params.id as string,
+        (req.body as AssignIncidentTeamInput).teamId,
         actorFrom(req),
         req.organizationId,
       );

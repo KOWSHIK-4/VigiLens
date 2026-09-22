@@ -11,6 +11,7 @@ const alertInclude = {
   incident: {
     select: { id: true, status: true },
   },
+  team: { select: { id: true, name: true } },
 } satisfies Prisma.AlertInclude;
 
 interface CreateAlertInput {
@@ -21,7 +22,7 @@ interface CreateAlertInput {
 }
 
 function buildAlertWhere(
-  params: Pick<AlertQueryInput, "severity" | "isRead" | "search" | "cameraId" | "dateFrom" | "dateTo">,
+  params: Pick<AlertQueryInput, "severity" | "isRead" | "search" | "cameraId" | "teamId" | "dateFrom" | "dateTo">,
   organizationId?: string,
 ): Prisma.AlertWhereInput {
   const where: Prisma.AlertWhereInput = {};
@@ -44,6 +45,10 @@ function buildAlertWhere(
 
   if (params.cameraId) {
     where.detection = { cameraId: params.cameraId };
+  }
+
+  if (params.teamId) {
+    where.teamId = params.teamId;
   }
 
   if (params.dateFrom || params.dateTo) {
@@ -204,6 +209,31 @@ export const alertService = {
         escalatedByName: actor.name,
         escalationNote: note ?? null,
       },
+      include: alertInclude,
+    });
+  },
+
+  async assignTeam(id: string, teamId: string | null, organizationId?: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}) },
+    });
+    if (!alert) throw new ApiError(404, "Alert not found");
+
+    if (teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: teamId, ...(organizationId ? { organizationId } : {}) },
+        select: { id: true },
+      });
+      if (!team) throw new ApiError(404, "Team not found");
+    }
+
+    if ((alert.teamId ?? null) === teamId) {
+      return prisma.alert.findFirst({ where: { id, ...(organizationId ? { organizationId } : {}) }, include: alertInclude });
+    }
+
+    return prisma.alert.update({
+      where: { id },
+      data: { teamId },
       include: alertInclude,
     });
   },

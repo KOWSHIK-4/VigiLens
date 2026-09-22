@@ -241,6 +241,7 @@ export const alertQuerySchema = z.object({
   isRead: z.enum(["true", "false"]).optional(),
   search: z.string().max(200).optional(),
   cameraId: z.string().uuid().optional(),
+  teamId: z.string().uuid().optional(),
   dateFrom: z
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), "must be a parseable date")
@@ -257,8 +258,13 @@ export const escalateAlertSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 
+export const assignAlertTeamSchema = z.object({
+  teamId: z.string().uuid("Invalid team id").nullable(),
+});
+
 export type AlertQueryInput = z.infer<typeof alertQuerySchema>;
 export type EscalateAlertInput = z.infer<typeof escalateAlertSchema>;
+export type AssignAlertTeamInput = z.infer<typeof assignAlertTeamSchema>;
 
 export const incidentStatusSchema = z.enum([
   "new",
@@ -276,6 +282,7 @@ export const incidentQuerySchema = z.object({
   assignedTo: z.string().uuid().optional(),
   mine: z.enum(["true", "false"]).optional(),
   unassigned: z.enum(["true", "false"]).optional(),
+  teamId: z.string().uuid().optional(),
   search: z.string().max(200).optional(),
   sortBy: z
     .enum(["status", "priority", "openedAt", "createdAt", "updatedAt", "title"])
@@ -288,6 +295,7 @@ export const incidentIdSchema = z.object({ id: z.string().uuid("Invalid incident
 export const createIncidentSchema = z.object({
   alertId: z.string().uuid("Invalid alert id"),
   priority: alertSeveritySchema.optional(),
+  teamId: z.string().uuid("Invalid team id").optional(),
   description: z.string().max(2000).default(""),
 });
 
@@ -304,6 +312,10 @@ export const assignIncidentSchema = z.object({
   assigneeId: z.string().uuid("Invalid user id").nullable(),
 });
 
+export const assignIncidentTeamSchema = z.object({
+  teamId: z.string().uuid("Invalid team id").nullable(),
+});
+
 export const addIncidentNoteSchema = z.object({
   body: z.string().trim().min(1, "Note body is required").max(4000),
 });
@@ -317,6 +329,7 @@ export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;
 export type UpdateIncidentPriorityInput = z.infer<typeof updateIncidentPrioritySchema>;
 export type AssignIncidentInput = z.infer<typeof assignIncidentSchema>;
+export type AssignIncidentTeamInput = z.infer<typeof assignIncidentTeamSchema>;
 export type AddIncidentNoteInput = z.infer<typeof addIncidentNoteSchema>;
 
 export const cameraIdSchema = z.object({ id: z.string().uuid() });
@@ -603,7 +616,7 @@ export const auditLogQuerySchema = z.object({
     "alert_created", "alert_acknowledged", "alert_escalated", "report_generated", "settings_changed",
     "incident_created", "incident_status_changed", "incident_assigned",
     "incident_unassigned", "incident_note_added", "incident_reopened",
-    "incident_resolved",
+    "incident_resolved", "alert_team_assigned", "incident_team_assigned",
     "team_created", "team_updated", "team_deleted",
     "team_member_assigned", "team_member_removed",
     "team_invitation_created", "team_invitation_revoked", "team_invitation_accepted",

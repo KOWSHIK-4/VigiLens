@@ -82,6 +82,8 @@ model Team {
   members      User[]           @relation("TeamMembers")
   invitations  TeamInvitation[]
   lead         User?            @relation("TeamLeads", fields: [leadId], references: [id], onDelete: SetNull)
+  alerts       Alert[]          @relation("AlertTeams")
+  incidents    Incident[]       @relation("IncidentTeams")
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
@@ -290,9 +292,11 @@ model Alert {
   escalationNote     String?       @map("escalation_note")
   createdAt          DateTime      @default(now()) @map("created_at")
   organizationId     String        @map("organization_id")
+  teamId             String?       @map("team_id")
 
   detection    Detection    @relation(fields: [detectionId], references: [id], onDelete: Cascade)
   incident     Incident?
+  team         Team?        @relation("AlertTeams", fields: [teamId], references: [id], onDelete: SetNull)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Alert list queries filter by is_read/severity and order by created_at DESC.
@@ -300,6 +304,7 @@ model Alert {
   @@index([isRead])
   @@index([createdAt])
   @@index([organizationId])
+  @@index([teamId])
   @@index([isRead, createdAt(sort: Desc)], map: "alerts_is_read_created_at_idx")
   @@index([severity, createdAt(sort: Desc)], map: "alerts_severity_created_at_idx")
   @@index([acknowledgedAt])
@@ -326,9 +331,11 @@ model Incident {
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
   organizationId    String         @map("organization_id")
+  teamId            String?        @map("team_id")
 
   alert        Alert              @relation(fields: [alertId], references: [id], onDelete: Cascade)
   assignedTo   User?              @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  team         Team?              @relation("IncidentTeams", fields: [teamId], references: [id], onDelete: SetNull)
   notes        IncidentNote[]
   activity     IncidentActivity[]
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -339,6 +346,7 @@ model Incident {
   @@index([openedAt])
   @@index([createdAt])
   @@index([organizationId])
+  @@index([teamId])
   // Incident list queries filter by status/priority/assignee and default to
   // opened_at DESC ordering; composites avoid a sort step per filtered list.
   @@index([status, openedAt(sort: Desc)], map: "incidents_status_opened_at_idx")
@@ -463,6 +471,8 @@ enum AuditLogAction {
   incident_note_added
   incident_reopened
   incident_resolved
+  alert_team_assigned
+  incident_team_assigned
   team_created
   team_updated
   team_deleted

@@ -1,5 +1,5 @@
 import type { Response, NextFunction } from "express";
-import type { AlertQueryInput, AuthRequest } from "../types";
+import type { AlertQueryInput, AssignAlertTeamInput, AuthRequest } from "../types";
 import { alertService } from "../services/alert.service";
 import { userService } from "../services/user.service";
 import { success, paginated } from "../utils/apiResponse";
@@ -109,6 +109,28 @@ export const alertController = {
     try {
       const result = await alertService.remove(req.params.id as string, req.organizationId);
       success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async assignTeam(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { teamId } = req.body as AssignAlertTeamInput;
+      const alert = (await alertService.assignTeam(req.params.id as string, teamId, req.organizationId))!;
+      const actor = await userService.findById(req.userId!).catch(() => null);
+      const info = getClientInfo(req);
+      await logAudit({
+        userId: req.userId,
+        username: actor?.name || "",
+        email: actor?.email || "",
+        action: "alert_team_assigned",
+        module: "alerts",
+        description: teamId ? `Alert routed to team: ${alert.team?.name || teamId}` : "Alert team cleared",
+        ...info,
+        metadata: { alertId: alert.id, teamId },
+      });
+      success(res, alert);
     } catch (err) {
       next(err);
     }
