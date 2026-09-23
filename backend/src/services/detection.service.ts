@@ -108,14 +108,21 @@ interface FindAllParams {
   confidenceMax?: number;
   sortBy?: string;
   sortOrder?: string;
+  /** Server-enforced team scope (own team for actors without teams.read). */
+  teamScopeId?: string;
 }
 
 function buildWhereClause(
   params: Partial<FindAllParams>,
   organizationId?: string,
+  teamScopeId?: string,
 ): Prisma.DetectionWhereInput {
   const where: Prisma.DetectionWhereInput = {};
   if (organizationId) where.organizationId = organizationId;
+
+  if (teamScopeId) {
+    where.camera = { teamId: teamScopeId };
+  }
 
   if (params.status) {
     where.status = params.status as DetectionStatus;
@@ -159,11 +166,16 @@ function buildWhereClause(
 const STATS_CACHE_TTL_MS = 5_000;
 const statsCache = new Map<string, { data: unknown; expiresAt: number }>();
 
-async function computeDetectionStats(organizationId?: string) {
+async function computeDetectionStats(organizationId?: string, teamScopeId?: string) {
   const scope: Prisma.DetectionWhereInput = organizationId ? { organizationId } : {};
   const camScope: Prisma.CameraWhereInput = organizationId ? { organizationId } : {};
   const orgCond: Prisma.Sql = organizationId
     ? Prisma.sql`AND organization_id = ${organizationId}`
+    : Prisma.empty;
+  const teamScope: Prisma.DetectionWhereInput = teamScopeId ? { camera: { teamId: teamScopeId } } : {};
+  const teamCamScope: Prisma.CameraWhereInput = teamScopeId ? { teamId: teamScopeId } : {};
+  const teamCond: Prisma.Sql = teamScopeId
+    ? Prisma.sql`AND camera_id IN (SELECT id FROM cameras WHERE team_id = ${teamScopeId})`
     : Prisma.empty;
 
   const [
@@ -174,11 +186,11 @@ async function computeDetectionStats(organizationId?: string) {
     detectionsOverTime,
     alertsByType,
   ] = await Promise.all([
-    prisma.detection.count({ where: scope }),
-    prisma.detection.count({ where: { ...scope, status: "critical" } }),
-    prisma.camera.count({ where: { ...camScope, status: "online" } }),
+    prisma.detection.count({ where: { ...scope, ...teamScope } }),
+    prisma.detection.count({ where: { ...scope, ...teamScope, status: "critical" } }),
+    prisma.camera.count({ where: { ...camScope, ...teamCamScope, status: "online" } }),
     prisma.detection.findMany({
-      where: scope,
+      where: { ...scope, ...teamScope },
       include: { camera: cameraView },
       orderBy: { timestamp: "desc" },
       take: 10,
@@ -188,6 +200,7 @@ async function computeDetectionStats(organizationId?: string) {
       FROM detections
       WHERE timestamp >= NOW() - INTERVAL '7 days'
         ${orgCond}
+        ${teamCond}
       GROUP BY DATE(timestamp)
       ORDER BY date ASC
     `,
@@ -196,6 +209,7 @@ async function computeDetectionStats(organizationId?: string) {
       FROM detections
       WHERE timestamp >= NOW() - INTERVAL '30 days'
         ${orgCond}
+        ${teamCond}
       GROUP BY label
       ORDER BY count DESC
       LIMIT 10
@@ -205,7 +219,7 @@ async function computeDetectionStats(organizationId?: string) {
   const avgConfidence =
     totalDetections > 0
       ? await prisma.detection
-          .aggregate({ _avg: { confidence: true }, where: scope })
+          .aggregate({ _avg: { confidence: true }, where: { ...scope, ...teamScope } })
           .then((r: { _avg: { confidence: number | null } }) => r._avg.confidence ?? 0)
       : 0;
 
@@ -421,8 +435,8 @@ export const detectionService = {
     return detection;
   },
 
-  async findAll(params: FindAllParams, organizationId?: string) {
-    const where = buildWhereClause(params, organizationId);
+  async findAll(params: FindAllParams, organizationId?: string, teamScopeId?: string) {
+    const where = buildWhereClause(params, organizationId, teamScopeId);
 
     const orderBy: Prisma.DetectionOrderByWithRelationInput = {};
     const sortField = params.sortBy || "timestamp";
@@ -481,8 +495,8 @@ export const detectionService = {
    * the caller (controller) can write them incrementally instead of loading
    * the whole result set into memory.
    */
-  async *streamCSV(params: Partial<FindAllParams>, pageSize = 500, organizationId?: string) {
-    const where = buildWhereClause(params, organizationId);
+  async *streamCSV(params: Partial<FindAllParams>, pageSize = 500, organizationId?: string, teamScopeId?: string) {
+    const where = buildWhereClause(params, organizationId, teamScopeId);
     let skip = 0;
 
     for (;;) {
@@ -510,14 +524,15 @@ export const detectionService = {
     }
   },
 
-  async getStats(organizationId?: string) {
-    const cached = organizationId ? statsCache.get(organizationId) : undefined;
+  async getStats(organizationId?: string, teamScopeId?: string) {
+    const cacheKey = organizationId ? `${organizationId}:${teamScopeId ?? "all"}` : undefined;
+    const cached = cacheKey ? statsCache.get(cacheKey) : undefined;
     if (cached && cached.expiresAt > Date.now()) {
       return cached.data as Awaited<ReturnType<typeof computeDetectionStats>>;
     }
-    const data = await computeDetectionStats(organizationId);
-    if (organizationId) {
-      statsCache.set(organizationId, { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
+    const data = await computeDetectionStats(organizationId, teamScopeId);
+    if (cacheKey) {
+      statsCache.set(cacheKey, { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
     }
     return data;
   },

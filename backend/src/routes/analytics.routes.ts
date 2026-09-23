@@ -2,6 +2,7 @@ import { Router } from "express";
 import { analyticsController } from "../controllers/analytics.controller";
 import { authenticate } from "../middleware/auth";
 import { requirePermission } from "../middleware/permissions";
+import { enforceTeamVisibility } from "../middleware/teamVisibility";
 import { validate } from "../middleware/validate";
 import { analyticsQuerySchema } from "../types";
 
@@ -9,6 +10,7 @@ const router = Router();
 
 router.use(authenticate);
 router.use(requirePermission("analytics.read"));
+router.use(enforceTeamVisibility);
 
 router.get("/overview", validate(analyticsQuerySchema, "query"), analyticsController.getOverview);
 router.get("/daily", validate(analyticsQuerySchema, "query"), analyticsController.getDaily);

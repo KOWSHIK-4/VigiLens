@@ -7,6 +7,12 @@ export interface AuthRequest extends Request {
   organizationId?: string;
   teamId?: string;
   permissions?: Set<string>;
+  /**
+   * Resolved server-side team scope: set to the actor's own team when they
+   * lack the org-wide teams.read permission, otherwise undefined. Downstream
+   * read paths must use this to restrict data to the actor's team.
+   */
+  teamScopeId?: string;
 }
 
 export const registerSchema = z.object({

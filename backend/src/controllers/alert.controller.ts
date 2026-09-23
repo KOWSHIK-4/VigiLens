@@ -98,7 +98,7 @@ export const alertController = {
   async markAllAsRead(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       await alertService.markAllAsRead(req.organizationId);
-      const unreadCount = await alertService.countUnread(req.organizationId);
+      const unreadCount = await alertService.countUnread(req.organizationId, req.teamScopeId);
       success(res, { unreadCount });
     } catch (err) {
       next(err);

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { cameraController } from "../controllers/camera.controller";
 import { authenticate } from "../middleware/auth";
 import { requirePermission } from "../middleware/permissions";
+import { enforceTeamVisibility } from "../middleware/teamVisibility";
 import { validate } from "../middleware/validate";
 import {
   cameraIdSchema,
@@ -15,7 +16,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get("/", requirePermission("cameras.read"), validate(cameraQuerySchema, "query"), cameraController.getAll);
+router.get("/", requirePermission("cameras.read"), validate(cameraQuerySchema, "query"), enforceTeamVisibility, cameraController.getAll);
 router.get(
   "/fleet/health",
   requirePermission("monitoring.read"),

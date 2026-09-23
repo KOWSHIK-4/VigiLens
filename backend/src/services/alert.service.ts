@@ -256,9 +256,13 @@ export const alertService = {
     });
   },
 
-  async countUnread(organizationId?: string) {
+  async countUnread(organizationId?: string, teamScopeId?: string) {
     return prisma.alert.count({
-      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
+      where: {
+        isRead: false,
+        ...(organizationId ? { organizationId } : {}),
+        ...(teamScopeId ? { teamId: teamScopeId } : {}),
+      },
     });
   },
 

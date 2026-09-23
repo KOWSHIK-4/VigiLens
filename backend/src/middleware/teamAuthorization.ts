@@ -32,7 +32,10 @@ export async function requireTeamLeadOrManage(
     if (!team) {
       return apiError(res, "Team not found", 404);
     }
-    if (team.leadId && team.leadId === req.userId) {
+    // A lead only ever manages a team they are still a member of. The
+    // membership check guards against stale lead rows left after a manual
+    // reassignment, so an ex-member cannot keep exercising lead powers.
+    if (team.leadId && team.leadId === req.userId && req.teamId === team.id) {
       return next();
     }
     return apiError(res, "Insufficient permissions", 403);

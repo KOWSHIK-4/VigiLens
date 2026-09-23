@@ -93,7 +93,7 @@ export const detectionController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as DetectionQueryInput;
-      const result = await detectionService.findAll(q, req.organizationId);
+      const result = await detectionService.findAll(q, req.organizationId, req.teamScopeId);
       paginated(res, result.data, result.total, q.page, q.limit);
     } catch (err) {
       next(err);
@@ -125,7 +125,7 @@ export const detectionController = {
           dateTo: q.dateTo,
           confidenceMin: q.confidenceMin,
           confidenceMax: q.confidenceMax,
-        }, 500, req.organizationId),
+        }, 500, req.organizationId, req.teamScopeId),
       );
     } catch (err) {
       if (!res.headersSent) next(err);
@@ -134,7 +134,7 @@ export const detectionController = {
 
   async getStats(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const stats = await detectionService.getStats(req.organizationId);
+      const stats = await detectionService.getStats(req.organizationId, req.teamScopeId);
       success(res, stats);
     } catch (err) {
       next(err);

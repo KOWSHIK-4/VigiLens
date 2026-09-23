@@ -3,6 +3,7 @@ import { detectionController } from "../controllers/detection.controller";
 import { authenticate } from "../middleware/auth";
 import { requireInternalKey } from "../middleware/internal";
 import { requirePermission } from "../middleware/permissions";
+import { enforceTeamVisibility } from "../middleware/teamVisibility";
 import { validate } from "../middleware/validate";
 import { detectionIdSchema, detectionQuerySchema } from "../types";
 
@@ -21,13 +22,15 @@ router.get(
   "/export/csv",
   requirePermission("detections.read"),
   validate(detectionQuerySchema, "query"),
+  enforceTeamVisibility,
   detectionController.exportCSV,
 );
-router.get("/stats", requirePermission("detections.read"), detectionController.getStats);
+router.get("/stats", requirePermission("detections.read"), enforceTeamVisibility, detectionController.getStats);
 router.get(
   "/",
   requirePermission("detections.read"),
   validate(detectionQuerySchema, "query"),
+  enforceTeamVisibility,
   detectionController.getAll,
 );
 router.get(
