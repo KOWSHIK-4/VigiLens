@@ -572,18 +572,19 @@ model DetectorCamera {
 }
 
 model SystemSetting {
-  id          String                @id @default(uuid())
-  category    SystemSettingCategory
-  key         String
-  label       String
-  description String                @default("")
-  value       Json
-  updatedBy   String?               @map("updated_by")
-  updatedAt   DateTime              @updatedAt @map("updated_at")
-  createdAt   DateTime              @default(now()) @map("created_at")
+  id             String                @id @default(uuid())
+  organizationId String                @default("") @map("organization_id")
+  category       SystemSettingCategory
+  key            String
+  label          String
+  description    String                @default("")
+  value          Json
+  updatedBy      String?               @map("updated_by")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
 
-  @@unique([category, key])
-  @@index([category])
+  @@unique([organizationId, category, key])
+  @@index([organizationId, category])
   @@map("system_settings")
 }
 

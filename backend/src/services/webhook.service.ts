@@ -77,14 +77,14 @@ export function parseWebhookConfig(
   };
 }
 
-export async function readWebhookConfig(): Promise<WebhookConfig> {
+export async function readWebhookConfig(organizationId = ""): Promise<WebhookConfig> {
   const [enabled, url, secret, alertCreatedEnabled, incidentChangedEnabled] =
     await Promise.all([
-      settingsService.getValue("notifications", "webhook_enabled"),
-      settingsService.getValue("notifications", "webhook_url"),
-      settingsService.getValue("notifications", "webhook_secret"),
-      settingsService.getValue("notifications", "webhook_alert_created_enabled"),
-      settingsService.getValue("notifications", "webhook_incident_changed_enabled"),
+      settingsService.getValue("notifications", "webhook_enabled", organizationId),
+      settingsService.getValue("notifications", "webhook_url", organizationId),
+      settingsService.getValue("notifications", "webhook_secret", organizationId),
+      settingsService.getValue("notifications", "webhook_alert_created_enabled", organizationId),
+      settingsService.getValue("notifications", "webhook_incident_changed_enabled", organizationId),
     ]);
   return parseWebhookConfig({
     webhook_enabled: enabled,
@@ -180,10 +180,11 @@ export const webhookService = {
     title: string;
     message: string;
     createdAt: Date | string;
+    organizationId?: string | null;
   }): Promise<WebhookDispatchResult | null> {
     let config: WebhookConfig;
     try {
-      config = await readWebhookConfig();
+      config = await readWebhookConfig(alert.organizationId ?? "");
     } catch (err) {
       logger.warn("Webhook config read failed", {
         error: err instanceof Error ? err.message : String(err),
@@ -201,6 +202,7 @@ export const webhookService = {
         severity: alert.severity,
         title: alert.title,
         message: alert.message,
+        organizationId: alert.organizationId ?? "",
       },
       "alert",
       alert.id,
@@ -216,10 +218,11 @@ export const webhookService = {
     status: string;
     action: string;
     timestamp?: Date;
+    organizationId?: string | null;
   }): Promise<WebhookDispatchResult | null> {
     let config: WebhookConfig;
     try {
-      config = await readWebhookConfig();
+      config = await readWebhookConfig(incident.organizationId ?? "");
     } catch (err) {
       logger.warn("Webhook config read failed", {
         error: err instanceof Error ? err.message : String(err),
@@ -235,6 +238,7 @@ export const webhookService = {
         id: incident.id,
         timestamp: serializeDate(incident.timestamp ?? new Date()),
         status: incident.status,
+        organizationId: incident.organizationId ?? "",
       },
       "incident",
       incident.id,
@@ -259,9 +263,11 @@ export const webhookService = {
     eventType: WebhookEventType,
     payload: Record<string, unknown>,
   ): Promise<{ ok: boolean; error?: string | null }> {
+    const organizationId =
+      typeof payload.organizationId === "string" ? payload.organizationId : "";
     let config: WebhookConfig;
     try {
-      config = await readWebhookConfig();
+      config = await readWebhookConfig(organizationId);
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

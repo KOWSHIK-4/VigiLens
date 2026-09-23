@@ -25,6 +25,7 @@ let receiver: http.Server | null = null;
 let passed = 0;
 let failed = 0;
 const createdCameraIds: string[] = [];
+const createdOrgIds: string[] = [];
 const deliveredPayloads: Array<{
   method: string;
   url: string;
@@ -330,7 +331,116 @@ async function run() {
     }
   }
 
-  // 5) Event filters suppress unwanted payloads.
+  // 5) Webhook configuration is scoped per organization: Org B disabling its
+  // own channel must not break delivery for Org A.
+  const orgB = await prisma.organization.create({
+    data: {
+      name: "Webhook Isolation Org",
+      slug: `webhook-isolation-${process.pid}`,
+      description: "",
+    },
+  });
+  createdOrgIds.push(orgB.id);
+  const adminHash = await prisma.user.findUnique({
+    where: { email: "admin@vigilens.io" },
+    select: { password: true },
+  });
+  const orgBUser = await prisma.user.create({
+    data: {
+      email: `webhook-b-${process.pid}@vigilens.io`,
+      password: adminHash?.password ?? "",
+      name: "Webhook Isolation Admin",
+      role: "admin",
+      status: "active",
+      organizationId: orgB.id,
+    },
+  });
+
+  const loginB = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: orgBUser.email, password: "admin123" }),
+  });
+  const tokenB = (loginB.body as { data: { token: string } })?.data?.token;
+  if (loginB.status === 200 && tokenB) {
+    ok("second-organization admin can log in");
+  } else {
+    fail("second-organization admin login", loginB);
+  }
+
+  const disableOrgB = await request(
+    "/settings/notifications",
+    { method: "PATCH", body: JSON.stringify({ webhook_enabled: false }) },
+    tokenB,
+  );
+  if (disableOrgB.status === 200) {
+    ok("Org B disables its own webhook channel via settings");
+  } else {
+    fail("Org B webhook disable", disableOrgB);
+  }
+
+  const adminNotificationSettings = await request("/settings/notifications", {}, adminToken);
+  const adminRows = (adminNotificationSettings.body as { data: Array<{ key: string; value: unknown }> })?.data ?? [];
+  const adminWebhookEnabled = adminRows.find((s) => s.key === "webhook_enabled")?.value;
+  const orgBNotificationSettings = await request("/settings/notifications", {}, tokenB);
+  const orgBRows = (orgBNotificationSettings.body as { data: Array<{ key: string; value: unknown }> })?.data ?? [];
+  const orgBWebhookEnabled = orgBRows.find((s) => s.key === "webhook_enabled")?.value;
+  if (adminWebhookEnabled === true && orgBWebhookEnabled === false) {
+    ok("webhook webhook configuration is scoped per organization");
+  } else {
+    fail("webhook configuration scoped per organization", {
+      adminWebhookEnabled,
+      orgBWebhookEnabled,
+    });
+  }
+
+  const cameraD = await prisma.camera.create({
+    data: {
+      name: "Webhook Test Cam D",
+      url: "rtsp://localhost/none",
+      cameraType: "rtsp",
+      location: "webhook-test-d",
+      organizationId: DEFAULT_ORG_ID,
+    },
+  });
+  createdCameraIds.push(cameraD.id);
+
+  const ingestD = await request(
+    "/detections/internal",
+    {
+      method: "POST",
+      headers: { "X-Internal-Key": internalKey },
+      body: JSON.stringify({
+        camera_id: cameraD.id,
+        label: "person",
+        confidence: 0.92,
+        detector_key: "person",
+        class_name: "person",
+        image_url: "",
+        skip_alert: false,
+      }),
+    },
+    adminToken,
+  );
+  if (ingestD.status !== 201) {
+    fail("isolation ingestion", ingestD);
+  }
+
+  const orgADelivery = await waitForDelivery(
+    (e) =>
+      e.body.event === "alert_created" &&
+      typeof e.body.message === "string" &&
+      e.body.message.includes("Webhook Test Cam D"),
+    15000,
+  );
+  if (orgADelivery) {
+    ok("Org A webhook delivery unaffected by Org B's settings");
+  } else {
+    fail("Org A webhook delivery unaffected by Org B's settings", {
+      received: deliveredPayloads.filter((e) => e.body.event === "alert_created").length,
+    });
+  }
+
+  // 6) Event filters suppress unwanted payloads.
   const deliveryCountBefore = deliveredPayloads.filter((e) => e.body.event === "alert_created").length;
   const filtered = await request(
     "/settings/notifications",
@@ -462,6 +572,7 @@ run()
   .finally(async () => {
     try {
       await prisma.camera.deleteMany({ where: { id: { in: createdCameraIds } } });
+      await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
     } catch {
       // cascade may have removed them already
     }

@@ -13,6 +13,17 @@ function getClientInfo(req: AuthRequest) {
   };
 }
 
+/**
+ * Security settings (password policy, session age, rate limits, MFA) govern
+ * the whole instance and are consulted during pre-login / auth flows where no
+ * organization context exists. They are deliberately instance-scoped (""),
+ * whereas operational settings -- including the webhook configuration under
+ * "notifications" -- are scoped to the caller's organization.
+ */
+function settingsScope(req: AuthRequest, category: SettingsCategory): string {
+  return category === "security" ? "" : req.organizationId ?? "";
+}
+
 async function auditSettingsChange(
   req: AuthRequest,
   description: string,
@@ -33,9 +44,9 @@ async function auditSettingsChange(
 }
 
 export const settingsController = {
-  async getAll(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const settings = await settingsService.getAll();
+      const settings = await settingsService.getAll(settingsScope(req, "general"));
       success(res, settings);
     } catch (err) {
       next(err);
@@ -45,7 +56,7 @@ export const settingsController = {
   async getByCategory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.params.category as SettingsCategory;
-      const settings = await settingsService.getByCategory(category);
+      const settings = await settingsService.getByCategory(category, settingsScope(req, category));
       success(res, settings);
     } catch (err) {
       next(err);
@@ -56,7 +67,7 @@ export const settingsController = {
     try {
       const category = req.params.category as SettingsCategory;
       const body = req.body as Record<string, string | number | boolean>;
-      const settings = await settingsService.update(category, body, req.userId);
+      const settings = await settingsService.update(category, body, req.userId, settingsScope(req, category));
       await auditSettingsChange(
         req,
         `Settings updated: ${category} (${Object.keys(body).length} value(s))`,
@@ -74,7 +85,7 @@ export const settingsController = {
   async reset(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.params.category as SettingsCategory;
-      const settings = await settingsService.reset(category, req.userId);
+      const settings = await settingsService.reset(category, req.userId, settingsScope(req, category));
       await auditSettingsChange(
         req,
         `Settings reset to defaults: ${category}`,

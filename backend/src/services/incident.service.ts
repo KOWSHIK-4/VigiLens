@@ -271,6 +271,7 @@ export const incidentService = {
       id: incident.id,
       status: incident.status,
       action: "created",
+      organizationId: alert.organizationId,
     });
 
     return prisma.incident.findUnique({
@@ -484,6 +485,7 @@ export const incidentService = {
       id: incident.id,
       status: input.status,
       action: "status_changed",
+      organizationId,
     });
 
     return updated;
