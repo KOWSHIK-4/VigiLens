@@ -20,6 +20,8 @@ let failed = 0;
 let createdCameraId: string | null = null;
 const createdCameraIds: string[] = [];
 const createdTeamIds: string[] = [];
+const createdRoleNames: string[] = [];
+const createdScopedUserIds: string[] = [];
 
 function ok(name: string, detail?: unknown) {
   passed += 1;
@@ -426,6 +428,191 @@ async function run() {
     sseA.close();
     sseB.close();
     await sleep(800);
+
+    // 5c) Team channel authorization. A subscriber may only scope to a team
+    // they are a member of or, holding the org-wide `teams.read`, to any team
+    // in the tenant; foreign/unknown teams fail closed before the stream opens.
+    const adminUserId = (await prisma.user.findFirst({
+      where: { email: "admin@vigilens.io" },
+      select: { id: true },
+    }))?.id ?? "";
+
+    // 5c-i) A `teams.read` holder (admin) may scope to a tenant team they do
+    // not belong to.
+    const scopeAdminTicketRes = await request("/auth/realtime-ticket", { method: "POST" }, adminToken);
+    const scopeAdminTicket = (scopeAdminTicketRes.body as { data?: { ticket: string } })?.data?.ticket;
+    const adminScoped = scopeAdminTicket
+      ? await openSse(`/api/realtime/events?ticket=${scopeAdminTicket}&teamIds=${teamAId}`)
+      : null;
+    await sleep(800);
+    const adminScopeSnap = ((await request("/realtime/subscribers", {}, adminToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const adminGrantedA = adminScopeSnap.some(
+      (s) => s.userId === adminUserId && s.teamIds?.includes(teamAId),
+    );
+    if (adminScoped && adminGrantedA) {
+      ok("teams.read holder can scope to a tenant team they are not a member of");
+    } else {
+      fail("teams.read holder team scope", adminScopeSnap);
+    }
+
+    // 5c-ii) A member WITHOUT teams.read is not allowed to scope to a team
+    // they do not belong to. Mint a custom role that excludes teams.read.
+    const superLogin = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
+    });
+    const superTokenAuth = (superLogin.body as { data?: { token: string } })?.data?.token ?? "";
+    if (superLogin.status === 200 && superTokenAuth) ok("super admin login returns token");
+    else fail("super admin login", superLogin);
+
+    const scopedRoleName = `rt_scoped_${Date.now()}`;
+    const roleRes = await request(
+      "/roles",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: scopedRoleName,
+          permissionKeys: ["dashboard.view", "detections.read"],
+        }),
+      },
+      superTokenAuth,
+    );
+    createdRoleNames.push(scopedRoleName);
+    if (roleRes.status === 201) ok("custom role without teams.read created");
+    else fail("custom role creation", roleRes);
+
+    const scopedEmail = `realtime_scoped_${Date.now()}@vigilens.io`;
+    const scopedUserRes = await request(
+      "/users",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Realtime Scoped",
+          email: scopedEmail,
+          password: "password123",
+          role: scopedRoleName,
+        }),
+      },
+      superTokenAuth,
+    );
+    const scopedUserId = (scopedUserRes.body as { data?: { id: string } })?.data?.id ?? "";
+    createdScopedUserIds.push(scopedUserId);
+    if (scopedUserRes.status === 201 && scopedUserId) ok("scoped user created in custom role");
+    else fail("scoped user creation", scopedUserRes);
+
+    const scopedRow = await prisma.user.findFirst({
+      where: { id: scopedUserId },
+      select: { teamId: true },
+    });
+    const scopedTeamId = scopedRow?.teamId ?? "";
+
+    const scopedLogin = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: scopedEmail, password: "password123" }),
+    });
+    const scopedToken = (scopedLogin.body as { data?: { token: string } })?.data?.token ?? "";
+    if (scopedLogin.status === 200 && scopedToken) ok("scoped user login returns token");
+    else fail("scoped user login", scopedLogin);
+
+    const scopedTicketRes = await request("/auth/realtime-ticket", { method: "POST" }, scopedToken);
+    const scopedTicket = (scopedTicketRes.body as { data?: { ticket: string } })?.data?.ticket ?? "";
+    if (scopedTicketRes.status === 200 && scopedTicket) ok("scoped user can mint a realtime ticket");
+    else fail("scoped user realtime ticket", scopedTicketRes);
+
+    const scopedTeamA = scopedTicket
+      ? await openSse(`/api/realtime/events?ticket=${scopedTicket}&teamIds=${teamAId}`)
+      : null;
+    await sleep(800);
+    const deniedSnap = ((await request("/realtime/subscribers", {}, scopedToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const grantedA2 = deniedSnap.some(
+      (s) => s.userId === scopedUserId && s.teamIds?.includes(teamAId),
+    );
+    if (scopedTeamA && !grantedA2) {
+      ok("member without teams.read cannot scope to a team they do not belong to");
+    } else {
+      fail("non-member team scope rejected", { grantedA2, snap: deniedSnap });
+    }
+    scopedTeamA?.close();
+    await sleep(800);
+
+    // 5c-iii) The same member may scope to their own team.
+    const scopedOwn = scopedTicket
+      ? await openSse(`/api/realtime/events?ticket=${scopedTicket}&teamIds=${scopedTeamId}`)
+      : null;
+    await sleep(800);
+    const onlyOwnSnap = ((await request("/realtime/subscribers", {}, scopedToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const memberOwn = onlyOwnSnap.some(
+      (s) => s.userId === scopedUserId && s.teamIds?.includes(scopedTeamId),
+    );
+    if (scopedOwn && memberOwn) {
+      ok("a team member can scope the stream to their own team");
+    } else {
+      fail("member own-team scope accepted", onlyOwnSnap);
+    }
+
+    // 5c-iv) While the member stream is still open, a `teams.read` holder also
+    // opens a stream: the member's snapshot must stay limited to themselves,
+    // while the holder sees every subscription.
+    const scopeAdminTicket2Res = await request("/auth/realtime-ticket", { method: "POST" }, adminToken);
+    const scopeAdminTicket2 = (scopeAdminTicket2Res.body as { data?: { ticket: string } })?.data?.ticket;
+    const adminScoped2 = scopeAdminTicket2
+      ? await openSse(`/api/realtime/events?ticket=${scopeAdminTicket2}&teamIds=${teamBId}`)
+      : null;
+    await sleep(800);
+
+    const restrictedSnap = ((await request("/realtime/subscribers", {}, scopedToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const memberSeesOnlyOwn =
+      restrictedSnap.every((s) => s.userId === scopedUserId) &&
+      restrictedSnap.some((s) => s.teamIds?.includes(scopedTeamId));
+    if (adminScoped2 && memberSeesOnlyOwn) {
+      ok("subscriber snapshot hides other users' streams from callers without teams.read");
+    } else {
+      fail("subscriber snapshot restricted to own", restrictedSnap);
+    }
+
+    const fullSnap = ((await request("/realtime/subscribers", {}, adminToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const adminSeesMember = fullSnap.some((s) => s.userId === scopedUserId);
+    const adminSeesAdmin = fullSnap.some((s) => s.userId === adminUserId);
+    if (adminSeesMember && adminSeesAdmin) {
+      ok("teams.read holder sees the full subscriber snapshot");
+    } else {
+      fail("teams.read full snapshot", fullSnap);
+    }
+
+    adminScoped2?.close();
+    scopedOwn?.close();
+    adminScoped?.close();
+    await sleep(800);
+
+    // 5c-v) A team id that does not exist in the tenant is rejected outright.
+    const foreignTeamId = "00000000-0000-0000-0000-000000000999";
+    const scopedForeign = scopedTicket
+      ? await openSse(`/api/realtime/events?ticket=${scopedTicket}&teamIds=${foreignTeamId}`)
+      : null;
+    await sleep(800);
+    const afterForeignSnap = ((await request("/realtime/subscribers", {}, scopedToken)).body as {
+      data?: { subscribers?: Array<{ userId: string; teamIds?: string[] }> };
+    })?.data?.subscribers ?? [];
+    const grantedForeign = afterForeignSnap.some(
+      (s) => s.userId === scopedUserId && s.teamIds?.includes(foreignTeamId),
+    );
+    if (scopedForeign && !grantedForeign) {
+      ok("subscription to a foreign/unknown team channel is rejected");
+    } else {
+      fail("foreign team scope rejected", { grantedForeign, snap: afterForeignSnap });
+    }
+    scopedForeign?.close();
+    await sleep(800);
   } else {
     fail("per-team SSE setup", "missing ticket or team id");
   }
@@ -451,6 +638,17 @@ run()
     }
     if (createdTeamIds.length > 0) {
       await prisma.team.deleteMany({ where: { id: { in: createdTeamIds } } }).catch(() => null);
+    }
+    if (createdScopedUserIds.length > 0) {
+      await prisma.user.deleteMany({
+        where: { id: { in: createdScopedUserIds } },
+      }).catch(() => null);
+    }
+    if (createdRoleNames.length > 0) {
+      await prisma.rolePermission.deleteMany({
+        where: { role: { in: createdRoleNames } },
+      }).catch(() => null);
+      await prisma.role.deleteMany({ where: { name: { in: createdRoleNames } } }).catch(() => null);
     }
     if (server) killProcessTree(server);
     await prisma.$disconnect();

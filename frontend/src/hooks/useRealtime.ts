@@ -28,6 +28,12 @@ export interface RealtimeOptions {
   heartbeatMs?: number;
   /** Maximum failed attempts in a single connecting episode. */
   maxTries?: number;
+  /**
+   * Team channels this stream is scoped to. Only teams the caller is a member
+   * of (or `teams.read` holders may open) are authorized server-side; the
+   * server rejects any channel outside that scope.
+   */
+  teamIds?: string[];
 }
 
 interface RetryState {
@@ -43,6 +49,7 @@ export function useRealtime(options: RealtimeOptions = {}) {
   const enabled = options.enabled ?? true;
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_TIMEOUT_MS;
   const maxTries = options.maxTries ?? 6;
+  const teamScopeKey = (options.teamIds ?? []).join(",");
 
   const [events, setEvents] = useState<RealtimeEventMessage[]>([]);
   const [connected, setConnected] = useState(false);
@@ -145,7 +152,7 @@ export function useRealtime(options: RealtimeOptions = {}) {
         setTimeout(() => {
           lastMessageAt = Date.now();
           const fresh = new EventSource(
-            `${API_BASE_URL}/realtime/events?ticket=${encodeURIComponent(currentTicket)}`,
+            buildStreamUrl(currentTicket),
           );
           attachHandlers(fresh);
           source = fresh;
@@ -159,6 +166,12 @@ export function useRealtime(options: RealtimeOptions = {}) {
     // and access logs). Exchange it for a short-lived, purpose-limited
     // realtime ticket first, then open EventSource with the ticket. Ticket
     // failures share the same bounded backoff as the stream itself.
+    const buildStreamUrl = (ticket: string) => {
+      const teamQuery =
+        teamScopeKey.length > 0 ? `&teamIds=${encodeURIComponent(teamScopeKey)}` : "";
+      return `${API_BASE_URL}/realtime/events?ticket=${encodeURIComponent(ticket)}${teamQuery}`;
+    };
+
     let currentTicket = "";
     const attachHandlers = (es: EventSource) => {
       sourceActive = false;
@@ -214,7 +227,7 @@ export function useRealtime(options: RealtimeOptions = {}) {
           currentTicket = body.data.ticket;
           retry.attempt = 0;
           const fresh = new EventSource(
-            `${API_BASE_URL}/realtime/events?ticket=${encodeURIComponent(currentTicket)}`,
+            buildStreamUrl(currentTicket),
           );
           attachHandlers(fresh);
           source = fresh;
@@ -254,7 +267,7 @@ export function useRealtime(options: RealtimeOptions = {}) {
       if (hbTimerId) clearInterval(hbTimerId);
       clearTimers();
     };
-  }, [enabled, heartbeatMs, maxTries]);
+  }, [enabled, heartbeatMs, maxTries, teamScopeKey]);
 
   return { events, connected, state };
 }
