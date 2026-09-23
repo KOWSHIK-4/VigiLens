@@ -187,10 +187,15 @@ async function seedFixtures(): Promise<Fixture> {
   });
   createdAlertIds.push(alertA.id, alertB.id);
 
-  await prisma.role.upsert({
-    where: { name: roleName },
+  const scopedRole = await prisma.role.upsert({
+    where: { organizationId_name: { organizationId: ORG_A_ID, name: roleName } },
     update: {},
-    create: { name: roleName, description: "team visibility scoped role", isSystem: false },
+    create: {
+      name: roleName,
+      description: "team visibility scoped role",
+      isSystem: false,
+      organizationId: ORG_A_ID,
+    },
   });
   const permKeys = [
     "cameras.read",
@@ -200,9 +205,9 @@ async function seedFixtures(): Promise<Fixture> {
     "audit.read",
   ];
   const perms = await prisma.permission.findMany({ where: { key: { in: permKeys } } });
-  await prisma.rolePermission.deleteMany({ where: { role: roleName } });
+  await prisma.rolePermission.deleteMany({ where: { roleId: scopedRole.id } });
   await prisma.rolePermission.createMany({
-    data: perms.map((p) => ({ role: roleName, permissionId: p.id })),
+    data: perms.map((p) => ({ roleId: scopedRole.id, permissionId: p.id })),
   });
 
   const password = await bcrypt.hash("admin123", 12);
@@ -254,7 +259,6 @@ async function cleanupFixtures() {
   if (createdCameraIds.length > 0) {
     await prisma.camera.deleteMany({ where: { id: { in: createdCameraIds } } }).catch(() => null);
   }
-  await prisma.rolePermission.deleteMany({ where: { role: roleName } }).catch(() => null);
   await prisma.role.deleteMany({ where: { name: roleName } }).catch(() => null);
   if (createdTeamIds.length > 0) {
     await prisma.team.deleteMany({ where: { id: { in: createdTeamIds } } }).catch(() => null);

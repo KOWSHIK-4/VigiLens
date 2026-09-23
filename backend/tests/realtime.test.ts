@@ -645,9 +645,6 @@ run()
       }).catch(() => null);
     }
     if (createdRoleNames.length > 0) {
-      await prisma.rolePermission.deleteMany({
-        where: { role: { in: createdRoleNames } },
-      }).catch(() => null);
       await prisma.role.deleteMany({ where: { name: { in: createdRoleNames } } }).catch(() => null);
     }
     if (server) killProcessTree(server);

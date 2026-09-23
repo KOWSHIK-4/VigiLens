@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+﻿import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { prisma } from "../config/prisma";
 import { config } from "../config";
@@ -116,7 +116,7 @@ export const authService = {
       },
     });
 
-    const permissions = await permissionService.getPermissionsForRole(user.role);
+    const permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
 
     const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
 
@@ -181,7 +181,7 @@ export const authService = {
       },
     });
 
-    const permissions = await permissionService.getPermissionsForRole(user.role);
+    const permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
     const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
 
     return { user: this.publicUser(user, permissions), token };
@@ -196,7 +196,7 @@ export const authService = {
       throw new Error("User not found");
     }
 
-    const permissions = await permissionService.getPermissionsForRole(user.role);
+    const permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
     return this.publicUser(user, permissions);
   },
 
@@ -234,7 +234,7 @@ export const authService = {
 
     const hashedPassword = await bcrypt.hash(input.newPassword, 12);
     // Bump tokenVersion to invalidate all existing sessions on password
-    // change — any previously issued JWT will be rejected by the auth
+    // change â€” any previously issued JWT will be rejected by the auth
     // middleware as soon as the user tries to use it.
     await prisma.user.update({
       where: { id: userId },

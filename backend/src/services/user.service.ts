@@ -3,7 +3,7 @@ import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
 import { teamService } from "./team.service";
-import { permissionService } from "./permission.service";
+import { permissionService, resolveRole } from "./permission.service";
 import { assertMayControlRole, canGrantRole } from "./roleHierarchy";
 import type {
   CreateUserInput,
@@ -47,8 +47,8 @@ function orgWhere(id: string, organizationId?: string) {
 }
 
 export const userService = {
-  async ensureRoleExists(role: string) {
-    const found = await prisma.role.findUnique({ where: { name: role } });
+  async ensureRoleExists(role: string, organizationId?: string) {
+    const found = await resolveRole(role, organizationId);
     if (!found) {
       throw new ApiError(400, `Unknown role: ${role}`);
     }
@@ -122,7 +122,7 @@ export const userService = {
     }
 
     const role = input.role ?? "operator";
-    await this.ensureRoleExists(role);
+    await this.ensureRoleExists(role, organizationId);
 
     if (!organizationId) {
       throw new ApiError(400, "A tenant organization is required to create a user");
@@ -131,8 +131,8 @@ export const userService = {
     // An account created in a role is a grant of that role: the actor must
     // have authority to grant it (nobody may mint authority above their own).
     if (actorRole) {
-      const actorPermissions = await permissionService.getPermissionsForRole(actorRole);
-      const decision = await canGrantRole(actorRole, actorPermissions, role);
+      const actorPermissions = await permissionService.getPermissionsForRole(actorRole, organizationId);
+      const decision = await canGrantRole(actorRole, actorPermissions, role, organizationId);
       if (!decision.allowed) {
         throw new ApiError(403, decision.reason ?? "Cannot create a user with this role");
       }
@@ -217,7 +217,7 @@ export const userService = {
       throw new ApiError(400, "You cannot change your own role");
     }
 
-    await this.ensureRoleExists(role);
+    await this.ensureRoleExists(role, organizationId);
 
     const user = await this.findById(id, organizationId);
 
@@ -229,9 +229,11 @@ export const userService = {
 
     // Assigning a role is a grant: the actor must possess the grants the
     // role implies and must never grant a seeded role at/above their rank.
+    // The organization scope guarantees the target role belongs to this
+    // tenant (or is instance-wide), never to a different organization.
     if (actorRole) {
-      const actorPermissions = await permissionService.getPermissionsForRole(actorRole);
-      const decision = await canGrantRole(actorRole, actorPermissions, role);
+      const actorPermissions = await permissionService.getPermissionsForRole(actorRole, organizationId);
+      const decision = await canGrantRole(actorRole, actorPermissions, role, organizationId);
       if (!decision.allowed) {
         throw new ApiError(403, decision.reason ?? "You cannot assign this role");
       }

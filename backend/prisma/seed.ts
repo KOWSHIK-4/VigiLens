@@ -162,17 +162,25 @@ async function main() {
   }
 
   for (const def of roleDefinitions) {
-    await prisma.role.upsert({
-      where: { name: def.name },
-      update: { description: def.description },
-      create: { name: def.name, description: def.description, isSystem: true },
+    let role = await prisma.role.findFirst({
+      where: { name: def.name, organizationId: null },
     });
-    await prisma.rolePermission.deleteMany({ where: { role: def.name } });
+    if (role) {
+      role = await prisma.role.update({
+        where: { id: role.id },
+        data: { description: def.description },
+      });
+    } else {
+      role = await prisma.role.create({
+        data: { name: def.name, description: def.description, isSystem: true, organizationId: null },
+      });
+    }
+    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
     await prisma.rolePermission.createMany({
       data: def.permissions
         .map((key) => permissionIds.get(key))
         .filter((id): id is string => Boolean(id))
-        .map((permissionId) => ({ role: def.name, permissionId })),
+        .map((permissionId) => ({ roleId: role.id, permissionId })),
     });
   }
 

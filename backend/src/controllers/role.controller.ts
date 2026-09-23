@@ -16,7 +16,7 @@ function getClientInfo(req: AuthRequest) {
 export const roleController = {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const roles = await roleService.findAll();
+      const roles = await roleService.findAll(req.organizationId ?? undefined);
       success(res, roles);
     } catch (err) {
       next(err);
@@ -34,7 +34,11 @@ export const roleController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const role = await roleService.create(req.body as CreateRoleInput, req.permissions);
+      const role = await roleService.create(
+        req.body as CreateRoleInput,
+        req.permissions,
+        req.organizationId ?? undefined,
+      );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -62,6 +66,7 @@ export const roleController = {
         req.params.name as string,
         req.body as UpdateRoleInput,
         req.permissions,
+        req.organizationId ?? undefined,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -83,7 +88,7 @@ export const roleController = {
 
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const result = await roleService.remove(req.params.name as string);
+      const result = await roleService.remove(req.params.name as string, req.organizationId ?? undefined);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -108,6 +113,7 @@ export const roleController = {
         req.params.name as string,
         (req.body as UpdateRoleInput).permissionKeys ?? [],
         req.permissions,
+        req.organizationId ?? undefined,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);

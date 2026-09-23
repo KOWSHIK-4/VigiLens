@@ -128,7 +128,7 @@ export async function authenticate(
     // ticket flow, which re-validates against the DB here as well.
     req.organizationId = user.organizationId;
     req.teamId = user.teamId ?? undefined;
-    req.permissions = await permissionService.getPermissionsForRole(user.role);
+    req.permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
     next();
   } catch {
     return apiError(res, "Invalid or expired token", 401);

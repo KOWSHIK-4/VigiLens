@@ -30,24 +30,49 @@ function pruneCache() {
 
 export const ALL_PERMISSION_KEYS_CATEGORY = "general";
 
+/**
+ * Resolves the role row for a (name, organizationId) pair. An organization
+ * scoped to the tenant's custom role is preferred; otherwise the instance-wide
+ * (global, organizationId NULL) role of the same name acts as the fallback so
+ * seeded system roles keep working for every tenant. Returns null when no
+ * role matches (unknown names fail closed with an empty permission set).
+ */
+export async function resolveRole(role: string, organizationId?: string | null) {
+  if (organizationId) {
+    const orgScoped = await prisma.role.findFirst({
+      where: { name: role, organizationId },
+    });
+    if (orgScoped) return orgScoped;
+  }
+  return prisma.role.findFirst({
+    where: { name: role, organizationId: null },
+  });
+}
+
 export const permissionService = {
   /**
-   * Permission set for a role, cached per role with a short TTL. Called on
-   * every authenticated request, so the cache bounds DB hits to roughly one
-   * query per role per TTL; role edits invalidate the affected entry.
+   * Permission set for a role within an organization, cached per
+   * (organizationId, role) pair with a short TTL. Called on every
+   * authenticated request, so the cache bounds DB hits to roughly one query
+   * per role per TTL; role edits invalidate the affected entry.
    */
-  async getPermissionsForRole(role: string): Promise<Set<string>> {
-    const cached = permissionCache.get(role);
+  async getPermissionsForRole(role: string, organizationId?: string | null): Promise<Set<string>> {
+    const cacheKey = organizationId ? `${organizationId}:${role}` : role;
+    const cached = permissionCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return new Set(cached.keys);
     }
-    const rows = await prisma.rolePermission.findMany({
-      where: { role },
-      select: { permission: { select: { key: true } } },
-    });
-    const keys = new Set(rows.map((row) => row.permission.key));
+    const resolved = await resolveRole(role, organizationId);
+    const keys = new Set<string>();
+    if (resolved) {
+      const rows = await prisma.rolePermission.findMany({
+        where: { roleId: resolved.id },
+        select: { permission: { select: { key: true } } },
+      });
+      for (const row of rows) keys.add(row.permission.key);
+    }
     pruneCache();
-    permissionCache.set(role, { keys, expiresAt: Date.now() + CACHE_TTL_MS });
+    permissionCache.set(cacheKey, { keys, expiresAt: Date.now() + CACHE_TTL_MS });
     return keys;
   },
 

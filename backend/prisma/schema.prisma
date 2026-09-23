@@ -129,7 +129,6 @@ model User {
   password            String
   name                String
   role                String     @default("operator")
-  roleRelation        Role       @relation(fields: [role], references: [name], onDelete: Restrict, onUpdate: Cascade)
   status              UserStatus @default(active)
   avatar              String?
   isLocked            Boolean    @default(false) @map("is_locked")
@@ -161,12 +160,15 @@ model User {
 }
 
 model Role {
-  name        String           @id
-  description String           @default("")
-  isSystem    Boolean          @default(true) @map("is_system")
-  permissions RolePermission[]
-  users       User[]
+  id             String           @id @default(uuid())
+  name           String
+  description    String           @default("")
+  isSystem       Boolean          @default(true) @map("is_system")
+  organizationId String?          @map("organization_id")
+  permissions    RolePermission[]
 
+  @@unique([organizationId, name])
+  @@index([organizationId])
   @@map("roles")
 }
 
@@ -183,12 +185,13 @@ model Permission {
 }
 
 model RolePermission {
-  role         String     @map("role_name")
+  roleId       String     @map("role_id")
   permissionId String     @map("permission_id")
-  roleRelation Role       @relation(fields: [role], references: [name], onDelete: Cascade, onUpdate: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  @@id([role, permissionId])
+  @@id([roleId, permissionId])
+  @@index([roleId])
   @@map("role_permissions")
 }
 

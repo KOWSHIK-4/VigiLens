@@ -1,17 +1,27 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
-import { permissionService } from "./permission.service";
+import { permissionService, resolveRole } from "./permission.service";
 import { assertActorPossessesPermissions } from "./roleHierarchy";
 import type { CreateRoleInput, UpdateRoleInput } from "../types";
 import type { Prisma } from "@prisma/client";
 
 const ROLE_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+/**
+ * Organization-scoped roles: a custom role is owned by the organization that
+ * created it (Role.organizationId) and is unique per (organizationId, name),
+ * so two tenants can never collide or inherit each other's role definitions.
+ * Seeded system roles are instance-wide (organizationId NULL) and act as the
+ * shared baseline every tenant builds on.
+ */
 export const roleService = {
-  async findAll() {
+  async findAll(organizationId?: string) {
     const [roles, users] = await Promise.all([
       prisma.role.findMany({
-        orderBy: { name: "asc" },
+        where: organizationId
+          ? { OR: [{ organizationId }, { organizationId: null }] }
+          : { organizationId: null },
+        orderBy: [{ organizationId: "desc" }, { name: "asc" }],
         include: {
           permissions: {
             select: { permission: true },
@@ -20,7 +30,9 @@ export const roleService = {
       }),
       prisma.user.groupBy({
         by: ["role"],
-        where: { deletedAt: null },
+        where: organizationId
+          ? { deletedAt: null, organizationId }
+          : { deletedAt: null },
         _count: { _all: true },
       }),
     ]);
@@ -30,17 +42,23 @@ export const roleService = {
     );
 
     return roles.map((role) => ({
+      id: role.id,
       name: role.name,
       description: role.description,
       isSystem: role.isSystem,
+      organizationId: role.organizationId,
       userCount: userCountByRole.get(role.name) ?? 0,
       permissions: role.permissions.map((rp) => rp.permission),
     }));
   },
 
-  async findByName(name: string) {
+  async findByName(name: string, organizationId?: string) {
+    const resolved = await resolveRole(name, organizationId);
+    if (!resolved) {
+      throw new ApiError(404, "Role not found");
+    }
     const role = await prisma.role.findUnique({
-      where: { name },
+      where: { id: resolved.id },
       include: {
         permissions: {
           select: { permission: true },
@@ -70,7 +88,7 @@ export const roleService = {
     return permissions;
   },
 
-  async create(input: CreateRoleInput, actorPermissions?: Set<string>) {
+  async create(input: CreateRoleInput, actorPermissions?: Set<string>, organizationId?: string) {
     const name = input.name.trim().toLowerCase();
 
     if (!ROLE_NAME_PATTERN.test(name)) {
@@ -80,9 +98,11 @@ export const roleService = {
       );
     }
 
-    const existing = await prisma.role.findUnique({ where: { name } });
+    const existing = await prisma.role.findFirst({
+      where: { name, organizationId: organizationId ?? null },
+    });
     if (existing) {
-      throw new ApiError(409, `A role named "${name}" already exists`);
+      throw new ApiError(409, `A role named "${name}" already exists in this organization`);
     }
 
     const permissions = await this.resolvePermissions(input.permissionKeys);
@@ -99,21 +119,30 @@ export const roleService = {
           name,
           description: input.description || "",
           isSystem: false,
+          organizationId: organizationId ?? null,
         },
-      }),
-      prisma.rolePermission.createMany({
-        data: permissions.map((permission) => ({
-          role: name,
-          permissionId: permission.id,
-        })),
       }),
     ]);
 
-    return this.findByName(name);
+    const created = await resolveRole(name, organizationId);
+    if (!created) {
+      throw new ApiError(500, "Role creation failed");
+    }
+    if (permissions.length > 0) {
+      await prisma.rolePermission.createMany({
+        data: permissions.map((permission) => ({
+          roleId: created.id,
+          permissionId: permission.id,
+        })),
+      });
+    }
+
+    return this.findByName(name, organizationId);
   },
 
-  async update(name: string, input: UpdateRoleInput, actorPermissions?: Set<string>) {
-    await this.findByName(name);
+  async update(name: string, input: UpdateRoleInput, actorPermissions?: Set<string>, organizationId?: string) {
+    const role = await this.findByName(name, organizationId);
+    if (!role) throw new ApiError(404, "Role not found");
 
     const data: Prisma.RoleUpdateInput = {};
     if (input.description !== undefined) {
@@ -124,44 +153,53 @@ export const roleService = {
       if (name === "super_admin") {
         throw new ApiError(
           400,
-          "Super Admin is a system-managed role and its permissions cannot be edited",
+          "Super Admin is a managed role and its permissions cannot be edited",
         );
       }
       const permissions = await this.resolvePermissions(input.permissionKeys);
       if (actorPermissions) {
         assertActorPossessesPermissions(actorPermissions, input.permissionKeys, name);
       }
-      await prisma.rolePermission.deleteMany({ where: { role: name } });
-      await prisma.rolePermission.createMany({
-        data: permissions.map((permission) => ({
-          role: name,
-          permissionId: permission.id,
-        })),
-      });
-      permissionService.invalidate(name);
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+      if (permissions.length > 0) {
+        await prisma.rolePermission.createMany({
+          data: permissions.map((permission) => ({
+            roleId: role.id,
+            permissionId: permission.id,
+          })),
+        });
+      }
+      permissionService.invalidate(organizationId ? `${organizationId}:${name}` : name);
     }
 
     await prisma.role.update({
-      where: { name },
+      where: { id: role.id },
       data,
     });
 
-    return this.findByName(name);
+    return this.findByName(name, organizationId);
   },
 
-  async updatePermissions(name: string, permissionKeys: string[], actorPermissions?: Set<string>) {
-    return this.update(name, { permissionKeys }, actorPermissions);
+  async updatePermissions(name: string, permissionKeys: string[], actorPermissions?: Set<string>, organizationId?: string) {
+    return this.update(name, { permissionKeys }, actorPermissions, organizationId);
   },
 
-  async remove(name: string) {
-    const role = await this.findByName(name);
+  async remove(name: string, organizationId?: string) {
+    const role = await this.findByName(name, organizationId);
+    if (!role) throw new ApiError(404, "Role not found");
 
     if (role.isSystem) {
       throw new ApiError(400, "System roles cannot be deleted");
     }
 
+    // Only the owning organization's active members block deletion; an
+    // instance-wide custom role blocks on any active member anywhere.
     const activeUserCount = await prisma.user.count({
-      where: { role: name, deletedAt: null },
+      where: {
+        role: name,
+        deletedAt: null,
+        ...(role.organizationId ? { organizationId: role.organizationId } : {}),
+      },
     });
     if (activeUserCount > 0) {
       throw new ApiError(
@@ -171,12 +209,15 @@ export const roleService = {
     }
 
     await prisma.user.updateMany({
-      where: { role: name },
+      where: {
+        role: name,
+        ...(role.organizationId ? { organizationId: role.organizationId } : {}),
+      },
       data: { role: "viewer" },
     });
 
-    await prisma.role.delete({ where: { name } });
-    permissionService.invalidate(name);
+    await prisma.role.delete({ where: { id: role.id } });
+    permissionService.invalidate(organizationId ? `${organizationId}:${name}` : name);
     return { success: true, name };
   },
 };

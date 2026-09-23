@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
+import { resolveRole } from "./permission.service";
 
 export const SUPER_ADMIN_ROLE = "super_admin";
 
@@ -29,9 +30,11 @@ export interface GrantDecision {
   reason?: string;
 }
 
-async function loadRolePermissions(role: string): Promise<string[]> {
+async function loadRolePermissions(role: string, organizationId?: string | null): Promise<string[]> {
+  const resolved = await resolveRole(role, organizationId);
+  if (!resolved) return [];
   const rows = await prisma.rolePermission.findMany({
-    where: { role },
+    where: { roleId: resolved.id },
     select: { permission: { select: { key: true } } },
   });
   return rows.map((row) => row.permission.key);
@@ -50,12 +53,13 @@ export async function canGrantRole(
   actorRole: string,
   actorPermissions: Set<string>,
   targetRole: string,
+  organizationId?: string | null,
 ): Promise<GrantDecision> {
   if (targetRole === SUPER_ADMIN_ROLE && actorRole !== SUPER_ADMIN_ROLE) {
     return { allowed: false, reason: "Only a Super Admin can grant the Super Admin role" };
   }
 
-  const required = await loadRolePermissions(targetRole);
+  const required = await loadRolePermissions(targetRole, organizationId);
   const missing = required.filter((key) => !actorPermissions.has(key));
   if (missing.length > 0) {
     return {

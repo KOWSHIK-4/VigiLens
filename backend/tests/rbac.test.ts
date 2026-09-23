@@ -15,6 +15,7 @@ let passed = 0;
 let failed = 0;
 const createdUserIds: string[] = [];
 const createdRoleNames: string[] = [];
+const createdOrgIds: string[] = [];
 
 function ok(name: string) {
   passed += 1;
@@ -101,6 +102,9 @@ async function cleanupDb() {
     }
     if (createdRoleNames.length > 0) {
       await prisma.role.deleteMany({ where: { name: { in: createdRoleNames } } });
+    }
+    if (createdOrgIds.length > 0) {
+      await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
     }
   } catch (err) {
     console.error("cleanup error:", (err as Error).message);
@@ -302,6 +306,122 @@ async function run() {
     ok("DELETE /roles/:name blocks system role deletion (400)");
   } else {
     fail("system role delete guard", deleteSystemRole);
+  }
+
+  // ---- Organization-scoped roles: a role name is unique per tenant and
+  // neither tenant can see or inherit the other's definition ----
+  const orgB = await prisma.organization.create({
+    data: {
+      name: "RBAC Isolation Org",
+      slug: `rbac-isolation-${process.pid}`,
+      description: "",
+    },
+  });
+  createdOrgIds.push(orgB.id);
+  const sharedHash = await prisma.user.findUnique({
+    where: { email: "admin@vigilens.io" },
+    select: { password: true },
+  });
+  const orgBUser = await prisma.user.create({
+    data: {
+      email: `rbac-b-${process.pid}@vigilens.io`,
+      password: sharedHash?.password ?? "",
+      name: "RBAC Isolation Super Admin",
+      role: "super_admin",
+      status: "active",
+      organizationId: orgB.id,
+    },
+  });
+  createdUserIds.push(orgBUser.id);
+
+  const orgBLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: orgBUser.email, password: "admin123" }),
+  });
+  const orgBToken = (orgBLogin.body as { data: { token: string } })?.data?.token;
+  if (orgBLogin.status === 200 && orgBToken) {
+    ok("second-organization super admin can log in");
+  } else {
+    fail("second-organization super admin login", orgBLogin);
+  }
+
+  const orgBRoleList = await request("/roles", {}, orgBToken);
+  const orgBRoleNames =
+    (orgBRoleList.body as { data: Array<{ name: string }> })?.data?.map((r) => r.name) ?? [];
+  if (orgBRoleList.status === 200 && !orgBRoleNames.includes(roleName)) {
+    ok("GET /roles does not leak other organizations' roles");
+  } else {
+    fail("GET /roles org isolation", orgBRoleList);
+  }
+
+  const orgBTwin = await request(
+    "/roles",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: roleName,
+        description: "Org B twin of the Org A role",
+        permissionKeys: ["dashboard.view"],
+      }),
+    },
+    orgBToken,
+  );
+  if (orgBTwin.status === 201) {
+    ok("same role name can be created in a different organization (201)");
+  } else {
+    fail("POST /roles per-organization uniqueness", orgBTwin);
+  }
+
+  const orgBAnalyst = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Org B Analyst",
+        email: `rbac-b2-${process.pid}@vigilens.io`,
+        password: "password123",
+        role: roleName,
+      }),
+    },
+    orgBToken,
+  );
+  if (orgBAnalyst.status !== 201) {
+    fail("POST /users with org-scoped role", orgBAnalyst);
+  } else {
+    const analystId = (orgBAnalyst.body as { data: { id: string } }).data.id;
+    createdUserIds.push(analystId);
+    const analyst = await prisma.user.findUnique({
+      where: { id: analystId },
+      select: { role: true, organizationId: true },
+    });
+    if (analyst && analyst.role === roleName && analyst.organizationId === orgB.id) {
+      ok("org-scoped role attaches to members of its organization");
+    } else {
+      fail("org-scoped role assignment", analyst);
+    }
+
+    const orgBRemoveAnalyst = await request(`/users/${analystId}`, { method: "DELETE" }, orgBToken);
+    if (orgBRemoveAnalyst.status === 200) {
+      ok("org-scoped member can be soft-deleted by their organization");
+    } else {
+      fail("DELETE org-scoped member", orgBRemoveAnalyst);
+    }
+  }
+
+  const orgBTwinDelete = await request(`/roles/${roleName}`, { method: "DELETE" }, orgBToken);
+  if (orgBTwinDelete.status === 200) {
+    ok("DELETE /roles/:name removes only the organization's own role");
+  } else {
+    fail("DELETE org-scoped role", orgBTwinDelete);
+  }
+
+  const superAfterOrgBDelete = await request("/roles", {}, superToken);
+  const superRoleNames =
+    (superAfterOrgBDelete.body as { data: Array<{ name: string }> })?.data?.map((r) => r.name) ?? [];
+  if (superAfterOrgBDelete.status === 200 && superRoleNames.includes(roleName)) {
+    ok("another organization's delete leaves the origin role intact");
+  } else {
+    fail("origin role survives cross-org delete", superAfterOrgBDelete);
   }
 
   // ---- User lifecycle with custom role ----
