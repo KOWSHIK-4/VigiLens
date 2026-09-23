@@ -282,6 +282,10 @@ export const cameraController = {
   async getThumbnail(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
+      const camera = await cameraService.findById(id, req.organizationId);
+      if (!camera) {
+        return error(res, "Camera not found", 404);
+      }
       const buffer = await cameraService.getSnapshot(id);
 
       if (!buffer) {

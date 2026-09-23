@@ -3,6 +3,7 @@ import type { AuthRequest } from "../types";
 import { prisma } from "../config/prisma";
 import { runtimeRegistry } from "../engine/runtimeRegistry";
 import { engineService } from "../engine/engineService";
+import { resolveProcessingCamera } from "../engine/resolveCamera";
 import { detectionService } from "../services/detection.service";
 import { loadCameraCredentials } from "../services/camera.service";
 import { success } from "../utils/apiResponse";
@@ -102,21 +103,14 @@ export const engineController = {
         (typeof req.query?.camera_id === "string" && (req.query.camera_id as string).trim()) ||
         "";
 
-      // Resolve a real camera so persisted detections satisfy the FK.
-      let cameraId = requestedCameraId;
-      if (cameraId) {
-        const camera = await prisma.camera.findUnique({ where: { id: cameraId } });
-        if (!camera) throw new ApiError(400, `Unknown camera_id "${cameraId}"`);
-      } else {
-        const first = await prisma.camera.findFirst({ orderBy: { createdAt: "asc" } });
-        if (!first) {
-          throw new ApiError(
-            400,
-            "No camera found: pass a valid camera_id or create a camera before processing frames",
-          );
-        }
-        cameraId = first.id;
-      }
+      // Resolve a real camera so persisted detections satisfy the FK. Only
+      // cameras belonging to the caller's organization are eligible so one
+      // tenant can never process (or fall back to) another tenant's camera.
+      const cameraId = await resolveProcessingCamera(
+        (args) => prisma.camera.findFirst(args as never),
+        req.organizationId,
+        requestedCameraId,
+      );
 
       const result = await engineService.processFrame(key, cameraId, req.file.buffer);
       success(res, {
@@ -159,9 +153,11 @@ export const engineController = {
           code: "INVALID_CAMERA_ID",
         });
       }
-      const camera = await prisma.camera.findUnique({ where: { id: cameraId } });
+      const camera = await prisma.camera.findFirst({
+        where: { id: cameraId, organizationId: req.organizationId },
+      });
       if (!camera) {
-        throw new ApiError(400, `Unknown camera_id "${cameraId}"`, {
+        throw new ApiError(404, `Unknown camera_id "${cameraId}"`, {
           code: "INVALID_CAMERA_ID",
         });
       }

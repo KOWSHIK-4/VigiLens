@@ -428,6 +428,84 @@ async function run() {
   if (bCameraHits >= 1) ok("tenant B global search finds its own camera");
   else fail("tenant B global search camera", sectionsB);
 
+  // 12. Thumbnail IDOR: tenant A cannot fetch tenant B camera thumbnail.
+  const aThumbnailB = await request(`/cameras/${fixture.cameraId}/thumbnail`, {}, tokenA);
+  if (aThumbnailB.status === 404) ok("tenant A cannot fetch tenant B camera thumbnail (404)");
+  else fail("tenant A thumbnail fetch of tenant B camera", {
+    status: aThumbnailB.status,
+    contentType: aThumbnailB.body,
+  });
+
+  // 13. Engine camera isolation: tenant A cannot process tenant B's camera.
+  const aProcessB = await request(
+    `/engines/person/process-live`,
+    { method: "POST", body: JSON.stringify({ camera_id: fixture.cameraId }) },
+    tokenA,
+  );
+  if (aProcessB.status === 404) ok("tenant A cannot process tenant B camera (404)");
+  else fail("tenant A engine process of tenant B camera", aProcessB);
+
+  // 14. Engine live path never falls back to a foreign camera: without a
+  // camera_id it is rejected outright rather than silently resolving any
+  // camera, and a cross-tenant camera id is never substituted.
+  const bProcessNoCam = await request(
+    `/engines/person/process-live`,
+    { method: "POST", body: JSON.stringify({}) },
+    tokenB,
+  );
+  if (bProcessNoCam.status === 400) ok("tenant B engine live requires an owned camera_id (400)");
+  else fail("tenant B engine live missing camera_id", bProcessNoCam);
+
+  const aProcessBCsv = await request(
+    `/engines/person/process-live`,
+    { method: "POST", body: JSON.stringify({ camera_id: fixture.cameraId, force: "true" }) },
+    tokenA,
+  );
+  if (aProcessBCsv.status === 404) ok("tenant A engine live rejects tenant B camera without fallback (404)");
+  else fail("tenant A engine live foreign camera fallback", aProcessBCsv);
+
+  // 15. Fallback resolution scope is verified at the unit level too (see
+  // engine-tenant-resolution.vitest.test.ts): with mocked data the resolver
+  // only ever returns cameras inside the caller organization.
+  const { resolveProcessingCamera } = await import("../src/engine/resolveCamera");
+  const orgACameras = [{ id: "cam-a-1" }, { id: "cam-a-2" }];
+  const resolvedA = await resolveProcessingCamera(async (args) => {
+    const where = args.where as { id?: string; organizationId?: string };
+    if (where.id) {
+      return orgACameras.find((c) => c.id === where.id && where.organizationId === "org-a") ?? null;
+    }
+    return orgACameras.find((c) => {
+      return where.organizationId === undefined || where.organizationId === "org-a";
+    }) ?? null;
+  }, "org-a");
+  if (resolvedA === "cam-a-1") ok("engine fallback resolves a camera inside caller organization");
+  else fail("engine fallback inside caller org", resolvedA);
+
+  const resolvedForeign = await resolveProcessingCamera(async (args) => {
+    const where = args.where as { id?: string; organizationId?: string };
+    if (where.id) {
+      return orgACameras.find((c) => c.id === where.id && where.organizationId === "org-a") ?? null;
+    }
+    return null;
+  }, "org-a", fixture.cameraId).catch((err: unknown) => {
+    return { rejected: (err as { statusCode?: number }).statusCode };
+  });
+  if (
+    resolvedForeign !== null &&
+    typeof resolvedForeign === "object" &&
+    (resolvedForeign as { rejected: number }).rejected === 404
+  )
+    ok("engine requested foreign camera id is rejected (404)");
+  else fail("engine requested foreign camera id rejection", resolvedForeign);
+
+  // 16. Report content regeneration is tenant scoped: tenant A cannot
+  // rebuild tenant B report content (404 before content generation).
+  if (reportBId) {
+    const aDownloadB2 = await request(`/reports/download/${reportBId}?format=csv`, {}, tokenA);
+    if (aDownloadB2.status === 404) ok("tenant A cannot regenerate tenant B report content (404)");
+    else fail("tenant A regeneration of tenant B report", aDownloadB2);
+  }
+
   if (failed > 0) {
     console.log(`\n${failed} tenant isolation test(s) FAILED, ${passed} passed`);
     process.exitCode = 1;

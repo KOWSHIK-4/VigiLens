@@ -311,7 +311,7 @@ export const reportService = {
     if (report.status !== "completed") throw new ApiError(400, "Report not yet completed");
 
     const dateRange = report.dateRange as { from: string; to: string };
-    const content = await buildReportData(report.type, dateRange, format);
+    const content = await buildReportData(report.type, dateRange, format, organizationId);
     const filename = `${sanitizeReportFilename(report.title)}.${format}`;
     const mimeType = format === "pdf" ? "application/pdf" : "text/csv";
 
