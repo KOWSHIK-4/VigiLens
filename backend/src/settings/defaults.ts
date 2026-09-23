@@ -217,6 +217,13 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         type: "boolean",
         defaultValue: false,
       },
+      {
+        key: "mfa_enforced",
+        label: "Require MFA for all users",
+        description: "When enabled, every account must enroll a TOTP authenticator app before it can access the API.",
+        type: "boolean",
+        defaultValue: false,
+      },
     ],
   },
   {

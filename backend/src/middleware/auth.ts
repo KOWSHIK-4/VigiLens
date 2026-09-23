@@ -12,11 +12,22 @@ interface JwtPayload {
   role: string;
   tokenVersion?: number;
   organizationId?: string;
+  sid?: string;
 }
 
 const ALLOWED_WHILE_PASSWORD_CHANGE_REQUIRED = new Set([
   "/change-password",
   "/me",
+  "/logout",
+]);
+
+// Routes an MFA-enforced deployment still lets an un-enrolled user reach:
+// the enrollment endpoints themselves, their own profile and logout.
+const ALLOWED_WITHOUT_MFA = new Set([
+  "/mfa/setup",
+  "/mfa/verify",
+  "/me",
+  "/change-password",
   "/logout",
 ]);
 
@@ -68,6 +79,7 @@ export async function authenticate(
         role: true,
         isLocked: true,
         mustChangePassword: true,
+        mfaEnabled: true,
         tokenVersion: true,
         organizationId: true,
         teamId: true,
@@ -94,21 +106,48 @@ export async function authenticate(
       return apiError(res, "Session invalidated. Please log in again.", 401);
     }
 
-    // Enforce the session_timeout_minutes policy: tokens whose embedded iat
-    // is older than the configured window are rejected. This gives operators
-    // a server-side max-session-age without relying on client-side expiry.
-    if (decoded.iat) {
+    // Realtime stream tickets are purpose-limited (30s TTL, no sid claim), so
+    // session lifecycle and MFA policy do not apply to them. Session state is
+    // enforced only for full bearer tokens that carry a session id.
+    const isRealtimeTicket = decoded.type === "realtime";
+
+    // Enforce the session_timeout_minutes policy as a true INACTIVITY window:
+    // the timestamp lives on a per-session row and is slid forward on every
+    // request, so an actively-used token never expires mid-flight. Tokens
+    // issued without a recorded session (e.g. legacy path) still rely on the
+    // version check above plus the JWT's absolute `exp` as the hard cap.
+    if (!isRealtimeTicket && decoded.sid) {
+      const session = await prisma.userSession.findUnique({
+        where: { id: decoded.sid },
+      });
+      if (!session || session.userId !== decoded.userId) {
+        return apiError(res, "Session invalidated. Please log in again.", 401);
+      }
       const timeoutMinutes = await settingsService.getValue(
         "security",
         "session_timeout_minutes",
       );
-      const timeoutMs =
-        (typeof timeoutMinutes === "number" ? timeoutMinutes : 0) * 60_000;
+      const timeoutMs = (typeof timeoutMinutes === "number" ? timeoutMinutes : 0) * 60_000;
       if (timeoutMs > 0) {
-        const tokenAgeMs = Date.now() - decoded.iat * 1000;
-        if (tokenAgeMs > timeoutMs) {
+        const idleMs = Date.now() - session.lastActivityAt.getTime();
+        if (idleMs > timeoutMs) {
           return apiError(res, "Session expired. Please log in again.", 401);
         }
+      }
+      await prisma.userSession.updateMany({
+        where: { id: session.id },
+        data: { lastActivityAt: new Date() },
+      });
+    }
+
+    // MFA policy: when the deployment enforces MFA org-wide, an account that
+    // has not enrolled is restricted to the enrollment flow until it does.
+    if (!isRealtimeTicket) {
+      const mfaEnforced = await settingsService.getValue("security", "mfa_enforced");
+      if (mfaEnforced === true && !user.mfaEnabled && !ALLOWED_WITHOUT_MFA.has(req.path)) {
+        return apiError(res, "MFA enrollment required", 403, {
+          code: "MFA_ENROLLMENT_REQUIRED",
+        });
       }
     }
 

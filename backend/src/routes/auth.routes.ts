@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { authController } from "../controllers/auth.controller";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { registerSchema, loginSchema, changePasswordSchema } from "../types";
+import { registerSchema, loginSchema, changePasswordSchema, mfaVerifySchema, mfaDisableSchema } from "../types";
 
 const router = Router();
 
@@ -32,5 +32,15 @@ router.post(
   authController.changePassword,
 );
 router.post("/realtime-ticket", authenticate, authController.issueRealtimeTicket);
+// TOTP enrollment. The enforce flag (security -> mfa_enforced) can be switched
+// on only once these endpoints exist; users without MFA are gated to them.
+router.post("/mfa/setup", authenticate, authController.mfaSetup);
+router.post("/mfa/verify", authenticate, validate(mfaVerifySchema), authController.mfaVerify);
+router.post(
+  "/mfa/disable",
+  authenticate,
+  validate(mfaDisableSchema),
+  authController.mfaDisable,
+);
 
 export default router;

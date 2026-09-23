@@ -34,6 +34,18 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(1),
+  // Present only when the account has MFA enabled. Either a live 6-digit TOTP
+  // window code or a single-use recovery code satisfies the challenge.
+  totpCode: z.string().min(6).max(10).optional(),
+  recoveryCode: z.string().min(8).max(32).optional(),
+});
+
+export const mfaVerifySchema = z.object({
+  code: z.string().min(6).max(10),
+});
+
+export const mfaDisableSchema = z.object({
+  password: z.string().min(1),
 });
 
 export const detectionQuerySchema = z.object({
@@ -632,6 +644,7 @@ export const auditLogQuerySchema = z.object({
   teamId: z.string().uuid("Invalid team id").optional(),
   action: z.enum([
     "user_login", "user_logout", "password_reset", "password_changed",
+    "mfa_enabled", "mfa_disabled",
     "user_created", "user_updated", "user_deleted", "user_locked",
     "user_unlocked", "role_changed", "role_created", "role_updated",
     "role_deleted", "camera_added", "camera_updated", "camera_deleted",

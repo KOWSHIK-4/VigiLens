@@ -81,7 +81,7 @@ export const authController = {
           code: "HTTPS_REQUIRED",
         });
       }
-      const result = await authService.login(req.body);
+      const result = await authService.login(req.body, getClientInfo(req));
       const info = getClientInfo(req);
       await logAudit({
         userId: result.user.id,
@@ -107,7 +107,9 @@ export const authController = {
       if (
         err instanceof Error &&
         (err.message === "Invalid email or password" ||
-          err.message === "Account disabled. Contact your administrator")
+          err.message === "Account disabled. Contact your administrator" ||
+          err.message === "Invalid MFA code" ||
+          err.message === "Invalid recovery code")
       ) {
         return error(res, err.message, 401);
       }
@@ -116,6 +118,9 @@ export const authController = {
         err.message === "Account temporarily locked. Try again later."
       ) {
         return error(res, err.message, 403);
+      }
+      if (err instanceof Error && err.message === "MFA code required") {
+        return error(res, err.message, 401, { code: "MFA_REQUIRED" });
       }
       next(err);
     }
@@ -173,6 +178,55 @@ export const authController = {
       req.userRole || "viewer",
       req.organizationId,
     );
+      success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async mfaSetup(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.mfaSetup(req.userId!);
+      success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async mfaVerify(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.mfaVerify(req.userId!, req.body.code as string);
+      const info = getClientInfo(req);
+      const user = await authService.me(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: user?.name || "",
+        email: user?.email || "",
+        action: "mfa_enabled",
+        module: "auth",
+        description: `MFA enabled for ${user?.email || req.userId}`,
+        ...info,
+      });
+      success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async mfaDisable(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.mfaDisable(req.userId!, req.body.password as string);
+      const info = getClientInfo(req);
+      const user = await authService.me(req.userId!).catch(() => null);
+      await logAudit({
+        userId: req.userId,
+        username: user?.name || "",
+        email: user?.email || "",
+        action: "mfa_disabled",
+        module: "auth",
+        description: `MFA disabled for ${user?.email || req.userId}`,
+        ...info,
+      });
       success(res, result);
     } catch (err) {
       next(err);

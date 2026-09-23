@@ -142,12 +142,16 @@ model User {
   updatedAt           DateTime   @updatedAt @map("updated_at")
   organizationId      String     @map("organization_id")
   teamId              String?    @map("team_id")
+  mfaSecret           String?    @map("mfa_secret")
+  mfaEnabled          Boolean    @default(false) @map("mfa_enabled")
+  mfaRecoveryCodes    String?    @map("mfa_recovery_codes")
 
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   team           Team?            @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
   incidents      Incident[]
   invitationsOut TeamInvitation[] @relation("TeamInvitationInviters")
   leadingTeams   Team[]           @relation("TeamLeads")
+  sessions       UserSession[]
 
   @@index([role])
   @@index([status])
@@ -157,6 +161,22 @@ model User {
   // covers both the org-only lookups (leading column) and the team scoping.
   @@index([organizationId, teamId], map: "users_org_team_idx")
   @@map("users")
+}
+
+model UserSession {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  tokenVersion   Int       @default(0) @map("token_version")
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent")
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lastActivityAt])
+  @@map("user_sessions")
 }
 
 model Role {
@@ -440,6 +460,8 @@ enum AuditLogAction {
   user_logout
   password_reset
   password_changed
+  mfa_enabled
+  mfa_disabled
   user_created
   user_updated
   user_deleted

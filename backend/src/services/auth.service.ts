@@ -5,8 +5,20 @@ import { config } from "../config";
 import { permissionService } from "./permission.service";
 import { settingsService } from "./settings.service";
 import { teamService } from "./team.service";
+import {
+  generateSecret,
+  generateRecoveryCodes,
+  hashRecoveryCodes,
+  verifyTotpCode,
+  verifyAndConsumeRecoveryCode,
+} from "./mfa.service";
 import { ApiError } from "../utils/errors";
 import type { RegisterInput, LoginInput, ChangePasswordInput } from "../types";
+
+export interface SessionMeta {
+  ipAddress?: string;
+  userAgent?: string;
+}
 
 export interface SecurityPolicy {
   maxLoginAttempts: number;
@@ -118,12 +130,23 @@ export const authService = {
 
     const permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
 
-    const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
+    const session = await prisma.userSession
+      .create({
+        data: { userId: user.id, tokenVersion: user.tokenVersion },
+      })
+      .catch(() => null);
+
+    const token = await this.generateTokenWithVersion(
+      user.id,
+      user.role,
+      policy.jwtExpirationHours,
+      session?.id,
+    );
 
     return { user: this.publicUser(user, permissions), token };
   },
 
-  async login(input: LoginInput) {
+  async login(input: LoginInput, meta?: SessionMeta) {
     const user = await prisma.user.findFirst({
       where: { email: input.email, deletedAt: null },
     });
@@ -158,17 +181,28 @@ export const authService = {
     const valid = await bcrypt.compare(input.password, user.password);
 
     if (!valid) {
-      const failedLoginAttempts = user.failedLoginAttempts + 1;
-      const shouldLock = failedLoginAttempts >= policy.maxLoginAttempts;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts,
-          isLocked: shouldLock,
-          lockedAt: shouldLock ? new Date() : user.lockedAt,
-        },
-      });
+      await this.recordFailedLogin(user, policy);
       throw new Error("Invalid email or password");
+    }
+
+    // Second-factor challenge. The password has already verified, so a missing
+    // code is NOT counted as a failed attempt -- the client is asked to prompt
+    // for it. A wrong TOTP or clipped recovery code is a real auth failure.
+    if (user.mfaEnabled) {
+      if (input.totpCode) {
+        if (!verifyTotpCode(user.mfaSecret, input.totpCode)) {
+          await this.recordFailedLogin(user, policy);
+          throw new ApiError(401, "Invalid MFA code");
+        }
+      } else if (input.recoveryCode) {
+        const usedUp = await verifyAndConsumeRecoveryCode(user.id, input.recoveryCode);
+        if (!usedUp) {
+          await this.recordFailedLogin(user, policy);
+          throw new ApiError(401, "Invalid recovery code");
+        }
+      } else {
+        throw new ApiError(401, "MFA code required", { code: "MFA_REQUIRED" });
+      }
     }
 
     await prisma.user.update({
@@ -182,9 +216,45 @@ export const authService = {
     });
 
     const permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
-    const token = await this.generateTokenWithVersion(user.id, user.role, policy.jwtExpirationHours);
+    const session = await prisma.userSession
+      .create({
+        data: {
+          userId: user.id,
+          tokenVersion: user.tokenVersion,
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        },
+      })
+      .catch(() => null);
+
+    const token = await this.generateTokenWithVersion(
+      user.id,
+      user.role,
+      policy.jwtExpirationHours,
+      session?.id,
+    );
 
     return { user: this.publicUser(user, permissions), token };
+  },
+
+  /**
+   * Records a failed credential attempt and triggers the policy-configured
+   * temporary account lock once the limit is reached.
+   */
+  async recordFailedLogin(
+    user: { id: string; failedLoginAttempts: number; lockedAt: Date | null },
+    policy: SecurityPolicy,
+  ) {
+    const failedLoginAttempts = user.failedLoginAttempts + 1;
+    const shouldLock = failedLoginAttempts >= policy.maxLoginAttempts;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts,
+        isLocked: shouldLock,
+        lockedAt: shouldLock ? new Date() : user.lockedAt,
+      },
+    });
   },
 
   async me(userId: string) {
@@ -251,6 +321,82 @@ export const authService = {
     return { success: true };
   },
 
+  /**
+   * Begins MFA enrollment: generates a TOTP secret and returns the otpauth
+   * provisioning URI. The secret is persisted (but not yet enabled) so the
+   * follow-up `mfaVerify` call can be authenticated against it.
+   */
+  async mfaSetup(userId: string) {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { email: true, mfaEnabled: true },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.mfaEnabled) {
+      throw new ApiError(400, "MFA is already enabled");
+    }
+    const { secret, otpauthUrl } = await generateSecret(user.email);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { mfaSecret: secret },
+    });
+    return { secret, otpauthUrl };
+  },
+
+  /**
+   * Completes enrollment after the user proves they scanned the secret. On
+   * success it flips MFA on, stores single-use recovery codes (hashed, so the
+   * plaintext is shown exactly once) and returns them for safe-keeping.
+   */
+  async mfaVerify(userId: string, code: string) {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { mfaSecret: true, mfaEnabled: true },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.mfaEnabled) {
+      throw new ApiError(400, "MFA is already enabled");
+    }
+    if (!verifyTotpCode(user.mfaSecret, code)) {
+      throw new ApiError(400, "Invalid code");
+    }
+    const recoveryCodes = generateRecoveryCodes();
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        mfaEnabled: true,
+        mfaRecoveryCodes: hashRecoveryCodes(recoveryCodes),
+      },
+    });
+    return { enabled: true, recoveryCodes };
+  },
+
+  async mfaDisable(userId: string, password: string) {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { password: true, mfaEnabled: true },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (!user.mfaEnabled) {
+      throw new ApiError(400, "MFA is not enabled");
+    }
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      throw new ApiError(400, "Current password is incorrect");
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: false, mfaSecret: null, mfaRecoveryCodes: null },
+    });
+    return { enabled: false };
+  },
+
   publicUser(
     user: {
       id: string;
@@ -261,6 +407,7 @@ export const authService = {
       avatar: string | null;
       isLocked: boolean;
       mustChangePassword: boolean;
+      mfaEnabled: boolean;
       lastLogin: Date | null;
       createdAt: Date;
       organizationId: string;
@@ -277,6 +424,7 @@ export const authService = {
       avatar: user.avatar,
       isLocked: user.isLocked,
       mustChangePassword: user.mustChangePassword,
+      mfaEnabled: user.mfaEnabled,
       lastLogin: user.lastLogin,
       createdAt: user.createdAt,
       organizationId: user.organizationId,
@@ -306,6 +454,7 @@ export const authService = {
     userId: string,
     role: string,
     expirationHours?: number,
+    sid?: string,
   ): Promise<string> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -315,12 +464,16 @@ export const authService = {
     const organizationId = user?.organizationId;
     const expiresIn =
       expirationHours !== undefined ? `${expirationHours}h` : config.jwt.expiresIn;
-    return jwt.sign({ userId, role, tokenVersion, organizationId }, config.jwt.secret, {
-      algorithm: "HS256",
-      issuer: config.jwt.issuer,
-      audience: config.jwt.audience,
-      expiresIn: expiresIn as SignOptions["expiresIn"],
-    });
+    return jwt.sign(
+      { userId, role, tokenVersion, organizationId, ...(sid ? { sid } : {}) },
+      config.jwt.secret,
+      {
+        algorithm: "HS256",
+        issuer: config.jwt.issuer,
+        audience: config.jwt.audience,
+        expiresIn: expiresIn as SignOptions["expiresIn"],
+      },
+    );
   },
 
   /**
