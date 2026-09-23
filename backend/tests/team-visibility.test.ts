@@ -142,6 +142,7 @@ async function seedFixtures(): Promise<Fixture> {
   const detectionA = await prisma.detection.create({
     data: {
       cameraId: cameraA.id,
+      teamId: teamA.id,
       label: `tv-detect-a-${RUN_TAG}`,
       confidence: 0.9,
       status: "critical",
@@ -152,6 +153,7 @@ async function seedFixtures(): Promise<Fixture> {
   const detectionB = await prisma.detection.create({
     data: {
       cameraId: cameraB.id,
+      teamId: teamB.id,
       label: `tv-detect-b-${RUN_TAG}`,
       confidence: 0.9,
       status: "critical",

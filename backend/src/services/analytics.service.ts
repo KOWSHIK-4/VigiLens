@@ -233,7 +233,7 @@ export function dateAndOrgWhereSql(
       : Prisma.sql`WHERE ${orgClause}`;
   }
   if (teamId) {
-    const teamClause = Prisma.sql`camera_id IN (SELECT id FROM cameras WHERE team_id = ${teamId})`;
+    const teamClause = Prisma.sql`team_id = ${teamId}`;
     clause = clause
       ? Prisma.sql`${clause} AND ${teamClause}`
       : Prisma.sql`WHERE ${teamClause}`;
@@ -241,9 +241,9 @@ export function dateAndOrgWhereSql(
   return clause;
 }
 
-/** Prisma relation filter narrowing detections to a team's cameras. */
+/** Prisma filter narrowing detections to a team via the denormalized column. */
 function teamDetectionWhere(teamId?: string) {
-  return teamId ? { camera: { teamId } } : {};
+  return teamId ? { teamId } : {};
 }
 
 /** Number of days spanned by the active period/from/to filter (for rates). */

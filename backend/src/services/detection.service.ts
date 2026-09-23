@@ -121,7 +121,7 @@ function buildWhereClause(
   if (organizationId) where.organizationId = organizationId;
 
   if (teamScopeId) {
-    where.camera = { teamId: teamScopeId };
+    where.teamId = teamScopeId;
   }
 
   if (params.status) {
@@ -172,10 +172,10 @@ async function computeDetectionStats(organizationId?: string, teamScopeId?: stri
   const orgCond: Prisma.Sql = organizationId
     ? Prisma.sql`AND organization_id = ${organizationId}`
     : Prisma.empty;
-  const teamScope: Prisma.DetectionWhereInput = teamScopeId ? { camera: { teamId: teamScopeId } } : {};
+  const teamScope: Prisma.DetectionWhereInput = teamScopeId ? { teamId: teamScopeId } : {};
   const teamCamScope: Prisma.CameraWhereInput = teamScopeId ? { teamId: teamScopeId } : {};
   const teamCond: Prisma.Sql = teamScopeId
-    ? Prisma.sql`AND camera_id IN (SELECT id FROM cameras WHERE team_id = ${teamScopeId})`
+    ? Prisma.sql`AND team_id = ${teamScopeId}`
     : Prisma.empty;
 
   const [
@@ -253,9 +253,10 @@ export const detectionService = {
     const cameraIds = Array.from(new Set(inputs.map((input) => input.cameraId)));
     const cameras = await prisma.camera.findMany({
       where: { id: { in: cameraIds } },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, teamId: true },
     });
     const orgByCamera = new Map(cameras.map((camera) => [camera.id, camera.organizationId]));
+    const teamByCamera = new Map(cameras.map((camera) => [camera.id, camera.teamId]));
     for (const cameraId of cameraIds) {
       if (!orgByCamera.has(cameraId)) {
         throw new ApiError(404, `Unknown camera: ${cameraId}`);
@@ -281,6 +282,7 @@ export const detectionService = {
             snapshotUrl: input.snapshotUrl,
             processingTimeMs: input.processingTimeMs,
             organizationId: orgByCamera.get(input.cameraId)!,
+            teamId: teamByCamera.get(input.cameraId) ?? null,
           },
           include: { camera: true },
         }),
@@ -327,7 +329,7 @@ export const detectionService = {
         id: input.cameraId,
         ...(callerOrganizationId ? { organizationId: callerOrganizationId } : {}),
       },
-      select: { id: true, name: true, organizationId: true },
+      select: { id: true, name: true, organizationId: true, teamId: true },
     });
     if (!camera) {
       throw new ApiError(404, "Camera not found");
@@ -351,6 +353,7 @@ export const detectionService = {
         snapshotUrl: input.snapshotUrl,
         processingTimeMs: input.processingTimeMs,
         organizationId,
+        teamId: camera.teamId ?? null,
       },
       include: { camera: true },
     });

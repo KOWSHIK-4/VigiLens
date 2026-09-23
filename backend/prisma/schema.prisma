@@ -83,6 +83,7 @@ model Team {
   invitations  TeamInvitation[]
   lead         User?            @relation("TeamLeads", fields: [leadId], references: [id], onDelete: SetNull)
   cameras      Camera[]         @relation("CameraTeams")
+  detections   Detection[]      @relation("DetectionTeams")
   alerts       Alert[]          @relation("AlertTeams")
   incidents    Incident[]       @relation("IncidentTeams")
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -153,8 +154,9 @@ model User {
   @@index([status])
   @@index([lastLogin])
   @@index([deletedAt])
-  @@index([organizationId])
-  @@index([teamId])
+  // Member/scope queries always filter by tenant then team; the composite
+  // covers both the org-only lookups (leading column) and the team scoping.
+  @@index([organizationId, teamId], map: "users_org_team_idx")
   @@map("users")
 }
 
@@ -220,8 +222,7 @@ model Camera {
   team                Team?               @relation("CameraTeams", fields: [teamId], references: [id], onDelete: SetNull)
   organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId])
-  @@index([teamId])
+  @@index([organizationId, teamId], map: "cameras_org_team_idx")
   @@map("cameras")
 }
 
@@ -251,6 +252,7 @@ model Detection {
   timestamp      DateTime        @default(now())
   createdAt      DateTime        @default(now()) @map("created_at")
   organizationId String          @map("organization_id")
+  teamId         String?         @map("team_id")
 
   // Detector Engine v2 fields (all optional for backward compatibility).
   detectorId       String? @map("detector_id")
@@ -264,6 +266,7 @@ model Detection {
 
   camera       Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   alert        Alert?
+  team         Team?        @relation("DetectionTeams", fields: [teamId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([cameraId])
@@ -271,12 +274,15 @@ model Detection {
   @@index([timestamp])
   @@index([detectorKey])
   @@index([trackId])
-  @@index([organizationId])
   // Per-camera and per-detector history queries filter by the leading
   // column and order by timestamp DESC; composites avoid a sort step.
   @@index([cameraId, timestamp(sort: Desc)])
   @@index([detectorKey, timestamp(sort: Desc)])
   @@index([status, timestamp(sort: Desc)], map: "detections_status_timestamp_idx")
+  // Team-scoped hot paths (list/detect stats/analytics) filter by tenant
+  // then team and order by timestamp DESC; the denormalized team_id lets
+  // those queries stay on the detections table instead of joining cameras.
+  @@index([organizationId, teamId, timestamp(sort: Desc)], map: "detections_org_team_timestamp_idx")
   @@map("detections")
 }
 
@@ -307,12 +313,11 @@ model Alert {
   @@index([severity])
   @@index([isRead])
   @@index([createdAt])
-  @@index([organizationId])
-  @@index([teamId])
   @@index([isRead, createdAt(sort: Desc)], map: "alerts_is_read_created_at_idx")
   @@index([severity, createdAt(sort: Desc)], map: "alerts_severity_created_at_idx")
   @@index([acknowledgedAt])
   @@index([escalatedAt])
+  @@index([organizationId, teamId], map: "alerts_org_team_idx")
   @@map("alerts")
 }
 
@@ -349,13 +354,12 @@ model Incident {
   @@index([assignedToUserId])
   @@index([openedAt])
   @@index([createdAt])
-  @@index([organizationId])
-  @@index([teamId])
   // Incident list queries filter by status/priority/assignee and default to
   // opened_at DESC ordering; composites avoid a sort step per filtered list.
   @@index([status, openedAt(sort: Desc)], map: "incidents_status_opened_at_idx")
   @@index([priority, openedAt(sort: Desc)], map: "incidents_priority_opened_at_idx")
   @@index([assignedToUserId, openedAt(sort: Desc)], map: "incidents_assigned_to_user_id_opened_at_idx")
+  @@index([organizationId, teamId], map: "incidents_org_team_idx")
   @@map("incidents")
 }
 
