@@ -519,7 +519,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
       {
         key: "report_digest_time",
         label: "Report time",
-        description: "Local time of day (HH:MM) at which scheduled reports are generated.",
+        description: "UTC time of day (HH:MM) at which scheduled reports are generated.",
         type: "string",
         defaultValue: "06:00",
       },

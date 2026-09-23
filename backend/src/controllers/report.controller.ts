@@ -44,9 +44,12 @@ export const reportController = {
 
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const q = req.query;
-      const page = typeof q.page === "string" ? q.page : "1";
-      const limit = typeof q.limit === "string" ? q.limit : "20";
+      // `validate` replaces req.query with zod-coerced data: page/limit are
+      // numbers (never strings), otherwise the normalization below silently
+      // drops them and the list always returns page 1/limit 20.
+      const q = req.query as Record<string, unknown>;
+      const page = typeof q.page === "number" ? q.page : 1;
+      const limit = typeof q.limit === "number" ? q.limit : 20;
       const search = typeof q.search === "string" ? q.search : undefined;
       const type = typeof q.type === "string" ? q.type : undefined;
       const status = typeof q.status === "string" ? q.status : undefined;
@@ -54,15 +57,15 @@ export const reportController = {
       const sortOrder = q.sortOrder === "asc" || q.sortOrder === "desc" ? q.sortOrder : undefined;
 
       const result = await reportService.findAll({
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         search,
         type,
         status,
         sortBy,
         sortOrder,
       }, req.organizationId);
-      paginated(res, result.data, result.total, parseInt(page), parseInt(limit));
+      paginated(res, result.data, result.total, page, limit);
     } catch (err) {
       next(err);
     }

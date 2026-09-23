@@ -159,13 +159,25 @@ export type AssignCameraTeamInput = z.infer<typeof assignCameraTeamSchema>;
 export const reportTypeSchema = z.enum(["daily", "weekly", "monthly", "camera", "detection", "alert"]);
 export const reportStatusSchema = z.enum(["generating", "completed", "failed"]);
 
+/** Longest window a single report generation may cover (bounds row counts). */
+export const MAX_REPORT_WINDOW_MS = 366 * 24 * 60 * 60 * 1000;
+
 export const generateReportSchema = z.object({
   title: z.string().min(1).max(200),
   type: reportTypeSchema,
-  dateRange: z.object({
-    from: z.string(),
-    to: z.string(),
-  }),
+  dateRange: z
+    .object({
+      from: z.string().refine((v) => !Number.isNaN(Date.parse(v)), { message: "must be a valid date" }),
+      to: z.string().refine((v) => !Number.isNaN(Date.parse(v)), { message: "must be a valid date" }),
+    })
+    .refine(({ from, to }) => new Date(to).getTime() >= new Date(from).getTime(), {
+      message: "dateRange.to must be on or after dateRange.from",
+      path: ["dateRange.to"],
+    })
+    .refine(
+      ({ from, to }) => new Date(to).getTime() - new Date(from).getTime() <= MAX_REPORT_WINDOW_MS,
+      { message: "dateRange may not exceed 366 days", path: ["dateRange.to"] },
+    ),
 });
 
 export const reportQuerySchema = z.object({

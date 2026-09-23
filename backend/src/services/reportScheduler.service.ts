@@ -39,16 +39,37 @@ export const REPORT_DIGEST_TIME_KEY = "report_digest_time";
 
 export const REPORT_SCHEDULER_TICK_MS = 30_000;
 
+/**
+ * Settings expose the cadence as a select whose values are stored as strings
+ * ("1" | "7" | "30"), but older code expected a number and silently ignored
+ * the stored value, pinning every tenant to daily reports. Accept both.
+ */
+export function parseCadenceDays(value: unknown): 1 | 7 | 30 {
+  if (typeof value === "number") return clampCadence(value);
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return clampCadence(Number(value.trim()));
+  }
+  return DEFAULT_REPORT_SCHEDULE_CONFIG.cadenceDays as 1 | 7 | 30;
+}
+
 export interface ReportSchedulerOptions {
   tickMs?: number;
-  /** Reads the three storage-group scheduling settings. */
-  configReader?: () => Promise<ReportScheduleConfig>;
-  /** Generates one report record. Default: reportService.generate as "system". */
+  /**
+   * Reads the three storage-group scheduling settings for one organization.
+   * Settings are scoped per tenant (falling back to platform defaults when a
+   * tenant has no override), so each organization's schedule — and whether it
+   * is enabled at all — is its own.
+   */
+  configReader?: (organizationId: string) => Promise<ReportScheduleConfig>;
+  /** The tenants scheduled reports are generated for. Default: all active orgs. */
+  organizationsProvider?: () => Promise<Array<{ id: string }>>;
+  /** Generates one report record for an organization. Default: reportService.generate as "system". */
   generateReport?: (input: {
     title: string;
     type: ScheduledReportType;
     generatedBy: string;
     dateRange: { from: string; to: string };
+    organizationId: string;
   }) => Promise<{ id: string }>;
   /** Records that a scheduled report fired (metrics). */
   recordRun?: (type: ScheduledReportType) => Promise<void>;
@@ -63,15 +84,15 @@ export interface ReportSchedulerStatus extends ReportScheduleState {
   lastError: string | null;
 }
 
-async function defaultConfigReader(): Promise<ReportScheduleConfig> {
+async function defaultConfigReader(organizationId: string): Promise<ReportScheduleConfig> {
   const [enabled, cadence, digestTime] = await Promise.all([
-    settingsService.getValue("storage", SCHEDULED_REPORTS_ENABLED_KEY),
-    settingsService.getValue("storage", REPORT_CADENCE_DAYS_KEY),
-    settingsService.getValue("storage", REPORT_DIGEST_TIME_KEY),
+    settingsService.getValue("storage", SCHEDULED_REPORTS_ENABLED_KEY, organizationId),
+    settingsService.getValue("storage", REPORT_CADENCE_DAYS_KEY, organizationId),
+    settingsService.getValue("storage", REPORT_DIGEST_TIME_KEY, organizationId),
   ]);
   return {
     enabled: enabled === true,
-    cadenceDays: typeof cadence === "number" ? clampCadence(cadence) : DEFAULT_REPORT_SCHEDULE_CONFIG.cadenceDays,
+    cadenceDays: parseCadenceDays(cadence),
     digestTime:
       typeof digestTime === "string" && parseDigestTime(digestTime)
         ? digestTime
@@ -79,11 +100,19 @@ async function defaultConfigReader(): Promise<ReportScheduleConfig> {
   };
 }
 
+async function defaultOrganizationsProvider(): Promise<Array<{ id: string }>> {
+  const { prisma } = await import("../config/prisma");
+  return prisma.organization.findMany({
+    select: { id: true },
+  });
+}
+
 export async function defaultGenerateReport(input: {
   title: string;
   type: ScheduledReportType;
   generatedBy: string;
   dateRange: { from: string; to: string };
+  organizationId: string;
 }): Promise<{ id: string }> {
   const { reportService } = await import("./report.service");
   return reportService.generate({
@@ -91,6 +120,7 @@ export async function defaultGenerateReport(input: {
     type: input.type,
     generatedBy: input.generatedBy,
     dateRange: input.dateRange,
+    organizationId: input.organizationId,
   });
 }
 
@@ -105,7 +135,8 @@ async function defaultRecordRun(type: ScheduledReportType): Promise<void> {
 
 export class ReportScheduler {
   private readonly tickMs: number;
-  private readonly configReader: () => Promise<ReportScheduleConfig>;
+  private readonly configReader: NonNullable<ReportSchedulerOptions["configReader"]>;
+  private readonly organizationsProvider: NonNullable<ReportSchedulerOptions["organizationsProvider"]>;
   private readonly generateReport: NonNullable<ReportSchedulerOptions["generateReport"]>;
   private readonly recordRun: NonNullable<ReportSchedulerOptions["recordRun"]>;
   private readonly now: () => number;
@@ -119,10 +150,12 @@ export class ReportScheduler {
   private lastError: string | null = null;
   private lastConfig: ReportScheduleConfig = { ...DEFAULT_REPORT_SCHEDULE_CONFIG };
   private runInFlight = false;
+  private readonly lastRunByOrg = new Map<string, string>();
 
   constructor(options: ReportSchedulerOptions = {}) {
     this.tickMs = options.tickMs ?? REPORT_SCHEDULER_TICK_MS;
     this.configReader = options.configReader ?? defaultConfigReader;
+    this.organizationsProvider = options.organizationsProvider ?? defaultOrganizationsProvider;
     this.generateReport = options.generateReport ?? defaultGenerateReport;
     this.recordRun = options.recordRun ?? defaultRecordRun;
     this.now = options.now ?? (() => Date.now());
@@ -167,38 +200,56 @@ export class ReportScheduler {
   }
 
   /**
-   * One scheduling pass: generate exactly one report if a cadence anchor has
-   * been reached since the last run. Public so tests can drive a single pass
-   * without a real timer.
+   * One scheduling pass: for every tenant whose cadence anchor has been
+   * reached since its last run, generate an organization-scoped report. Public
+   * so tests can drive a single pass without a real timer.
    */
   async tick(): Promise<void> {
     if (!this.running || this.runInFlight) return;
     const nowMs = this.now();
-    const config = await this.configReader().catch(() => ({ ...DEFAULT_REPORT_SCHEDULE_CONFIG }));
-    this.lastConfig = config;
-
-    const lastRunOn = this.lastRunAt ? new Date(this.lastRunAt).getTime() : 0;
-    const decision = decideSchedule(nowMs, config, lastRunOn);
-    this.nextRunAt = decision.nextRunAt ? new Date(decision.nextRunAt).toISOString() : null;
-    if (decision.type) this.runType = decision.type;
-
-    if (!decision.shouldRun || !decision.type) return;
+    const orgs = await this.organizationsProvider().catch(() => []);
+    const firedAt: number[] = [];
 
     this.runInFlight = true;
-    const type = decision.type;
+    this.lastError = null;
+    this.nextRunAt = null;
+    this.runType = null;
     try {
-      const dateRange = dateRangeFor(nowMs, type);
-      await this.generateReport({
-        title: defaultReportTitle(nowMs, type),
-        type,
-        generatedBy: "system",
-        dateRange,
-      });
-      await this.recordRun(type);
-      this.lastRunAt = new Date(nowMs).toISOString();
-      this.lastError = null;
-      this.runCount += 1;
-      logger.info("Scheduled report generated", { type, dateRange, runCount: this.runCount });
+      for (const org of orgs) {
+        const config = await this.configReader(org.id).catch(() => ({ ...DEFAULT_REPORT_SCHEDULE_CONFIG }));
+        this.lastConfig = config;
+
+        const lastRunOn = this.lastRunByOrg.has(org.id)
+          ? new Date(this.lastRunByOrg.get(org.id) as string).getTime()
+          : 0;
+        const decision = decideSchedule(nowMs, config, lastRunOn);
+        if (decision.nextRunAt !== null) {
+          const next = new Date(decision.nextRunAt).getTime();
+          if (this.nextRunAt === null || next < new Date(this.nextRunAt).getTime()) {
+            this.nextRunAt = new Date(next).toISOString();
+          }
+        }
+        if (!decision.shouldRun || !decision.type) continue;
+        this.runType = decision.type;
+
+        const dateRange = dateRangeFor(nowMs, decision.type);
+        await this.generateReport({
+          title: defaultReportTitle(nowMs, decision.type),
+          type: decision.type,
+          generatedBy: "system",
+          dateRange,
+          organizationId: org.id,
+        });
+        await this.recordRun(decision.type);
+        this.lastRunByOrg.set(org.id, new Date(nowMs).toISOString());
+        firedAt.push(nowMs);
+        logger.info("Scheduled report generated", { organizationId: org.id, type: decision.type, dateRange });
+      }
+
+      if (firedAt.length > 0) {
+        this.lastRunAt = new Date(Math.max(...firedAt)).toISOString();
+        this.runCount += firedAt.length;
+      }
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       logger.warn("Scheduled report generation failed", { error: this.lastError });

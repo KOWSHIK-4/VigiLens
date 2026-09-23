@@ -6,6 +6,27 @@ import { toCsv } from "../utils/csv";
 import { ApiError } from "../utils/errors";
 import type { Prisma, ReportStatus, ReportType } from "@prisma/client";
 
+/**
+ * Row cap for a single report artifact. A bounded generation keeps downloads
+ * and the in-memory render proportional regardless of how dense the requested
+ * window is; workloads that exceed it get a truncated artifact plus an
+ * explicit notice instead of an unbounded result set.
+ */
+export const MAX_REPORT_ROWS = 25_000;
+
+function buildWhereWithWindow(
+  from: Date,
+  to: Date,
+  organizationId?: string,
+): Prisma.DetectionWhereInput {
+  return {
+    timestamp: { gte: from, lt: to },
+    ...(organizationId ? { organizationId } : {}),
+  };
+}
+
+export const REPORT_TRUNCATION_NOTICE = `Report truncated at the first ${MAX_REPORT_ROWS} rows; refine the date range for full data.`;
+
 interface GenerateReportInput {
   title: string;
   type: ReportType;
@@ -64,27 +85,31 @@ async function buildReportData(
 ): Promise<string | Buffer> {
   const from = new Date(dateRange.from);
   const to = new Date(dateRange.to);
-  const where: Prisma.DetectionWhereInput = {
-    timestamp: { gte: from, lte: to },
-    ...(organizationId ? { organizationId } : {}),
-  };
+  const where = buildWhereWithWindow(from, to, organizationId);
 
   switch (type) {
     case "daily":
     case "weekly":
     case "monthly": {
-      const detections = await prisma.detection.findMany({ where, orderBy: { timestamp: "desc" } });
+      const detections = await prisma.detection.findMany({
+        where,
+        orderBy: { timestamp: "desc" },
+        take: MAX_REPORT_ROWS,
+      });
+      const truncated = detections.length === MAX_REPORT_ROWS;
       const counts = await prisma.detection.groupBy({
         by: ["status"],
         _count: { id: true },
         where,
       });
-      return format === "csv" ? buildCsv(detections, counts) : buildPdf(type, dateRange, detections, counts);
+      const content =
+        format === "csv" ? buildCsv(detections, counts, truncated) : buildPdf(type, dateRange, detections, counts, truncated);
+      return content;
     }
     case "camera": {
       const cameras = await prisma.camera.findMany({
         where: organizationId ? { organizationId } : {},
-        include: { _count: { select: { detections: { where: { timestamp: { gte: from, lte: to } } } } } },
+        include: { _count: { select: { detections: { where: { timestamp: { gte: from, lt: to } } } } } },
       });
       return format === "csv" ? buildCameraCsv(cameras) : buildCameraPdf(cameras);
     }
@@ -93,23 +118,33 @@ async function buildReportData(
         where,
         include: { camera: { select: { id: true, name: true, location: true } } },
         orderBy: { timestamp: "desc" },
+        take: MAX_REPORT_ROWS,
       });
-      return format === "csv" ? buildDetectionCsv(detections) : buildDetectionPdf(detections);
+      const truncated = detections.length === MAX_REPORT_ROWS;
+      const content =
+        format === "csv"
+          ? buildDetectionCsv(detections, truncated)
+          : buildDetectionPdf(detections, truncated);
+      return content;
     }
     case "alert": {
       const alerts = await prisma.alert.findMany({
-        where: { createdAt: { gte: from, lte: to }, ...(organizationId ? { organizationId } : {}) },
+        where: { createdAt: { gte: from, lt: to }, ...(organizationId ? { organizationId } : {}) },
         include: { detection: { include: { camera: { select: { id: true, name: true, location: true } } } } },
         orderBy: { createdAt: "desc" },
+        take: MAX_REPORT_ROWS,
       });
-      return format === "csv" ? buildAlertCsv(alerts) : buildAlertPdf(alerts);
+      const truncated = alerts.length === MAX_REPORT_ROWS;
+      const content =
+        format === "csv" ? buildAlertCsv(alerts, truncated) : buildAlertPdf(alerts, truncated);
+      return content;
     }
     default:
       return "";
   }
 }
 
-function buildCsv(detections: DetectionRow[], counts: StatusCountRow[]): string {
+function buildCsv(detections: DetectionRow[], counts: StatusCountRow[], truncated = false): string {
   const rows = toCsv(
     ["ID", "Label", "Confidence", "Status", "Camera ID", "Timestamp"],
     detections.map((d) => [d.id, d.label, d.confidence, d.status, d.cameraId, d.timestamp.toISOString()]),
@@ -118,10 +153,12 @@ function buildCsv(detections: DetectionRow[], counts: StatusCountRow[]): string 
     ["Status", "Count"],
     counts.map((c) => [c.status, c._count.id]),
   );
-  return rows + summary;
+  const note = truncated ? `\n\nNote: ${REPORT_TRUNCATION_NOTICE}\n` : "";
+  return rows + summary + note;
 }
 
-function buildPdf(type: string, dateRange: { from: string; to: string }, detections: DetectionRow[], counts: StatusCountRow[]): Buffer {
+function buildPdf(type: string, dateRange: { from: string; to: string }, detections: DetectionRow[], counts: StatusCountRow[], truncated = false): Buffer {
+  const note = truncated ? ["", `Note: ${REPORT_TRUNCATION_NOTICE}`] : [];
   return buildPdfDocument(`${type.charAt(0).toUpperCase() + type.slice(1)} Report`, [
     `Period: ${dateRange.from} to ${dateRange.to}`,
     `Total Detections: ${detections.length}`,
@@ -130,6 +167,7 @@ function buildPdf(type: string, dateRange: { from: string; to: string }, detecti
     ...counts.map((c) => `  ${c.status}: ${c._count.id}`),
     "",
     ...detections.map((d) => `  [${d.timestamp.toISOString()}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status}`),
+    ...note,
   ]);
 }
 
@@ -147,8 +185,8 @@ function buildCameraPdf(cameras: CameraRow[]): Buffer {
   ]);
 }
 
-function buildDetectionCsv(detections: Array<DetectionRow & { camera?: { name: string | null } | null }>): string {
-  return toCsv(
+function buildDetectionCsv(detections: Array<DetectionRow & { camera?: { name: string | null } | null }>, truncated = false): string {
+  const rows = toCsv(
     ["ID", "Label", "Confidence", "Status", "Camera", "Timestamp"],
     detections.map((d) => [
       d.id,
@@ -159,17 +197,20 @@ function buildDetectionCsv(detections: Array<DetectionRow & { camera?: { name: s
       d.timestamp.toISOString(),
     ]),
   );
+  return truncated ? rows + "\n\nNote: " + REPORT_TRUNCATION_NOTICE + "\n" : rows;
 }
 
-function buildDetectionPdf(detections: DetectionRow[]): Buffer {
+function buildDetectionPdf(detections: DetectionRow[], truncated = false): Buffer {
+  const note = truncated ? ["", `Note: ${REPORT_TRUNCATION_NOTICE}`] : [];
   return buildPdfDocument("Detection Report", [
     "",
     ...detections.map((d) => `  [${d.timestamp.toISOString()}] ${d.label} (${(d.confidence * 100).toFixed(0)}%) - ${d.status} on ${d.camera?.name || "Unknown"}`),
+    ...note,
   ]);
 }
 
-function buildAlertCsv(alerts: AlertRow[]): string {
-  return toCsv(
+function buildAlertCsv(alerts: AlertRow[], truncated = false): string {
+  const rows = toCsv(
     ["ID", "Severity", "Title", "Message", "Camera", "Created At"],
     alerts.map((a) => [
       a.id,
@@ -180,12 +221,15 @@ function buildAlertCsv(alerts: AlertRow[]): string {
       a.createdAt.toISOString(),
     ]),
   );
+  return truncated ? rows + "\n\nNote: " + REPORT_TRUNCATION_NOTICE + "\n" : rows;
 }
 
-function buildAlertPdf(alerts: AlertRow[]): Buffer {
+function buildAlertPdf(alerts: AlertRow[], truncated = false): Buffer {
+  const note = truncated ? ["", `Note: ${REPORT_TRUNCATION_NOTICE}`] : [];
   return buildPdfDocument("Alert Report", [
     "",
     ...alerts.map((a) => `  [${a.createdAt.toISOString()}] ${a.severity.toUpperCase()}: ${a.title} - ${a.message} (${a.detection?.camera?.name || "Unknown"})`),
+    ...note,
   ]);
 }
 

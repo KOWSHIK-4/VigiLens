@@ -19,6 +19,7 @@ import {
   DAY_MS,
   type ReportScheduleConfig,
 } from "../src/services/reportSchedulerPolicy";
+import { parseCadenceDays } from "../src/services/reportScheduler.service";
 
 const enabledDaily: ReportScheduleConfig = {
   enabled: true,
@@ -132,6 +133,7 @@ describe("ReportScheduler (injectable dependencies)", () => {
     const scheduler = new ReportScheduler({
       tickMs: 1_000_000,
       configReader: async () => ({ ...config }),
+      organizationsProvider: async () => [{ id: "org-1" }],
       generateReport: generated,
       recordRun: recorded,
       now: () => clock,
@@ -152,6 +154,7 @@ describe("ReportScheduler (injectable dependencies)", () => {
     expect(recorded).toHaveBeenCalledTimes(1);
     expect(generated.mock.calls[0][0].type).toBe("daily");
     expect(generated.mock.calls[0][0].generatedBy).toBe("system");
+    expect(generated.mock.calls[0][0].organizationId).toBe("org-1");
     scheduler.stop();
   });
 
@@ -162,6 +165,7 @@ describe("ReportScheduler (injectable dependencies)", () => {
     const scheduler = new ReportScheduler({
       tickMs: 1_000_000,
       configReader: async () => ({ ...enabledDaily }),
+      organizationsProvider: async () => [{ id: "org-1" }],
       generateReport: generated,
       recordRun: async () => undefined,
       now: () => nowMs,
@@ -182,6 +186,7 @@ describe("ReportScheduler (injectable dependencies)", () => {
     const scheduler = new ReportScheduler({
       tickMs: 1_000_000,
       configReader: async () => ({ ...enabledDaily, enabled: false }),
+      organizationsProvider: async () => [{ id: "org-1" }],
       generateReport: generated,
       recordRun: async () => undefined,
       now: () => nowMs,
@@ -191,5 +196,47 @@ describe("ReportScheduler (injectable dependencies)", () => {
     expect(generated).not.toHaveBeenCalled();
     expect(scheduler.getStatus().lastRunAt).toBeNull();
     scheduler.stop();
+  });
+
+  it("fires independently per organization from its own schedule", async () => {
+    const clock = new Date("2026-09-19T06:05:00Z").getTime();
+    const generated = vi.fn().mockResolvedValue({ id: "rep-x" });
+    const configByOrg: Record<string, ReportScheduleConfig> = {
+      "org-a": { ...enabledDaily },
+      "org-b": { ...enabledDaily, enabled: false },
+    };
+    const { ReportScheduler } = await import("../src/services/reportScheduler.service");
+    const scheduler = new ReportScheduler({
+      tickMs: 1,
+      configReader: async (orgId) => ({ ...configByOrg[orgId] }),
+      organizationsProvider: async () => [{ id: "org-a" }, { id: "org-b" }],
+      generateReport: generated,
+      recordRun: async () => undefined,
+      now: () => clock,
+    });
+    scheduler.start();
+    await scheduler.tick();
+    expect(generated).toHaveBeenCalledTimes(1);
+    expect(generated.mock.calls[0][0].organizationId).toBe("org-a");
+    scheduler.stop();
+  });
+});
+
+describe("parseCadenceDays (settings values are stored as select strings)", () => {
+  it("accepts numeric strings and numbers and clamps to the supported set", () => {
+    expect(parseCadenceDays("1")).toBe(1);
+    expect(parseCadenceDays("7")).toBe(7);
+    expect(parseCadenceDays("30")).toBe(30);
+    expect(parseCadenceDays(1)).toBe(1);
+    expect(parseCadenceDays(7)).toBe(7);
+    expect(parseCadenceDays(30)).toBe(30);
+    expect(parseCadenceDays("999")).toBe(30);
+  });
+
+  it("falls back to daily for unparseable or missing values", () => {
+    expect(parseCadenceDays("weekly")).toBe(1);
+    expect(parseCadenceDays("")).toBe(1);
+    expect(parseCadenceDays(undefined)).toBe(1);
+    expect(parseCadenceDays(null)).toBe(1);
   });
 });

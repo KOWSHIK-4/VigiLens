@@ -9,6 +9,7 @@
  */
 import type { Response } from "express";
 import { csvCell } from "./csv";
+import { logger } from "../config/logger";
 
 export function csvHeaderLine(headers: string[]): string {
   return headers.join(",") + "\n";
@@ -17,6 +18,14 @@ export function csvHeaderLine(headers: string[]): string {
 export function csvLine(values: unknown[]): string {
   return values.map(csvCell).join(",") + "\n";
 }
+
+/**
+ * Upper bound on rows written by a single streaming export. Keeps export
+ * generation proportional to a configurable cap so a broad filter cannot
+ * stream an unbounded result set; reaching the cap closes the document with
+ * an explicit comment instead of silently stopping.
+ */
+export const MAX_EXPORT_ROWS = 100_000;
 
 async function waitForDrain(res: Response): Promise<void> {
   await new Promise<void>((resolve) => res.once("drain", resolve));
@@ -31,15 +40,24 @@ export async function sendCsvStream(
   res: Response,
   headers: string[],
   rows: AsyncIterable<unknown[]>,
+  maxRows: number = MAX_EXPORT_ROWS,
 ): Promise<void> {
   try {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.write(csvHeaderLine(headers));
+    let written = 0;
     for await (const row of rows) {
       if (res.writableEnded) return;
+      if (written >= maxRows) {
+        logger.warn("CSV export truncated at row cap", { maxRows });
+        res.write(`# Export truncated at the first ${maxRows} rows\n`);
+        res.end();
+        return;
+      }
       if (!res.write(csvLine(row))) {
         await waitForDrain(res);
       }
+      written += 1;
     }
     res.end();
   } catch (err) {
