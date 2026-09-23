@@ -400,6 +400,156 @@ async function run() {
   }
   await request(`/users/${userId}/unlock`, { method: "POST" }, superToken);
 
+  // ---- Privilege escalation guards ----
+  const escalationEmail = `escalation_${Date.now()}@vigilens.io`;
+  const escalationTarget = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({ name: "Escalation Target", email: escalationEmail, password: "password123" }),
+    },
+    superToken,
+  );
+  if (escalationTarget.status === 201) {
+    ok("escalation target user created");
+  } else {
+    fail("escalation target creation", escalationTarget);
+  }
+  const escalationTargetId = (escalationTarget.body as { data: { id: string } }).data.id;
+  createdUserIds.push(escalationTargetId);
+
+  const adminAssignSuper = await request(
+    `/users/${escalationTargetId}/role`,
+    { method: "PATCH", body: JSON.stringify({ role: "super_admin" }) },
+    adminToken,
+  );
+  if (adminAssignSuper.status === 403) {
+    ok("admin cannot assign the super_admin role (403)");
+  } else {
+    fail("admin assignments super_admin", adminAssignSuper);
+  }
+
+  const adminCreateSuper = await request(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Naughty",
+        email: `naughty_${Date.now()}@vigilens.io`,
+        password: "password123",
+        role: "super_admin",
+      }),
+    },
+    adminToken,
+  );
+  if (adminCreateSuper.status === 403) {
+    ok("admin cannot create a super_admin user (403)");
+  } else {
+    fail("admin creates super_admin user", adminCreateSuper);
+  }
+
+  const adminDemoteSuper = await request(
+    `/users/${superLogin.body!.data.user.id}/role`,
+    { method: "PATCH", body: JSON.stringify({ role: "operator" }) },
+    adminToken,
+  );
+  if (adminDemoteSuper.status === 403) {
+    ok("admin cannot demote a super_admin (403)");
+  } else {
+    fail("admin demotes super_admin", adminDemoteSuper);
+  }
+
+  const adminResetSuper = await request(
+    `/users/${superLogin.body!.data.user.id}/reset-password`,
+    { method: "POST", body: JSON.stringify({ password: "Hijack123!" }) },
+    adminToken,
+  );
+  if (adminResetSuper.status === 403) {
+    ok("admin cannot reset a super_admin password (403)");
+  } else {
+    fail("admin resets super_admin password", adminResetSuper);
+  }
+
+  const adminLockSuper = await request(
+    `/users/${superLogin.body!.data.user.id}/lock`,
+    { method: "POST" },
+    adminToken,
+  );
+  if (adminLockSuper.status === 403) {
+    ok("admin cannot lock a super_admin (403)");
+  } else {
+    fail("admin locks super_admin", adminLockSuper);
+  }
+
+  const adminDisableSuper = await request(
+    `/users/${superLogin.body!.data.user.id}/status`,
+    { method: "PATCH", body: JSON.stringify({ status: "disabled" }) },
+    adminToken,
+  );
+  if (adminDisableSuper.status === 403) {
+    ok("admin cannot disable a super_admin (403)");
+  } else {
+    fail("admin disables super_admin", adminDisableSuper);
+  }
+
+  const adminAssignAdmin = await request(
+    `/users/${escalationTargetId}/role`,
+    { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    adminToken,
+  );
+  if (adminAssignAdmin.status === 403) {
+    ok("admin cannot grant a role at their own rank or above (403)");
+  } else {
+    fail("admin grants the admin role", adminAssignAdmin);
+  }
+
+  const adminAssignOperator = await request(
+    `/users/${escalationTargetId}/role`,
+    { method: "PATCH", body: JSON.stringify({ role: "operator" }) },
+    adminToken,
+  );
+  if (adminAssignOperator.status === 200) {
+    ok("admin can grant a lower rank role they possess (operator)");
+  } else {
+    fail("admin grants operator role", adminAssignOperator);
+  }
+
+  const adminRoleEscalate = await request(
+    "/roles",
+    {
+      method: "POST",
+      body: JSON.stringify({ name: `sneaky_${Date.now()}`, permissionKeys: ["roles.manage"] }),
+    },
+    adminToken,
+  );
+  if (adminRoleEscalate.status === 403) {
+    ok("admin cannot mint a role with permissions they lack (403)");
+  } else {
+    fail("admin role escalation", adminRoleEscalate);
+  }
+
+  const legitReset = await request(
+    `/users/${escalationTargetId}/reset-password`,
+    { method: "POST", body: JSON.stringify({ password: "LegitPass99!" }) },
+    superToken,
+  );
+  if (legitReset.status === 200) {
+    ok("super_admin can perform legitimate account operations");
+  } else {
+    fail("super_admin legit reset", legitReset);
+  }
+
+  const lastSuperGuard = await request(
+    `/users/${superLogin.body!.data.user.id}/status`,
+    { method: "PATCH", body: JSON.stringify({ status: "disabled" }) },
+    superToken,
+  );
+  if (lastSuperGuard.status === 400) {
+    ok("last-super_admin/self disable guard remains intact");
+  } else {
+    fail("last super admin guard", lastSuperGuard);
+  }
+
   // ---- Auto-lockout after repeated failures ----
   const victimEmail = `lockout_${Date.now()}@vigilens.io`;
   const victim = await request(

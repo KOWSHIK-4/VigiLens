@@ -34,7 +34,7 @@ export const roleController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const role = await roleService.create(req.body as CreateRoleInput);
+      const role = await roleService.create(req.body as CreateRoleInput, req.permissions);
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
       await logAudit({
@@ -61,6 +61,7 @@ export const roleController = {
       const role = await roleService.update(
         req.params.name as string,
         req.body as UpdateRoleInput,
+        req.permissions,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -106,6 +107,7 @@ export const roleController = {
       const role = await roleService.updatePermissions(
         req.params.name as string,
         (req.body as UpdateRoleInput).permissionKeys ?? [],
+        req.permissions,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);

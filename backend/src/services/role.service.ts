@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
 import { permissionService } from "./permission.service";
+import { assertActorPossessesPermissions } from "./roleHierarchy";
 import type { CreateRoleInput, UpdateRoleInput } from "../types";
 import type { Prisma } from "@prisma/client";
 
@@ -69,7 +70,7 @@ export const roleService = {
     return permissions;
   },
 
-  async create(input: CreateRoleInput) {
+  async create(input: CreateRoleInput, actorPermissions?: Set<string>) {
     const name = input.name.trim().toLowerCase();
 
     if (!ROLE_NAME_PATTERN.test(name)) {
@@ -85,6 +86,12 @@ export const roleService = {
     }
 
     const permissions = await this.resolvePermissions(input.permissionKeys);
+
+    // Granter-possesses: a role may only bundle permissions the actor holds,
+    // so an admin cannot mint authority above their own.
+    if (actorPermissions) {
+      assertActorPossessesPermissions(actorPermissions, input.permissionKeys, name);
+    }
 
     await prisma.$transaction([
       prisma.role.create({
@@ -105,7 +112,7 @@ export const roleService = {
     return this.findByName(name);
   },
 
-  async update(name: string, input: UpdateRoleInput) {
+  async update(name: string, input: UpdateRoleInput, actorPermissions?: Set<string>) {
     await this.findByName(name);
 
     const data: Prisma.RoleUpdateInput = {};
@@ -121,6 +128,9 @@ export const roleService = {
         );
       }
       const permissions = await this.resolvePermissions(input.permissionKeys);
+      if (actorPermissions) {
+        assertActorPossessesPermissions(actorPermissions, input.permissionKeys, name);
+      }
       await prisma.rolePermission.deleteMany({ where: { role: name } });
       await prisma.rolePermission.createMany({
         data: permissions.map((permission) => ({
@@ -139,8 +149,8 @@ export const roleService = {
     return this.findByName(name);
   },
 
-  async updatePermissions(name: string, permissionKeys: string[]) {
-    return this.update(name, { permissionKeys });
+  async updatePermissions(name: string, permissionKeys: string[], actorPermissions?: Set<string>) {
+    return this.update(name, { permissionKeys }, actorPermissions);
   },
 
   async remove(name: string) {

@@ -3,6 +3,8 @@ import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
 import { teamService } from "./team.service";
+import { permissionService } from "./permission.service";
+import { assertMayControlRole, canGrantRole } from "./roleHierarchy";
 import type {
   CreateUserInput,
   ResetPasswordInput,
@@ -111,7 +113,7 @@ export const userService = {
     });
   },
 
-  async create(input: CreateUserInput, organizationId?: string) {
+  async create(input: CreateUserInput, organizationId?: string, actorRole?: string) {
     const existing = await prisma.user.findUnique({
       where: { email: input.email },
     });
@@ -122,11 +124,21 @@ export const userService = {
     const role = input.role ?? "operator";
     await this.ensureRoleExists(role);
 
-    const password = await bcrypt.hash(input.password, 12);
-
     if (!organizationId) {
       throw new ApiError(400, "A tenant organization is required to create a user");
     }
+
+    // An account created in a role is a grant of that role: the actor must
+    // have authority to grant it (nobody may mint authority above their own).
+    if (actorRole) {
+      const actorPermissions = await permissionService.getPermissionsForRole(actorRole);
+      const decision = await canGrantRole(actorRole, actorPermissions, role);
+      if (!decision.allowed) {
+        throw new ApiError(403, decision.reason ?? "Cannot create a user with this role");
+      }
+    }
+
+    const password = await bcrypt.hash(input.password, 12);
 
     // Join-the-right-team induction: every new tenant member starts on the
     // organization's default team so new accounts are never left ungrouped.
@@ -173,12 +185,15 @@ export const userService = {
     });
   },
 
-  async remove(id: string, actorId?: string, organizationId?: string) {
+  async remove(id: string, actorId?: string, actorRole?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot delete your own account");
     }
 
     const user = await this.findById(id, organizationId);
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
 
     if (user.role === "super_admin") {
       const superAdmins = await prisma.user.count({
@@ -197,7 +212,7 @@ export const userService = {
     return { success: true, id };
   },
 
-  async assignRole(id: string, role: string, actorId?: string, organizationId?: string) {
+  async assignRole(id: string, role: string, actorId?: string, actorRole?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot change your own role");
     }
@@ -205,6 +220,22 @@ export const userService = {
     await this.ensureRoleExists(role);
 
     const user = await this.findById(id, organizationId);
+
+    // Accounts holding Super Admin are only controllable by a Super Admin
+    // (this also blocks demoting a Super Admin from below).
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
+
+    // Assigning a role is a grant: the actor must possess the grants the
+    // role implies and must never grant a seeded role at/above their rank.
+    if (actorRole) {
+      const actorPermissions = await permissionService.getPermissionsForRole(actorRole);
+      const decision = await canGrantRole(actorRole, actorPermissions, role);
+      if (!decision.allowed) {
+        throw new ApiError(403, decision.reason ?? "You cannot assign this role");
+      }
+    }
 
     if (user.role === "super_admin" && role !== "super_admin") {
       const superAdmins = await prisma.user.count({
@@ -225,12 +256,15 @@ export const userService = {
     });
   },
 
-  async setStatus(id: string, status: UserStatus, actorId?: string, organizationId?: string) {
+  async setStatus(id: string, status: UserStatus, actorId?: string, actorRole?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot change your own status");
     }
 
     const user = await this.findById(id, organizationId);
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
 
     if (user.role === "super_admin" && status === "disabled") {
       const superAdmins = await prisma.user.count({
@@ -248,12 +282,15 @@ export const userService = {
     });
   },
 
-  async lock(id: string, actorId?: string, organizationId?: string) {
+  async lock(id: string, actorId?: string, actorRole?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot lock your own account");
     }
 
     const user = await this.findById(id, organizationId);
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
 
     if (user.isLocked) {
       throw new ApiError(400, "This account is already locked");
@@ -270,12 +307,15 @@ export const userService = {
     });
   },
 
-  async unlock(id: string, actorId?: string, organizationId?: string) {
+  async unlock(id: string, actorId?: string, actorRole?: string, organizationId?: string) {
     if (id === actorId) {
       throw new ApiError(400, "You cannot unlock your own account");
     }
 
     const user = await this.findById(id, organizationId);
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
 
     if (!user.isLocked) {
       throw new ApiError(400, "This account is not locked");
@@ -292,8 +332,11 @@ export const userService = {
     });
   },
 
-  async resetPassword(id: string, input: ResetPasswordInput, organizationId?: string) {
-    await this.findById(id, organizationId);
+  async resetPassword(id: string, input: ResetPasswordInput, actorRole?: string, organizationId?: string) {
+    const user = await this.findById(id, organizationId);
+    if (actorRole) {
+      assertMayControlRole(actorRole, user.role);
+    }
     const hashedPassword = await bcrypt.hash(input.password, 12);
     // Bump tokenVersion to revoke every outstanding session for the account.
     // An admin resetting a compromised password must not leave the attacker's
