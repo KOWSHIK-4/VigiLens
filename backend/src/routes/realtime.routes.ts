@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth";
 import { prisma } from "../config/prisma";
-import { subscribe, getSubscriberCount, getSubscriberSnapshot } from "../services/realtime.service";
+import { subscribe, getSubscriberSnapshot } from "../services/realtime.service";
 import { success, error as apiError } from "../utils/apiResponse";
 import type { AuthRequest } from "../types";
 
@@ -85,11 +85,16 @@ router.get("/subscribers", authenticate, (req, res) => {
   const authReq = req as AuthRequest;
   const snapshot = getSubscriberSnapshot();
   const canViewAll = authReq.permissions?.has("teams.read") ?? false;
+  // The snapshot is always scoped to the caller's tenant: a teams.read holder
+  // sees their own organization's subscribers, never another tenant's. Other
+  // members only see their own subscriptions, and the reported count matches
+  // whatever is visible -- so neither the list nor the count leaks across
+  // organizations.
   const visible = canViewAll
-    ? snapshot
+    ? snapshot.filter((sub) => !sub.organizationId || sub.organizationId === authReq.organizationId)
     : snapshot.filter((sub) => sub.userId === authReq.userId);
   success(res, {
-    count: getSubscriberCount(),
+    count: visible.length,
     subscribers: visible,
   });
 });
