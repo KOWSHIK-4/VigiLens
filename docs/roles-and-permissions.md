@@ -19,6 +19,14 @@ Permissions are enforced in two layers so the UI can never bypass the API:
   `frontend/src/utils/permissions.ts`, populated from the `/auth/me` payload),
   and show read-only banners and neutral empty states when actions are missing.
 
+Account-level security controls layer **on top of** the permission checks
+without introducing new permission keys: TOTP multi-factor authentication
+(per-account enrollment plus the org-wide `mfa_enforced` setting that gates
+un-enrolled accounts to the enrollment flow), and the server-side sliding
+session-inactivity window (`session_timeout_minutes`). These are enforced by
+the authentication middleware, not by `requirePermission`, so they apply to
+every role uniformly.
+
 ## Built-in Roles
 
 | Role          | Description                                                            |

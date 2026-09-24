@@ -32,13 +32,33 @@ Login returns `{ token, user }`. After 5 consecutive failed attempts the
 account is locked (`isLocked: true`, `lockedAt` set); locked accounts get `403`
 on login until an admin unlocks them via `POST /users/:id/unlock`.
 
+When the account has MFA enabled, password alone returns `401` with
+`{ "code": "MFA_REQUIRED" }`; the challenge must be satisfied on the same
+request (or a retry) by either a live TOTP code or a single-use recovery code:
+
+```bash
+POST /auth/login
+{
+  "email": "jane@example.com",
+  "password": "securepassword",
+  "totpCode": "123456"        # or "recoveryCode": "<one-time code>"
+}
+```
+
+A wrong TOTP is recorded as a failed login attempt; a wrong recovery code is
+rejected immediately. Recovery codes are consumed (invalidated) on first
+successful use.
+
 Additional auth endpoints (all require the Bearer token unless noted):
 
 ```bash
-POST /auth/logout            # blacklists the token, writes user_logout audit
+POST /auth/logout            # invalidates the session, writes user_logout audit
 GET  /auth/me                # current user profile + effective permissions
 POST /auth/change-password   # { "currentPassword", "newPassword" }
 POST /auth/realtime-ticket   # issue a short-lived SSE credential { ticket, expiresInSeconds }
+POST /auth/mfa/setup         # start enrollment -> { secret, otpauthUri }
+POST /auth/mfa/verify        # { "code" } -> enables MFA, returns 10 recovery codes
+POST /auth/mfa/disable       # { "password" } -> removes the second factor
 ```
 
 `POST /auth/realtime-ticket` issues a purpose-limited `type: "realtime"`
@@ -57,6 +77,17 @@ proxy logs never expose a long-lived credential.
   reset), every authenticated request except `/auth/change-password`,
   `/auth/me` and `/auth/logout` is rejected with `403`
   `{ "code": "PASSWORD_CHANGE_REQUIRED" }`.
+- Every login opens a server-side session; the issued JWT carries a `sid`
+  claim and `session_timeout_minutes` is enforced as a **sliding inactivity**
+  window — each authenticated request refreshes the session's `lastActivityAt`
+  (see System Settings), so active users never expire mid-flight, while an
+  idle session past the window is rejected with `401`. Logout deletes the
+  session row.
+- When the org-wide `mfa_enforced` setting is on, an authenticated account
+  that has not completed MFA enrollment is restricted to
+  `/auth/mfa/setup`, `/auth/mfa/verify`, `/auth/me`,
+  `/auth/change-password` and `/auth/logout` until it enrolls (`403`
+  `{ "code": "MFA_ENROLLMENT_REQUIRED" }` elsewhere).
 
 All subsequent requests require the `Authorization: Bearer <token>` header.
 
@@ -347,6 +378,12 @@ validated against its type/range/options, and is cached in memory. Every
 change is written to the audit log (`settings_changed`) and is restricted to
 administrators (`settings.read` / `settings.manage`).
 
+Operational settings (anything except `security`) are scoped **per
+organization**: a tenant reads and writes only its own values, so one
+tenant's notifications or webhook configuration can never alter another's.
+`security` settings are instance-scoped (they govern the shared auth and
+login path that runs before any organization context exists).
+
 ```bash
 GET    /settings                          # all settings across every category
 GET    /settings/:category                # settings for one category
@@ -395,10 +432,10 @@ Notable settings:
 - **Security**: `session_timeout_minutes`, `password_min_length`,
   `password_require_complexity`, `max_login_attempts`, `lockout_duration_minutes`,
   `rate_limit_window_ms`, `rate_limit_max_requests`, `jwt_expiration_hours`,
-  `jwt_require_https`.
+  `jwt_require_https`, `allow_registration`, `mfa_enforced`.
 - **Notifications**: `email_alerts_enabled`, `critical_alert_enabled`,
   `warning_alert_enabled`, `daily_summary_enabled`, `weekly_report_enabled`,
-  `digest_time`.
+  `digest_time`, `webhook_enabled`, `webhook_url`, `webhook_secret`.
 - **Cameras**: `default_capture_fps`, `max_connected_cameras`,
   `camera_reconnect_timeout_seconds`, `thumbnail_refresh_seconds`.
 - **Storage**: `storage_base_path`, `max_storage_gb`, `low_storage_threshold_gb`,
@@ -1015,8 +1052,13 @@ optionally carrying a `teamId` on the frame when the event is team-scoped.
 Pass `?teamIds=id1,id2` to subscribe to only those teams: frames whose `teamId`
 is set are delivered only to subscribers whose `teamIds` contains it (unset
 team frames reach everyone). The subscriber pool is capped at 200 connections
-(oldest evicted first);
-`GET /realtime/subscribers` reports the connected count.
+(oldest evicted first).
+
+`GET /realtime/subscribers` returns `{ count, subscribers }` scoped to the
+caller's own organization: a caller with `teams.read` sees the subscribers of
+their own tenant only, and anyone else sees only their own subscriptions — the
+reported `count` matches whatever is visible, so neither the list nor the count
+ever crosses organizations.
 
 ## Rate Limits
 

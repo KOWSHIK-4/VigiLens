@@ -13,6 +13,8 @@ Status of every VigiLens capability against the three-tier rubric:
 | Capability | Status | Notes |
 |-----------|--------|-------|
 | Auth + JWT + RBAC permissions | IMPLEMENTED | Users, roles, permission middleware, lockout, audit trail |
+| MFA & session policy | IMPLEMENTED | TOTP enrollment/verify/disable, single-use recovery codes, `mfa_enforced` gating, per-session sliding inactivity (`sid` claim) |
+| Multi-tenant isolation & RBAC guards | IMPLEMENTED | Cross-tenant report/snapshot/engine holes closed; role assignment ships no escalation; realtime subscriber registry org-scoped; org-scoped settings, webhooks and roles; server-side team visibility |
 | API validation & abuse protection | IMPLEMENTED | zod schemas on every route, layered rate limits (300/min global, 20/15min auth), camera credential redaction, CSV formula-injection guard |
 | Camera management | IMPLEMENTED | CRUD, health probing, frame capture, snapshots |
 | Detection history | IMPLEMENTED | CRUD, stats, CSV export, per-detector feed |
@@ -20,7 +22,7 @@ Status of every VigiLens capability against the three-tier rubric:
 | Analytics & reports | IMPLEMENTED | Trends, per-camera/per-detector stats |
 | System monitoring | IMPLEMENTED | Health endpoints, scheduler status, metrics |
 | Frontend (18 pages) | IMPLEMENTED | Dashboard, live camera, models, detectors, cameras, detections, analytics, reports, alerts, incidents, incident investigation, monitoring, audit, settings, users, roles, system monitoring, security dashboard |
-| CI pipelines | IMPLEMENTED | Backend + AI checks in GitHub Actions |
+| CI pipelines | IMPLEMENTED | Backend + AI checks in GitHub Actions; backend job runs migrate → seed → lint → typecheck → build → vitest → full e2e (`npm test`) against a real PostgreSQL 16 test database |
 
 ## Real-time detection engine
 
