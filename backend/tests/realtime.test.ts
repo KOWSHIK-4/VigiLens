@@ -458,7 +458,8 @@ async function run() {
     }
 
     // 5c-ii) A member WITHOUT teams.read is not allowed to scope to a team
-    // they do not belong to. Mint a custom role that excludes teams.read.
+    // they do not belong to. Mint a custom role that excludes teams.read but
+    // keeps alerts.read, since the realtime stream is an alerts channel.
     const superLogin = await request("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
@@ -474,7 +475,7 @@ async function run() {
         method: "POST",
         body: JSON.stringify({
           name: scopedRoleName,
-          permissionKeys: ["dashboard.view", "detections.read"],
+          permissionKeys: ["dashboard.view", "detections.read", "alerts.read"],
         }),
       },
       superTokenAuth,

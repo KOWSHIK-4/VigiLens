@@ -156,11 +156,22 @@ async function run() {
     return;
   }
 
+  // Security settings are instance-wide: only a Super Admin may tune them,
+  // matching the production authorization boundary.
+  const superLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
+  });
+  const superToken =
+    superLogin.status === 200
+      ? (superLogin.body as { data: { token: string } }).data.token
+      : "";
+
   // Registration is closed by default; open it for the account we create.
   await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ allow_registration: true }) },
-    adminToken,
+    superToken,
   );
 
   const mfaEmail = `mfa_${Date.now()}@vigilens.io`;
@@ -306,7 +317,7 @@ async function run() {
   const enforceOn = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ mfa_enforced: true }) },
-    adminToken,
+    superToken,
   );
   if (enforceOn.status === 200) {
     ok("mfa_enforced can be turned on");
@@ -353,8 +364,9 @@ async function run() {
     fail("enrolled user while enforced", enrolledCall);
   }
 
-  // The enforcement flag gates every un-enrolled account, so the admin must
-  // enroll before it can turn the policy back off (the real operator workflow).
+  // The enforcement flag gates every un-enrolled account, so even the Super
+  // Admin must enroll before it can turn the policy back off (the real
+  // operator workflow). Tenant admins cannot change instance-wide settings.
   const adminSetup = await request("/auth/mfa/setup", { method: "POST" }, adminToken);
   const adminVerify = await request(
     "/auth/mfa/verify",
@@ -369,15 +381,39 @@ async function run() {
   } else {
     fail("admin enrollment while enforced", adminVerify);
   }
+  const superSetup = await request("/auth/mfa/setup", { method: "POST" }, superToken);
+  const superVerify = await request(
+    "/auth/mfa/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ code: generateSync({ secret: (superSetup.body as { data: { secret: string } }).data.secret }) }),
+    },
+    superToken,
+  );
+  if (superVerify.status === 200 && (superVerify.body as { data: { enabled: boolean } }).data.enabled === true) {
+    ok("enrolled super admin can complete the enforced-enrollment flow");
+  } else {
+    fail("super enrollment while enforced", superVerify);
+  }
   const enforceOff = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ mfa_enforced: false }) },
-    adminToken,
+    superToken,
   );
   if (enforceOff.status === 200) {
-    ok("mfa_enforced can be turned back off by an enrolled admin");
+    ok("mfa_enforced can be turned back off by an enrolled super admin");
   } else {
     fail("disable mfa_enforced", enforceOff);
+  }
+  const superUnenroll = await request(
+    "/auth/mfa/disable",
+    { method: "POST", body: JSON.stringify({ password: "admin123" }) },
+    superToken,
+  );
+  if (superUnenroll.status === 200) {
+    ok("super admin MFA is disabled again so later suites are unaffected");
+  } else {
+    fail("super admin mfa disable", superUnenroll);
   }
   const adminUnenroll = await request(
     "/auth/mfa/disable",
@@ -427,7 +463,7 @@ async function run() {
   const timeoutUpdate = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ session_timeout_minutes: 5 }) },
-    adminToken,
+    superToken,
   );
   if (timeoutUpdate.status === 200) {
     ok("session_timeout_minutes can be lowered to the minimum");
@@ -498,7 +534,7 @@ async function run() {
   const resetSettings = await request(
     "/settings/security/reset",
     { method: "POST" },
-    adminToken,
+    superToken,
   );
   if (resetSettings.status === 200) {
     ok("security settings reset to defaults");

@@ -126,6 +126,18 @@ async function run() {
   const token = (login.body as { data: { token: string } }).data.token;
   ok("admin login returns token");
 
+  // Security settings are instance-wide and only a Super Admin may tune them,
+  // matching the production authorization boundary. Capture the Super Admin
+  // token here, BEFORE the login-limit bucket below is exhausted (once the
+  // auth cap trips, every login on this client IP shares the bucket).
+  const superLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
+  });
+  const superToken = (superLogin.body as { data: { token: string } }).data?.token ?? "";
+  if (superLogin.status === 200 && superToken) ok("super admin login returns token");
+  else fail("super admin login", superLogin);
+
   let pollingBlocked = false;
   for (let i = 0; i < 150; i++) {
     const res = await request("/auth/me", {}, token);
@@ -176,7 +188,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ rate_limit_max_requests: 10 }),
     },
-    token,
+    superToken,
   );
   if (settingsDown.status === 200) {
     ok("PATCH security settings to rate_limit_max_requests=10 succeeds");

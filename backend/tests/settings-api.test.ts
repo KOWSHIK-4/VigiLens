@@ -149,6 +149,9 @@ async function run() {
   const adminToken = await login("admin@vigilens.io");
   ok("admin login returns token");
 
+  const superAdminToken = await login("super@vigilens.io");
+  ok("super admin login returns token");
+
   const all = await request("/settings", {}, adminToken);
   const allBody = all.body as { data: SettingsRow[] };
   if (all.status === 200 && Array.isArray(allBody.data)) {
@@ -188,13 +191,24 @@ async function run() {
     fail("GET /settings/security", byCategory);
   }
 
+  const nonSuperPatch = await request(
+    "/settings/security",
+    { method: "PATCH", body: JSON.stringify({ session_timeout_minutes: 45 }) },
+    adminToken,
+  );
+  if (nonSuperPatch.status === 403) {
+    ok("non-super-admin cannot change instance-wide security settings (403)");
+  } else {
+    fail("PATCH /settings/security non-super-admin", nonSuperPatch);
+  }
+
   const updated = await request(
     "/settings/security",
     {
       method: "PATCH",
       body: JSON.stringify({ session_timeout_minutes: 45, max_login_attempts: 7 }),
     },
-    adminToken,
+    superAdminToken,
   );
   const updatedRows = (updated.body as { data: SettingsRow[] }).data ?? [];
   const timeoutRow = updatedRows.find((s) => s.key === "session_timeout_minutes");
@@ -208,7 +222,7 @@ async function run() {
   const badRange = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ session_timeout_minutes: 99999 }) },
-    adminToken,
+    superAdminToken,
   );
   if (badRange.status === 400) {
     ok("PATCH settings rejects out-of-range value (400)");
@@ -219,7 +233,7 @@ async function run() {
   const badType = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ password_require_complexity: "yes" }) },
-    adminToken,
+    superAdminToken,
   );
   if (badType.status === 400) {
     ok("PATCH settings rejects wrong type (400)");
@@ -230,7 +244,7 @@ async function run() {
   const unknownKey = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({ not_a_real_setting: 1 }) },
-    adminToken,
+    superAdminToken,
   );
   if (unknownKey.status === 400) {
     ok("PATCH settings rejects unknown key (400)");
@@ -252,7 +266,7 @@ async function run() {
   const emptyBody = await request(
     "/settings/security",
     { method: "PATCH", body: JSON.stringify({}) },
-    adminToken,
+    superAdminToken,
   );
   if (emptyBody.status === 400) {
     ok("PATCH settings rejects empty body (400)");
@@ -260,7 +274,7 @@ async function run() {
     fail("PATCH settings empty body", emptyBody);
   }
 
-  const reset = await request("/settings/security/reset", { method: "POST" }, adminToken);
+  const reset = await request("/settings/security/reset", { method: "POST" }, superAdminToken);
   const resetRows = (reset.body as { data: SettingsRow[] }).data ?? [];
   const resetTimeout = resetRows.find((s) => s.key === "session_timeout_minutes");
   if (reset.status === 200 && resetTimeout?.value === 30) {

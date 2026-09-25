@@ -140,6 +140,23 @@ async function run() {
     return;
   }
 
+  // Security settings are instance-wide: only a Super Admin may tune them,
+  // matching the production authorization boundary.
+  const superLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
+  });
+  const superToken =
+    superLogin.status === 200
+      ? (superLogin.body as { data: { token: string } }).data.token
+      : "";
+  if (superLogin.status === 200) {
+    ok("super admin login returns token");
+  } else {
+    fail("super admin login", superLogin);
+    return;
+  }
+
   // ---- Registration is closed by default (and test-enforced) ----
   const disableUpdate = await request(
     "/settings/security",
@@ -147,7 +164,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ allow_registration: false }),
     },
-    adminToken,
+    superToken,
   );
   if (disableUpdate.status === 200) {
     ok("allow_registration can be toggled to false");
@@ -182,7 +199,7 @@ async function run() {
         allow_registration: true,
       }),
     },
-    adminToken,
+    superToken,
   );
   if (policyUpdate.status === 200) {
     ok("security settings accept the test policy values");
@@ -269,7 +286,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ lockout_duration_minutes: 1 }),
     },
-    adminToken,
+    superToken,
   );
   await prisma.user.updateMany({
     where: { email: userEmail },
@@ -368,7 +385,7 @@ async function run() {
   const resetSettings = await request(
     "/settings/security/reset",
     { method: "POST" },
-    adminToken,
+    superToken,
   );
   if (resetSettings.status === 200) {
     ok("security settings reset to defaults");
