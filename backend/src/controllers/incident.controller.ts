@@ -51,7 +51,7 @@ export const incidentController = {
 
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const incident = await incidentService.findById(req.params.id as string, req.organizationId);
+      const incident = await incidentService.findById(req.params.id as string, req.organizationId, req.teamScopeId);
       success(res, incident);
     } catch (err) {
       next(err);
@@ -78,6 +78,7 @@ export const incidentController = {
         req.body as UpdateIncidentStatusInput,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident);
     } catch (err) {
@@ -92,6 +93,7 @@ export const incidentController = {
         (req.body as UpdateIncidentPriorityInput).priority,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident);
     } catch (err) {
@@ -106,6 +108,7 @@ export const incidentController = {
         req.body as AssignIncidentInput,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident);
     } catch (err) {
@@ -120,6 +123,7 @@ export const incidentController = {
         (req.body as AssignIncidentTeamInput).teamId,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident);
     } catch (err) {
@@ -134,6 +138,7 @@ export const incidentController = {
         req.body as AddIncidentNoteInput,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident, 201);
     } catch (err) {
@@ -143,7 +148,7 @@ export const incidentController = {
 
   async getSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const summary = await incidentService.summary(req.organizationId);
+      const summary = await incidentService.summary(req.organizationId, req.teamScopeId);
       success(res, summary);
     } catch (err) {
       next(err);
@@ -152,7 +157,7 @@ export const incidentController = {
 
   async getRelatedDetections(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const related = await incidentService.getRelatedDetections(req.params.id as string, 30, req.organizationId);
+      const related = await incidentService.getRelatedDetections(req.params.id as string, 30, req.organizationId, req.teamScopeId);
       success(res, related);
     } catch (err) {
       next(err);
@@ -166,6 +171,7 @@ export const incidentController = {
         (req.body as { resolutionSummary: string }).resolutionSummary,
         actorFrom(req),
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, incident);
     } catch (err) {

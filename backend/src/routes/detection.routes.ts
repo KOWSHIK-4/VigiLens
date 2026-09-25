@@ -16,6 +16,7 @@ router.use(authenticate);
 router.get(
   "/fleet/correlation",
   requirePermission("detections.read"),
+  enforceTeamVisibility,
   detectionController.getFleetCorrelation,
 );
 router.get(
@@ -36,18 +37,21 @@ router.get(
 router.get(
   "/:id/risk",
   requirePermission("detections.read"),
+  enforceTeamVisibility,
   validate(detectionIdSchema, "params"),
   detectionController.getRiskScore,
 );
 router.get(
   "/:id",
   requirePermission("detections.read"),
+  enforceTeamVisibility,
   validate(detectionIdSchema, "params"),
   detectionController.getById,
 );
 router.delete(
   "/:id",
   requirePermission("detections.manage"),
+  enforceTeamVisibility,
   validate(detectionIdSchema, "params"),
   detectionController.remove,
 );

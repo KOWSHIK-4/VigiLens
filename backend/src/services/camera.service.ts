@@ -337,9 +337,9 @@ export const cameraService = {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
-  async findById(id: string, organizationId?: string) {
+  async findById(id: string, organizationId?: string, teamScopeId?: string) {
     const camera = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       include: {
         team: { select: { id: true, name: true } },
         detections: {
@@ -398,12 +398,12 @@ export const cameraService = {
     return toApiCamera(camera);
   },
 
-  async update(id: string, data: UpdateCameraInput, organizationId?: string) {
+  async update(id: string, data: UpdateCameraInput, organizationId?: string, teamScopeId?: string) {
     // Credential fields are read separately, without `cameraType`, so the
     // prisma redaction scrub (keyed on cameraType + password) lets them
     // through — matching the loadCameraCredentials convention.
     const existing = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       select: { name: true, cameraType: true, url: true },
     });
     if (!existing) return null;
@@ -469,9 +469,9 @@ export const cameraService = {
     return toApiCamera(camera);
   },
 
-  async assignTeam(id: string, teamId: string | null, organizationId?: string) {
+  async assignTeam(id: string, teamId: string | null, organizationId?: string, teamScopeId?: string) {
     const existing = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!existing) return null;
 
@@ -499,9 +499,9 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async remove(id: string, organizationId?: string) {
+  async remove(id: string, organizationId?: string, teamScopeId?: string) {
     const existing = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!existing) return false;
 
@@ -509,9 +509,9 @@ export const cameraService = {
     return true;
   },
 
-  async startCamera(id: string, organizationId?: string) {
+  async startCamera(id: string, organizationId?: string, teamScopeId?: string) {
     const camera = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!camera) return null;
 
@@ -532,9 +532,9 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async stopCamera(id: string, organizationId?: string) {
+  async stopCamera(id: string, organizationId?: string, teamScopeId?: string) {
     const camera = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!camera) return null;
 
@@ -552,9 +552,9 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async healthCheck(id: string, client: AiServiceClient = aiServiceClient, organizationId?: string) {
+  async healthCheck(id: string, client: AiServiceClient = aiServiceClient, organizationId?: string, teamScopeId?: string) {
     const camera = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!camera) return null;
 
@@ -636,11 +636,11 @@ export const cameraService = {
     return toApiCamera(updated);
   },
 
-  async getHealthLogs(cameraId: string, limit = 50, organizationId?: string) {
+  async getHealthLogs(cameraId: string, limit = 50, organizationId?: string, teamScopeId?: string) {
     // Parent-table tenant check: only cameras of the caller's organization
     // expose health history.
     const camera = await prisma.camera.findFirst({
-      where: { id: cameraId, ...(organizationId ? { organizationId } : {}) },
+      where: { id: cameraId, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       select: { id: true },
     });
     if (!camera) return [];
@@ -656,9 +656,10 @@ export const cameraService = {
     client: AiServiceClient = aiServiceClient,
     snapshotDir?: string,
     organizationId?: string,
+    teamScopeId?: string,
   ) {
     const camera = await prisma.camera.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!camera) {
       throw new ApiError(404, "Camera not found");

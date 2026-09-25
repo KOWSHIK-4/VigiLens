@@ -160,9 +160,9 @@ export const alertService = {
     }
   },
 
-  async markAsRead(id: string, organizationId?: string) {
+  async markAsRead(id: string, organizationId?: string, teamScopeId?: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!alert) throw new ApiError(404, "Alert not found");
 
@@ -173,9 +173,9 @@ export const alertService = {
     });
   },
 
-  async acknowledge(id: string, actor: { id: string; name: string }, organizationId?: string) {
+  async acknowledge(id: string, actor: { id: string; name: string }, organizationId?: string, teamScopeId?: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!alert) throw new ApiError(404, "Alert not found");
 
@@ -191,9 +191,9 @@ export const alertService = {
     });
   },
 
-  async escalate(id: string, actor: { id: string; name: string }, note?: string, organizationId?: string) {
+  async escalate(id: string, actor: { id: string; name: string }, note?: string, organizationId?: string, teamScopeId?: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!alert) throw new ApiError(404, "Alert not found");
 
@@ -213,9 +213,9 @@ export const alertService = {
     });
   },
 
-  async assignTeam(id: string, teamId: string | null, organizationId?: string) {
+  async assignTeam(id: string, teamId: string | null, organizationId?: string, teamScopeId?: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!alert) throw new ApiError(404, "Alert not found");
 
@@ -249,9 +249,9 @@ export const alertService = {
     return updated;
   },
 
-  async markAllAsRead(organizationId?: string) {
+  async markAllAsRead(organizationId?: string, teamScopeId?: string) {
     await prisma.alert.updateMany({
-      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
+      where: { isRead: false, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       data: { isRead: true },
     });
   },
@@ -271,18 +271,18 @@ export const alertService = {
    * grouped query. The dashboard uses this instead of issuing one filtered
    * list request per severity on every polling tick.
    */
-  async countUnreadBySeverity(organizationId?: string) {
+  async countUnreadBySeverity(organizationId?: string, teamScopeId?: string) {
     const rows = await prisma.alert.groupBy({
       by: ["severity"],
-      where: { isRead: false, ...(organizationId ? { organizationId } : {}) },
+      where: { isRead: false, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       _count: { severity: true },
     });
     return aggregateUnreadSeverityCounts(rows);
   },
 
-  async remove(id: string, organizationId?: string) {
+  async remove(id: string, organizationId?: string, teamScopeId?: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!alert) throw new ApiError(404, "Alert not found");
 
@@ -290,9 +290,9 @@ export const alertService = {
     return { id };
   },
 
-  async getLatest(limit = 10, organizationId?: string) {
+  async getLatest(limit = 10, organizationId?: string, teamScopeId?: string) {
     return prisma.alert.findMany({
-      where: organizationId ? { organizationId } : {},
+      where: { ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       include: alertInclude,
       orderBy: { createdAt: "desc" },
       take: limit,

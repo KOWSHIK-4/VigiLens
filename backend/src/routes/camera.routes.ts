@@ -20,37 +20,42 @@ router.get("/", requirePermission("cameras.read"), validate(cameraQuerySchema, "
 router.get(
   "/fleet/health",
   requirePermission("monitoring.read"),
+  enforceTeamVisibility,
   cameraController.getFleetHealth,
 );
-router.get("/:id", requirePermission("cameras.read"), validate(cameraIdSchema, "params"), cameraController.getById);
+router.get("/:id", requirePermission("cameras.read"), enforceTeamVisibility, validate(cameraIdSchema, "params"), cameraController.getById);
 router.post("/", requirePermission("cameras.manage"), validate(createCameraSchema), cameraController.create);
 router.patch(
   "/:id",
   requirePermission("cameras.manage"),
+  enforceTeamVisibility,
   validate(cameraIdSchema, "params"),
   validate(updateCameraSchema),
   cameraController.update,
 );
-router.delete("/:id", requirePermission("cameras.manage"), validate(cameraIdSchema, "params"), cameraController.remove);
-router.post("/:id/start", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.start);
-router.post("/:id/stop", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.stop);
-router.patch("/:id/team", requirePermission("cameras.manage"), validate(cameraIdSchema, "params"), validate(assignCameraTeamSchema), cameraController.assignTeam);
-router.post("/:id/capture", requirePermission("cameras.control"), validate(cameraIdSchema, "params"), cameraController.capture);
+router.delete("/:id", requirePermission("cameras.manage"), enforceTeamVisibility, validate(cameraIdSchema, "params"), cameraController.remove);
+router.post("/:id/start", requirePermission("cameras.control"), enforceTeamVisibility, validate(cameraIdSchema, "params"), cameraController.start);
+router.post("/:id/stop", requirePermission("cameras.control"), enforceTeamVisibility, validate(cameraIdSchema, "params"), cameraController.stop);
+router.patch("/:id/team", requirePermission("cameras.manage"), enforceTeamVisibility, validate(cameraIdSchema, "params"), validate(assignCameraTeamSchema), cameraController.assignTeam);
+router.post("/:id/capture", requirePermission("cameras.control"), enforceTeamVisibility, validate(cameraIdSchema, "params"), cameraController.capture);
 router.get(
   "/:id/thumbnail",
   requirePermission("cameras.read"),
+  enforceTeamVisibility,
   validate(cameraIdSchema, "params"),
   cameraController.getThumbnail,
 );
 router.post(
   "/:id/health",
   requirePermission("cameras.read"),
+  enforceTeamVisibility,
   validate(cameraIdSchema, "params"),
   cameraController.healthCheck,
 );
 router.get(
   "/:id/health-logs",
   requirePermission("cameras.read"),
+  enforceTeamVisibility,
   validate(cameraIdSchema, "params"),
   cameraController.getHealthLogs,
 );

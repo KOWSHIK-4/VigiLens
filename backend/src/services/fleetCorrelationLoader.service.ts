@@ -16,12 +16,13 @@ function clampWindow(windowMs: number | undefined): number {
 }
 
 /** Bounded: never loads the whole table, only the requested window. */
-async function loadWindow(windowMs: number, organizationId?: string, limit = 10_000): Promise<FleetDetectionInput[]> {
+async function loadWindow(windowMs: number, organizationId?: string, teamScopeId?: string, limit = 10_000): Promise<FleetDetectionInput[]> {
   const from = new Date(Date.now() - windowMs);
   const rows = await prisma.detection.findMany({
     where: {
       timestamp: { gte: from },
       ...(organizationId ? { organizationId } : {}),
+      ...(teamScopeId ? { teamId: teamScopeId } : {}),
     },
     select: {
       id: true,
@@ -68,10 +69,11 @@ export const fleetCorrelationService = {
     windowMs?: number,
     cameraId?: string,
     organizationId?: string,
+    teamScopeId?: string,
   ): Promise<{ windowMs: number; sequences: CrossCameraSequence[] }> {
     const safeWindow = clampWindow(windowMs);
     try {
-      let detections = await loadWindow(safeWindow, organizationId);
+      let detections = await loadWindow(safeWindow, organizationId, teamScopeId);
       if (cameraId) {
         detections = detections.filter(
           (d) => d.cameraId === cameraId || d.cameraName === cameraId,

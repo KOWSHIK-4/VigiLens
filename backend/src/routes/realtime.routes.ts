@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth";
+import { requirePermission } from "../middleware/permissions";
 import { prisma } from "../config/prisma";
 import { subscribe, getSubscriberSnapshot } from "../services/realtime.service";
 import { success, error as apiError } from "../utils/apiResponse";
@@ -56,7 +57,7 @@ async function authorizeTeamScope(
   return { teamIds: uniqueIds };
 }
 
-router.get("/events", authenticate, async (req, res, next) => {
+router.get("/events", authenticate, requirePermission("alerts.read"), async (req, res, next) => {
   const authReq = req as AuthRequest;
   if (!authReq.userId) {
     res.writeHead(401, { "Content-Type": "application/json" });
@@ -75,7 +76,15 @@ router.get("/events", authenticate, async (req, res, next) => {
       return apiError(res, scope.error, 403);
     }
 
-    subscribe(authReq.userId, res, authReq.organizationId, scope.teamIds);
+    // Without an explicit scope, a member without the org-wide teams.read
+    // permission falls back to their own team channel instead of the whole
+    // organization, mirroring the list-endpoint team-visibility policy.
+    const scopedTeamIds = scope.teamIds ??
+      (authReq.teamId && !(authReq.permissions?.has("teams.read") ?? false)
+        ? [authReq.teamId]
+        : undefined);
+
+    subscribe(authReq.userId, res, authReq.organizationId, scopedTeamIds);
   } catch (err) {
     next(err);
   }

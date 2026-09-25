@@ -103,7 +103,7 @@ export const detectionController = {
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const detection = await detectionService.findById(id, req.organizationId);
+      const detection = await detectionService.findById(id, req.organizationId, req.teamScopeId);
       success(res, detection);
     } catch (err) {
       next(err);
@@ -152,6 +152,7 @@ export const detectionController = {
         Number.isFinite(windowMs) ? windowMs : undefined,
         cameraId,
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, result);
     } catch (err) {
@@ -162,7 +163,7 @@ export const detectionController = {
   async getRiskScore(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const risk = await riskScoreService.forDetection(id, req.organizationId);
+      const risk = await riskScoreService.forDetection(id, req.organizationId, req.teamScopeId);
       success(res, risk);
     } catch (err) {
       next(err);
@@ -172,8 +173,8 @@ export const detectionController = {
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const detection = await detectionService.findById(id, req.organizationId);
-      const result = await detectionService.remove(id, req.organizationId);
+      const detection = await detectionService.findById(id, req.organizationId, req.teamScopeId);
+      const result = await detectionService.remove(id, req.organizationId, req.teamScopeId);
       const actor = req.userId
         ? await prisma.user.findFirst({
             where: { id: req.userId },

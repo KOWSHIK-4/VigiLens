@@ -468,9 +468,9 @@ export const detectionService = {
     });
   },
 
-  async findById(id: string, organizationId?: string) {
+  async findById(id: string, organizationId?: string, teamScopeId?: string) {
     const detection = await prisma.detection.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
       include: { camera: cameraView, alert: true },
     });
 
@@ -481,9 +481,9 @@ export const detectionService = {
     return detection;
   },
 
-  async remove(id: string, organizationId?: string) {
+  async remove(id: string, organizationId?: string, teamScopeId?: string) {
     const detection = await prisma.detection.findFirst({
-      where: { id, ...(organizationId ? { organizationId } : {}) },
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
     });
     if (!detection) {
       throw new ApiError(404, "Detection not found");

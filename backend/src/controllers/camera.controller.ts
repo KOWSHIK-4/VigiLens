@@ -21,6 +21,7 @@ export const cameraController = {
       const summary = await cameraFleetHealthService.summarize(
         Number.isFinite(windowMs) && windowMs > 0 ? windowMs : undefined,
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, summary);
     } catch (err) {
@@ -50,7 +51,7 @@ export const cameraController = {
   async getById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.findById(id, req.organizationId);
+      const camera = await cameraService.findById(id, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -86,7 +87,7 @@ export const cameraController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.update(id, req.body, req.organizationId);
+      const camera = await cameraService.update(id, req.body, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -113,8 +114,8 @@ export const cameraController = {
   async remove(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const existingCamera = await cameraService.findById(id, req.organizationId);
-      const deleted = await cameraService.remove(id, req.organizationId);
+      const existingCamera = await cameraService.findById(id, req.organizationId, req.teamScopeId);
+      const deleted = await cameraService.remove(id, req.organizationId, req.teamScopeId);
 
       if (!deleted) {
         return error(res, "Camera not found", 404);
@@ -142,7 +143,7 @@ export const cameraController = {
     try {
       const id = req.params.id as string;
       const { teamId } = req.body as { teamId?: string | null };
-      const camera = await cameraService.assignTeam(id, teamId ?? null, req.organizationId);
+      const camera = await cameraService.assignTeam(id, teamId ?? null, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -171,7 +172,7 @@ export const cameraController = {
   async start(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.startCamera(id, req.organizationId);
+      const camera = await cameraService.startCamera(id, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -198,7 +199,7 @@ export const cameraController = {
   async stop(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.stopCamera(id, req.organizationId);
+      const camera = await cameraService.stopCamera(id, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -225,7 +226,7 @@ export const cameraController = {
   async healthCheck(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.healthCheck(id, undefined, req.organizationId);
+      const camera = await cameraService.healthCheck(id, undefined, req.organizationId, req.teamScopeId);
 
       if (!camera) {
         return error(res, "Camera not found", 404);
@@ -244,6 +245,7 @@ export const cameraController = {
         id,
         Number(req.query.limit) || 50,
         req.organizationId,
+        req.teamScopeId,
       );
       success(res, logs);
     } catch (err) {
@@ -254,7 +256,7 @@ export const cameraController = {
   async capture(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const result = await cameraService.captureSnapshot(id, undefined, undefined, req.organizationId);
+      const result = await cameraService.captureSnapshot(id, undefined, undefined, req.organizationId, req.teamScopeId);
 
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -282,7 +284,7 @@ export const cameraController = {
   async getThumbnail(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const camera = await cameraService.findById(id, req.organizationId);
+      const camera = await cameraService.findById(id, req.organizationId, req.teamScopeId);
       if (!camera) {
         return error(res, "Camera not found", 404);
       }
