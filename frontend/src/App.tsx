@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -64,6 +64,26 @@ const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/dashboard",
+    element: <Navigate to="/" replace />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/team",
+    element: <Navigate to="/teams" replace />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/audit",
+    element: <Navigate to="/audit-logs" replace />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/security",
+    element: <Navigate to="/security-dashboard" replace />,
     errorElement: <RouteErrorBoundary />,
   },
   {
