@@ -58,8 +58,8 @@ services:
       dockerfile: ../docker/backend/Dockerfile
     container_name: vigilens-backend
     restart: unless-stopped
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     depends_on:
       postgres:
         condition: service_healthy

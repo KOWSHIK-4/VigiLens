@@ -140,6 +140,14 @@ export const roleDefinitions: Array<{
 async function main() {
   const password = await bcrypt.hash("admin123", 12);
 
+  // Destructive/repointing steps (reactivating demo users, repointing demo
+  // cameras, force-resetting model state, deleting custom models) may only run
+  // against an empty database. Re-running the seed on a populated database is
+  // a no-op for those steps so an accidental re-seed can never clobber live
+  // tenants, round-reassign data, or delete custom models.
+  const existingUserCount = await prisma.user.count();
+  const freshSeed = existingUserCount === 0;
+
   const defaultOrg = await prisma.organization.upsert({
     where: { slug: "default" },
     update: {},
@@ -196,7 +204,7 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@vigilens.io" },
-    update: { role: "admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
+    update: freshSeed ? { role: "admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id } : {},
     create: {
       email: "admin@vigilens.io",
       password,
@@ -209,7 +217,7 @@ async function main() {
 
   const superAdmin = await prisma.user.upsert({
     where: { email: "super@vigilens.io" },
-    update: { role: "super_admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
+    update: freshSeed ? { role: "super_admin", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id } : {},
     create: {
       email: "super@vigilens.io",
       password,
@@ -222,7 +230,7 @@ async function main() {
 
   const operator = await prisma.user.upsert({
     where: { email: "operator@vigilens.io" },
-    update: { role: "operator", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
+    update: freshSeed ? { role: "operator", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id } : {},
     create: {
       email: "operator@vigilens.io",
       password,
@@ -235,7 +243,7 @@ async function main() {
 
   const viewer = await prisma.user.upsert({
     where: { email: "viewer@vigilens.io" },
-    update: { role: "viewer", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id },
+    update: freshSeed ? { role: "viewer", status: "active", organizationId: defaultOrg.id, teamId: defaultTeam.id } : {},
     create: {
       email: "viewer@vigilens.io",
       password,
@@ -248,7 +256,7 @@ async function main() {
 
   const disabled = await prisma.user.upsert({
     where: { email: "disabled@vigilens.io" },
-    update: { role: "viewer", status: "disabled", organizationId: defaultOrg.id, teamId: defaultTeam.id },
+    update: freshSeed ? { role: "viewer", status: "disabled", organizationId: defaultOrg.id, teamId: defaultTeam.id } : {},
     create: {
       email: "disabled@vigilens.io",
       password,
@@ -353,16 +361,18 @@ async function main() {
     const isDefaultActive = index === 0;
     const detector = await prisma.aIModel.upsert({
       where: { detectorKey: model.key },
-      update: {
-        name: model.name,
-        version: model.version,
-        description: model.description,
-        confidenceThreshold: model.defaultConfidenceThreshold,
-        gpuSupported: model.gpuSupported,
-        modelPath: model.modelPath,
-        enabled: true,
-        status: isDefaultActive ? "loaded" : "disabled",
-      },
+      update: freshSeed
+        ? {
+            name: model.name,
+            version: model.version,
+            description: model.description,
+            confidenceThreshold: model.defaultConfidenceThreshold,
+            gpuSupported: model.gpuSupported,
+            modelPath: model.modelPath,
+            enabled: true,
+            status: isDefaultActive ? "loaded" : "disabled",
+          }
+        : {},
       create: {
         name: model.name,
         version: model.version,
@@ -410,10 +420,14 @@ async function main() {
   const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);  const staleModels = await prisma.aIModel.findMany({
     where: { detectorKey: { notIn: registeredKeys } },
   });
-  if (staleModels.length > 0) {
+  if (freshSeed && staleModels.length > 0) {
     await prisma.aIModel.deleteMany({
       where: { detectorKey: { notIn: registeredKeys } },
     });
+  } else if (staleModels.length > 0) {
+    console.log(
+      `Skipped removal of ${staleModels.length} custom AI models (database already populated; run seed on an empty database to re-canonicalize)`,
+    );
   }
 
   console.log({ admin, superAdmin, operator, viewer, disabled });
@@ -424,7 +438,7 @@ async function main() {
   console.log(
     `Seeded ${permissionDefinitions.length} permissions across ${roleDefinitions.length} roles`,
   );
-  if (staleModels.length > 0) {
+  if (freshSeed && staleModels.length > 0) {
     console.log(`Removed ${staleModels.length} stale AI models`);
   }
 }
