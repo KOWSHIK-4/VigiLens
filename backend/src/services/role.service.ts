@@ -1,7 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/errors";
 import { permissionService, resolveRole } from "./permission.service";
-import { assertActorPossessesPermissions } from "./roleHierarchy";
+import { assertActorPossessesPermissions, isSystemRole, SUPER_ADMIN_ROLE } from "./roleHierarchy";
 import type { CreateRoleInput, UpdateRoleInput } from "../types";
 import type { Prisma } from "@prisma/client";
 
@@ -98,6 +98,13 @@ export const roleService = {
       );
     }
 
+    if (isSystemRole(name)) {
+      throw new ApiError(
+        400,
+        `Role name "${name}" is reserved by the built-in ${name} role`,
+      );
+    }
+
     const existing = await prisma.role.findFirst({
       where: { name, organizationId: organizationId ?? null },
     });
@@ -140,9 +147,20 @@ export const roleService = {
     return this.findByName(name, organizationId);
   },
 
-  async update(name: string, input: UpdateRoleInput, actorPermissions?: Set<string>, organizationId?: string) {
+  async update(name: string, input: UpdateRoleInput, actorPermissions?: Set<string>, organizationId?: string, actorRole?: string) {
     const role = await this.findByName(name, organizationId);
     if (!role) throw new ApiError(404, "Role not found");
+
+    // Instance-wide roles (organizationId NULL) are a shared authorization
+    // baseline across every tenant: permission or description edits here
+    // would re-shape other organizations' access control, so only an
+    // instance administrator (Super Admin) may touch them.
+    if (role.organizationId === null && actorRole !== SUPER_ADMIN_ROLE) {
+      throw new ApiError(
+        403,
+        "Global roles are managed at the instance level and can only be edited by a Super Admin",
+      );
+    }
 
     const data: Prisma.RoleUpdateInput = {};
     if (input.description !== undefined) {
@@ -169,7 +187,10 @@ export const roleService = {
           })),
         });
       }
-      permissionService.invalidate(organizationId ? `${organizationId}:${name}` : name);
+      // Global roles are the shared baseline for every tenant, so a change is
+      // cached under each organization's key too (org users fall back to the
+      // global role) — clear the whole permission cache to drop all of them.
+      permissionService.invalidate(role.organizationId === null ? undefined : `${role.organizationId}:${name}`);
     }
 
     await prisma.role.update({
@@ -180,8 +201,8 @@ export const roleService = {
     return this.findByName(name, organizationId);
   },
 
-  async updatePermissions(name: string, permissionKeys: string[], actorPermissions?: Set<string>, organizationId?: string) {
-    return this.update(name, { permissionKeys }, actorPermissions, organizationId);
+  async updatePermissions(name: string, permissionKeys: string[], actorPermissions?: Set<string>, organizationId?: string, actorRole?: string) {
+    return this.update(name, { permissionKeys }, actorPermissions, organizationId, actorRole);
   },
 
   async remove(name: string, organizationId?: string) {
@@ -217,7 +238,7 @@ export const roleService = {
     });
 
     await prisma.role.delete({ where: { id: role.id } });
-    permissionService.invalidate(organizationId ? `${organizationId}:${name}` : name);
+    permissionService.invalidate(role.organizationId === null ? undefined : `${role.organizationId}:${name}`);
     return { success: true, name };
   },
 };

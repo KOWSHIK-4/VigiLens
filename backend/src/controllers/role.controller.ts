@@ -67,6 +67,7 @@ export const roleController = {
         req.body as UpdateRoleInput,
         req.permissions,
         req.organizationId ?? undefined,
+        req.userRole,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);
@@ -114,6 +115,7 @@ export const roleController = {
         (req.body as UpdateRoleInput).permissionKeys ?? [],
         req.permissions,
         req.organizationId ?? undefined,
+        req.userRole,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);

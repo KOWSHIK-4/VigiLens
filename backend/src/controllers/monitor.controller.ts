@@ -6,9 +6,13 @@ import { success } from "../utils/apiResponse";
 import { userService } from "../services/user.service";
 
 export const monitorController = {
-  async getStatus(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getStatus(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const status = await monitorScheduler.getStatus();
+      // Monitoring loops are gathered from the shared detector surface, so a
+      // tenant admin only sees their own organization's loops; an instance
+      // admin (super_admin) gets the full view.
+      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
+      const status = await monitorScheduler.getStatus(scope);
       success(res, status);
     } catch (err) {
       next(err);
@@ -17,6 +21,7 @@ export const monitorController = {
 
   async start(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
       const actor = await userService.findById(req.userId!).catch(() => null);
       if (!monitorScheduler.isRunning()) {
         monitorScheduler.start();
@@ -30,7 +35,7 @@ export const monitorController = {
           ipAddress: req.ip,
         });
       }
-      success(res, await monitorScheduler.getStatus(), 200);
+      success(res, await monitorScheduler.getStatus(scope), 200);
     } catch (err) {
       next(err);
     }
@@ -38,6 +43,7 @@ export const monitorController = {
 
   async stop(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
       const actor = await userService.findById(req.userId!).catch(() => null);
       if (monitorScheduler.isRunning()) {
         monitorScheduler.stop();
@@ -51,7 +57,7 @@ export const monitorController = {
           ipAddress: req.ip,
         });
       }
-      success(res, await monitorScheduler.getStatus(), 200);
+      success(res, await monitorScheduler.getStatus(scope), 200);
     } catch (err) {
       next(err);
     }

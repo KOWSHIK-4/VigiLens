@@ -15,9 +15,13 @@ export const securityController = {
     }
   },
 
-  async getAuditIntegrity(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getAuditIntegrity(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const result = await auditLogService.verifyIntegrity();
+      // Audit rows carry a tenant organization, so an integrity report from
+      // an organization admin must be scoped to that tenant (an instance
+      // admin gets the full picture).
+      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
+      const result = await auditLogService.verifyIntegrity(100_000, scope);
       success(res, result);
     } catch (err) {
       next(err);

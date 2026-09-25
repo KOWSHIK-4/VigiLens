@@ -5,6 +5,7 @@ import { rateLimitService } from "../services/rateLimit.service";
 import { userService } from "../services/user.service";
 import { success } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
+import { ApiError } from "../utils/errors";
 
 function getClientInfo(req: AuthRequest) {
   return {
@@ -22,6 +23,17 @@ function getClientInfo(req: AuthRequest) {
  */
 function settingsScope(req: AuthRequest, category: SettingsCategory): string {
   return category === "security" ? "" : req.organizationId ?? "";
+}
+
+/**
+ * Security settings are instance-scoped, so mutating them must be limited to
+ * an instance administrator -- a tenant admin with settings.manage must not
+ * relax MFA, session age or rate-limit policy for every organization.
+ */
+function assertInstanceSettingsWrite(req: AuthRequest, category: SettingsCategory): void {
+  if (category === "security" && req.userRole !== "super_admin") {
+    throw new ApiError(403, "Security settings are instance-wide and can only be changed by a Super Admin");
+  }
 }
 
 async function auditSettingsChange(
@@ -66,6 +78,7 @@ export const settingsController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.params.category as SettingsCategory;
+      assertInstanceSettingsWrite(req, category);
       const body = req.body as Record<string, string | number | boolean>;
       const settings = await settingsService.update(category, body, req.userId, settingsScope(req, category));
       await auditSettingsChange(
@@ -85,6 +98,7 @@ export const settingsController = {
   async reset(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.params.category as SettingsCategory;
+      assertInstanceSettingsWrite(req, category);
       const settings = await settingsService.reset(category, req.userId, settingsScope(req, category));
       await auditSettingsChange(
         req,

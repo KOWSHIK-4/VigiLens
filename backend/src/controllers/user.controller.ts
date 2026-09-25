@@ -81,6 +81,7 @@ export const userController = {
         req.params.id as string,
         req.body as UpdateUserInput,
         req.organizationId,
+        req.userRole,
       );
       const info = getClientInfo(req);
       const actor = await userService.findById(req.userId!).catch(() => null);

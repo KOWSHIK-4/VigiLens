@@ -53,6 +53,8 @@ export interface MonitorCameraRef {
   name: string;
   url: string;
   cameraType: CameraType;
+  /** Tenant owning the camera; used to scope monitoring views per organization. */
+  organizationId?: string;
 }
 
 export interface MonitorLoop {
@@ -182,7 +184,7 @@ function toMonitorLoop(model: {
   detectorKey: string;
   settings?: { detectionIntervalMs: number } | null;
   cameraAssignments: Array<{
-    camera: { id: string; name: string; url: string; cameraType: CameraType };
+    camera: { id: string; name: string; url: string; cameraType: CameraType; organizationId?: string | null };
   }>;
 }): MonitorLoop[] {
   const intervalMs = model.settings?.detectionIntervalMs ?? 5000;
@@ -196,6 +198,7 @@ function toMonitorLoop(model: {
       name: assignment.camera.name,
       url: assignment.camera.url,
       cameraType: assignment.camera.cameraType,
+      organizationId: assignment.camera.organizationId ?? undefined,
     },
     intervalMs,
     status: "idle",
@@ -267,6 +270,8 @@ export class MonitorScheduler {
   private cachedLoops: MonitorLoop[] | null = null;
   private cachedLoopsAt = 0;
   private static readonly LOOP_CACHE_TTL_MS = 2500;
+  /** Ceiling for simultaneous capture/inference runs in one tick. */
+  private static readonly MAX_CONCURRENT_RUNS = 4;
 
   constructor(options: {
     frameSource: FrameSource;
@@ -328,7 +333,7 @@ export class MonitorScheduler {
     return loops;
   }
 
-  async getStatus(): Promise<MonitorStatus> {
+  async getStatus(organizationId?: string): Promise<MonitorStatus> {
     let loops: MonitorLoop[] = [];
     try {
       loops = await this.loadLoopsCached();
@@ -340,8 +345,13 @@ export class MonitorScheduler {
       if (!currentIds.has(id)) this.loopStates.delete(id);
     }
 
-    const merged = loops.map((loop) => this.merge(loop));
-    const total = merged.reduce(
+    const mergedAll = loops.map((loop) => this.merge(loop));
+    // The scheduler gathers loops from every tenant (detectors are shared),
+    // so an organizational view must only expose its own loops.
+    const visible = organizationId
+      ? mergedAll.filter((l) => l.camera.organizationId === organizationId)
+      : mergedAll;
+    const total = visible.reduce(
       (acc, l) => {
         acc.framesProcessed += l.framesProcessed;
         acc.detectionsCreated += l.detectionsCreated;
@@ -350,6 +360,14 @@ export class MonitorScheduler {
       },
       { framesProcessed: 0, detectionsCreated: 0, errorCount: 0 },
     );
+
+    // Camera URLs (rtsp/http/video paths) never leave the scheduler: they are
+    // resolved from DB secrets only during capture and are withheld from the
+    // monitoring UI, mirroring the credential-redaction on camera endpoints.
+    const merged = visible.map((l) => ({
+      ...l,
+      camera: { ...l.camera, url: "" },
+    }));
 
     return {
       running: this.running,
@@ -376,14 +394,23 @@ export class MonitorScheduler {
     this.nextTickAt = new Date(Date.now() + this.tickMs);
     const tickStarted = process.hrtime.bigint();
     try {
-      const loops = await this.loadLoops();
-      // Share the freshest loops with the status API so polls between ticks
-      // reuse this snapshot instead of running the DB join again.
-      this.cachedLoops = loops;
-      this.cachedLoopsAt = Date.now();
+      const loops = await this.loadLoopsCached();
       const due = loops.filter((loop) => this.isDue(loop));
       if (due.length > 0) {
-        await Promise.all(due.map((loop) => this.runLoop(loop)));
+        // Bounded worker pool: a growing fleet never launches unbounded
+        // concurrent captures/streams in a single tick.
+        let index = 0;
+        const workers = Array.from(
+          { length: Math.min(MonitorScheduler.MAX_CONCURRENT_RUNS, due.length) },
+          async () => {
+            while (index < due.length) {
+              const loop = due[index];
+              index += 1;
+              await this.runLoop(loop);
+            }
+          },
+        );
+        await Promise.all(workers);
       }
       this.lastTickError = null;
     } catch (err) {

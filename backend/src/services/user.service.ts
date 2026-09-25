@@ -161,8 +161,15 @@ export const userService = {
     return user;
   },
 
-  async update(id: string, input: UpdateUserInput, organizationId?: string) {
+  async update(id: string, input: UpdateUserInput, organizationId?: string, actorRole?: string) {
     const existing = await this.findById(id, organizationId);
+
+    // Accounts holding Super Admin are only controllable by a Super Admin.
+    // This covers profile edits (name/email/avatar) in addition to the
+    // role/password/lock operations guarded elsewhere.
+    if (actorRole && existing.role === "super_admin") {
+      assertMayControlRole(actorRole, existing.role);
+    }
 
     if (input.email && input.email !== existing.email) {
       const clash = await prisma.user.findUnique({

@@ -285,8 +285,9 @@ export const auditLogService = {
    * before this feature was deployed) are reported as legacy rather than
    * tampered: they predate stamping and cannot be validated retroactively.
    */
-  async verifyIntegrity(bound = 100_000) {
+  async verifyIntegrity(bound = 100_000, organizationId?: string) {
     const rows = await prisma.auditLog.findMany({
+      where: organizationId ? { organizationId } : {},
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: bound,
     });

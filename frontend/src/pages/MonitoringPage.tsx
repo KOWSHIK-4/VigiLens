@@ -247,9 +247,7 @@ export default function MonitoringPage() {
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-gray-800">{loop.camera.name}</p>
-                          <p className="max-w-[220px] truncate text-xs text-gray-500" title={loop.camera.url}>
-                            {loop.camera.cameraType} · {loop.camera.url}
-                          </p>
+                          <p className="text-xs text-gray-500">{loop.camera.cameraType}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-700">{formatInterval(loop.intervalMs)}</td>
                         <td className="px-4 py-3">
