@@ -81,6 +81,28 @@ Honest list of what VigiLens does and does not do in its current form.
   equivalent remains available as `npm run prune:media` for on-demand audits
   and dry runs.
 
+## Deployment
+
+- The Vercel backend is a serverless function, not a long-lived Node server.
+  The in-process monitor scheduler and retention scheduler are therefore
+  best-effort across invocations; deployments that need continuous monitoring
+  must run the Docker Compose topology (or an external scheduler) instead.
+- `backend/vercel.json` runs `npm ci` and `prisma migrate deploy` on every
+  deploy but deliberately does not seed. Initial demo/tenant data must be
+  provisioned explicitly with `npm run prisma:seed` against an empty
+  database.
+- Production startup fails closed when `CAMERA_CREDENTIALS_KEY` is missing or
+  insecure. On Vercel this returns HTTP 500 for every route until an operator
+  adds the variable and redeploys; the key must be a stable secret shared by
+  all function invocations, never generated per request or committed.
+- The backend's `AI_SERVICE_URL` default is `http://localhost:8000`, which is
+  unreachable on Vercel. Any deployment that expects live capture or inference
+  must set `AI_SERVICE_URL` to a reachable AI service and provision the
+  matching `INTERNAL_API_KEY` on that service.
+- The frontend package defines `test:e2e` but no `npm test` script, so a bare
+  `npm test` in `frontend/` fails with "Missing script". Typecheck, lint, the
+  production build, and the E2E harness are the available frontend gates.
+
 ## Frontend
 
 - The live camera page uses the AI service's `/detect/webcam` MJPEG stream

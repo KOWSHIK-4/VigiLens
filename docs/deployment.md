@@ -4,26 +4,28 @@
 
 VigiLens is deployed as two separate Vercel projects that work together:
 
-- **Frontend project (`vigilens`)** — the static React SPA, served at
-  `https://vigilens.vercel.app`. `frontend/vercel.json` rewrites every
+- **Frontend project (`vigilens`)** — the static React SPA, currently aliased
+  at `https://vigilens-rho.vercel.app`. `frontend/vercel.json` rewrites every
   `/api/*` request to the backend project and serves `index.html` for all
   other routes (SPA fallback). The browser therefore talks to the API
-  **same-origin** (`https://vigilens.vercel.app/api/...`), and Vercel's edge
-  proxy forwards those requests to the backend.
+  **same-origin** (`https://vigilens-rho.vercel.app/api/...`), and Vercel's
+  edge proxy forwards those requests to the backend.
 - **Backend project (`vigilens-api`)** — the serverless Express function,
   served at `https://vigilens-api.vercel.app`. `backend/vercel.json`
-  installs dependencies, applies Prisma migrations, seeds the database, and
-  rewrites all routes into the `api/index.ts` serverless function. The
-  linked project names come from `frontend/.vercel/project.json` and
-  `backend/.vercel/project.json`.
+  installs dependencies, applies Prisma migrations, and rewrites all routes
+  into the `api/index.ts` serverless function. It does **not** seed: an
+  operator provisions initial data explicitly with `npm run prisma:seed`
+  against an empty database. The linked project names come from
+  `frontend/.vercel/project.json` and `backend/.vercel/project.json`.
 
 Relationship: the SPA never calls the backend origin directly — the frontend
 rewrite is the single proxy path. Because preflight and cross-origin requests
-still carry the `Origin: https://vigilens.vercel.app` header after Vercel's
+still carry the `Origin: https://vigilens-rho.vercel.app` header after Vercel's
 rewrite, the backend's CORS allow-list must include the **frontend**
-production origin (set `CORS_ORIGIN` accordingly). The legacy
-`viglens-rho.vercel.app` host is not part of the current architecture and its
-backend CORS default was retired.
+production origin. Set `CORS_ORIGIN` explicitly; the committed fallback list
+also covers `https://vigilens-rho.vercel.app` and the historical
+`https://vigilens.vercel.app` host. Update both the Vercel alias and the CORS
+allow-list together if the frontend domain changes.
 
 ## Docker Compose (Recommended)
 
@@ -117,45 +119,50 @@ See `.env.example` for all configuration options. Never commit `.env` to version
 
 ```bash
 cd backend
-npx vitest run
+npm run test:unit
 ```
 
-Runs 275 pure unit tests covering engine config, lifecycle, postprocess,
-tracking, hardening, detection status, camera credential encryption, and
-security validation. Uses the `.vitest.test.ts` suffix so they don't
-conflict with integration tests.
+Runs 432 pure unit tests across 43 files covering engine config, lifecycle,
+postprocess, tracking, hardening, detection status, camera credential
+encryption, reports/exports, monitoring, and security validation. Uses the
+`.vitest.test.ts` suffix so they don't conflict with integration tests.
 
 ### Backend Integration Tests (tsx — requires PostgreSQL)
 
 ```bash
 cd backend
-npm run build
-npm test
+NODE_ENV=test npm test
 ```
 
 Runs all test files sequentially via `tsx`. Integration tests start the
 backend server and require a running PostgreSQL database. These include
 RBAC, user management, camera, detector, model, audit, settings,
-monitoring, and engine API tests.
+monitoring, MFA, realtime, isolation, and engine API tests. `NODE_ENV=test`
+is required when the committed local `backend/.env` sets
+`NODE_ENV=production`, because the production startup guard intentionally
+refuses to run without production-grade secrets.
 
 ### AI Service Tests (pytest)
 
 ```bash
 cd ai
 pip install -r requirements-dev.txt
-python -m pytest tests/ -v
+python -m pytest
+ruff check .
 ```
 
-83 tests covering health, detection routes, capture, confidence validation,
-IoU tracking, webcam stats, and detector catalog. Uses mocks for camera
+93 tests covering health, detection routes, capture, confidence validation,
+IoU tracking, webcam stats, and the detector catalog. Uses mocks for camera
 hardware — no real cameras needed.
 
 ### End-to-End Verification
 
 ```bash
 cd frontend
-npm run test:e2e-verify
+NODE_ENV=test npm run test:e2e
 ```
 
-Spawns both backend and frontend dev servers, verifies health endpoints,
-login flow, and API responses. Requires both services to be installable.
+Spawns both backend and frontend dev servers, verifies the Vite `/api` proxy,
+login, model/detector catalogues, system monitoring and metrics, detections,
+alerts, and CSV export. Requires a local PostgreSQL database with migrations
+applied and seed data present; it never targets production.

@@ -140,15 +140,17 @@ variables — those are embedded into the client bundle at build time.
 
 The frontend and backend are deployed as separate Vercel projects:
 
-- **Frontend** — static React SPA built with Vite, served via Vercel's edge
-  network at `https://vigilens.vercel.app`. The `vercel.json` rewrites
-  `/api/*` requests to the backend project (`vigilens-api.vercel.app`) and
-  serves `index.html` for all other routes (SPA fallback). The API is always
-  reached same-origin through this rewrite.
-- **Backend** — serverless Express function at `https://vigilens-api.vercel.app`.
-  `api/index.ts` re-exports the built Express app. The `installCommand` runs
-  Prisma migrations and seed automatically during deployment. Backend CORS
-  must allow the frontend origin (`https://vigilens.vercel.app`).
+- **Frontend** — static React SPA built with Vite, currently served via
+  Vercel's edge network at `https://vigilens-rho.vercel.app`. The
+  `vercel.json` rewrites `/api/*` requests to the backend project
+  (`vigilens-api.vercel.app`) and serves `index.html` for all other routes
+  (SPA fallback). The API is always reached same-origin through this rewrite.
+- **Backend** — serverless Express function at
+  `https://vigilens-api.vercel.app`. `api/index.ts` re-exports the built
+  Express app. The `installCommand` runs `npm ci` and
+  `prisma migrate deploy`; it does **not** seed. Provision an empty database
+  explicitly with `npm run prisma:seed`. Backend CORS must allow the frontend
+  origin (set `CORS_ORIGIN` to the deployed frontend domain).
 
 ### Docker Compose (Full Stack)
 
