@@ -151,6 +151,23 @@ const AI_HEALTH_TIMEOUT_MS = 3000;
 async function checkAI(): Promise<ServiceHealth> {
   const name = "ai";
   const label = "AI Service";
+
+  // A deployment that never declared AI_SERVICE_URL has no inference service
+  // to probe. Reporting `offline` here would be a false negative (the
+  // localhost fallback can never resolve in a serverless runtime) and would
+  // pin /health/ready to 503 forever, so report the honest `not_configured`
+  // state that `overallStatus` already excludes from the aggregate.
+  if (!config.ai.configured) {
+    return {
+      name,
+      label,
+      status: "not_configured",
+      responseTimeMs: 0,
+      lastChecked: nowIso(),
+      detail: "AI_SERVICE_URL is not set; live inference is not available in this deployment",
+    };
+  }
+
   const start = Date.now();
   const url = `${config.ai.serviceUrl}/health`;
   try {

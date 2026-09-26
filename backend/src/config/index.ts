@@ -98,6 +98,17 @@ export const config = {
   },
   ai: {
     serviceUrl: process.env.AI_SERVICE_URL || "http://localhost:8000",
+    /**
+     * True only when the deployment explicitly declared an AI service.
+     *
+     * An unset `AI_SERVICE_URL` falls back to the localhost default, which
+     * can never resolve on a serverless platform. Health reporting uses this
+     * flag to report the AI service as `not_configured` instead of probing a
+     * guaranteed-dead address and reporting a false `offline`, so a
+     * deployment that intentionally ships without live inference does not
+     * hold its readiness gate permanently red.
+     */
+    configured: Boolean(process.env.AI_SERVICE_URL?.trim()),
   },
   monitor: {
     enabled: process.env.MONITOR_ENABLED === "true",

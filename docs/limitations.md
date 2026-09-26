@@ -99,6 +99,15 @@ Honest list of what VigiLens does and does not do in its current form.
   unreachable on Vercel. Any deployment that expects live capture or inference
   must set `AI_SERVICE_URL` to a reachable AI service and provision the
   matching `INTERNAL_API_KEY` on that service.
+- A Vercel deployment ships no AI service, so live inference (frame capture,
+  detection, tracking) is **not available in production** and cannot be
+  production-certified. The Vercel backend is a control-plane API only. The
+  Docker Compose topology is the deployment that includes inference.
+- When `AI_SERVICE_URL` is unset the AI service is reported as
+  `not_configured` on `/health/ready` and is excluded from the readiness
+  aggregate, so a deployment that intentionally omits inference is not held
+  permanently unready. AI-dependent endpoints return HTTP 502
+  (`AI_SERVICE_UNREACHABLE`); no unrelated route fails because of it.
 - The frontend package defines `test:e2e` but no `npm test` script, so a bare
   `npm test` in `frontend/` fails with "Missing script". Typecheck, lint, the
   production build, and the E2E harness are the available frontend gates.

@@ -27,6 +27,38 @@ also covers `https://vigilens-rho.vercel.app` and the historical
 `https://vigilens.vercel.app` host. Update both the Vercel alias and the CORS
 allow-list together if the frontend domain changes.
 
+### Required `vigilens-api` production environment
+
+The backend fails closed at import time (`backend/src/config/index.ts`) when a
+production secret is missing or insecure, which surfaces as HTTP 500
+`FUNCTION_INVOCATION_FAILED` on **every** route, including `/health`. The
+`vigilens-api` project must therefore have at least:
+
+| Variable | Required | Value / how to produce |
+|----------|----------|-----------------------|
+| `DATABASE_URL` | Yes | Managed PostgreSQL connection string; must not contain a default password |
+| `JWT_SECRET` | Yes | Random string, min 32 chars, not a placeholder |
+| `INTERNAL_API_KEY` | Yes | Random string, min 32 chars, not a placeholder |
+| `CAMERA_CREDENTIALS_KEY` | Yes | `openssl rand -hex 32` — 32 bytes as 64 hex chars (or base64) |
+| `CORS_ORIGIN` | Recommended | `https://vigilens-rho.vercel.app` (comma-separated for more origins) |
+| `AI_SERVICE_URL` | Only with live inference | Base URL of a reachable AI service; omit when none is deployed |
+
+`CAMERA_CREDENTIALS_KEY` is a stable secret shared by every function
+invocation. Never generate it per request, never commit it, and never place it
+in a `VITE_*` variable. Rotating it requires keeping the previous value in
+`CAMERA_CREDENTIALS_KEY_LEGACY` so already-encrypted camera credentials remain
+decryptable.
+
+Setting `CORS_ORIGIN` **replaces** the built-in allow-list rather than adding
+to it, so the value must name the deployed frontend origin explicitly. The
+built-in fallback is only a safety net for a deployment that has not set it.
+
+`AI_SERVICE_URL` left unset is a supported configuration: the AI service is
+reported as `not_configured` on `/health/ready` (excluded from the readiness
+aggregate) and every AI-dependent endpoint returns HTTP 502 with
+`AI_SERVICE_UNREACHABLE`. Do not point it at `http://localhost:8000` on a
+serverless platform — that address can never resolve there.
+
 ## Docker Compose (Recommended)
 
 ```bash
