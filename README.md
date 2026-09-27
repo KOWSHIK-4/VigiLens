@@ -2,7 +2,9 @@
 
 **AI-Powered Security Monitoring Platform**
 
-VigiLens is a production-ready, open-source security monitoring platform that detects safety and security violations from images, videos, and live camera streams using state-of-the-art computer vision models.
+VigiLens is an open-source security monitoring platform that detects safety and security violations from images, videos, and live camera streams using state-of-the-art computer vision models.
+
+> **Production status: not signed off.** The 2026-09-25 [security certification](VigiLens_SECURITY_CERTIFICATION_2026-09-25.md) returned **NOT APPROVED** with four P1 blockers. Remediation and re-test are tracked in the phase reports below, and [Limitations](docs/limitations.md) lists the current known gaps.
 
 ---
 
@@ -353,6 +355,8 @@ VigiLens/
 
 ## Documentation
 
+Reference:
+
 - **[Deployment](docs/deployment.md)** — Docker Compose, hardening, and manual setup
 - **[Roles & Permissions](docs/roles-and-permissions.md)** — the RBAC model, permission catalog, role matrix, and seeded accounts
 - **[API](docs/api.md)** — RESTful API reference
@@ -361,6 +365,19 @@ VigiLens/
 - **[Implementation Status](docs/implementation-status.md)** — what is implemented today
 - **[Limitations](docs/limitations.md)** — known limits and constraints
 
+Security:
+
+- **[Security Certification (2026-09-25)](VigiLens_SECURITY_CERTIFICATION_2026-09-25.md)** — read-only audit, verdict and per-finding remediation status
+
+Build phases, newest last:
+
+- [Phase 5 — Production Hardening and Reliability](docs/phase-5.md)
+- [Phase 8 — Security Intelligence and Production Certification](docs/phase-8.md)
+- [Phase 9 — Teams and Resource Grouping](docs/phase-9.md)
+- [Phase 10 — Production Hardening & Certification](docs/phase-10.md)
+- [Phase 11 — Final Security Certification](docs/phase-11.md)
+- [Phase 12 — Live Production Smoke Test](docs/phase-12.md)
+
 ## License
 
-MIT
+Released under the [MIT License](LICENSE).
