@@ -430,7 +430,13 @@ async function main() {
     );
   }
 
-  console.log({ admin, superAdmin, operator, viewer, disabled });
+  // Report which demo accounts exist, but never the rows themselves. The full
+  // Prisma User objects carry the bcrypt password hash, and a seed runs as part
+  // of deployment, so logging them would push credential material into whatever
+  // log aggregator the platform retains.
+  for (const user of [admin, superAdmin, operator, viewer, disabled]) {
+    console.log(`Seeded demo user ${user.email} (${user.role}, ${user.status})`);
+  }
   const seededModels = defaultDetectorDefinitions.filter(
     (d) => d.autoInstall !== false,
   ).length;

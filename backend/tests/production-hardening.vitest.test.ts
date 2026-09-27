@@ -13,6 +13,7 @@ const ENV_EXAMPLES = [
   path.resolve(__dirname, "../../ai/.env.example"),
   path.resolve(__dirname, "../../frontend/.env.example"),
 ];
+const PRISMA_SEED = path.resolve(__dirname, "../prisma/seed.ts");
 
 /** Recursively lists source files, skipping dependency and build output. */
 async function walkSourceFiles(dir: string, extensions: string[]): Promise<string[]> {
@@ -70,6 +71,43 @@ describe("console usage guard", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("seeded credential leak guard", () => {
+  // prisma/seed.ts runs during deployment, so anything it logs reaches the
+  // platform's retained log store. It legitimately logs progress, but must
+  // never log a whole User row, which carries the bcrypt password hash.
+  const FORBIDDEN_IN_LOG =
+    /\b(?:admin|superAdmin|operator|viewer|disabled|password|passwordHash|hash)\b/;
+  const CONSOLE_CALL = /console\.(?:log|info|warn|error|debug)\(/g;
+
+  function consoleCallArguments(source: string): string[] {
+    const args: string[] = [];
+    for (const match of source.matchAll(CONSOLE_CALL)) {
+      let depth = 1;
+      let index = match.index + match[0].length;
+      while (index < source.length && depth > 0) {
+        if (source[index] === "(") depth += 1;
+        else if (source[index] === ")") depth -= 1;
+        index += 1;
+      }
+      args.push(source.slice(match.index + match[0].length, index - 1));
+    }
+    return args;
+  }
+
+  it("prisma/seed.ts never logs seeded user rows or password material", async () => {
+    const content = await readFile(PRISMA_SEED, "utf8");
+    const offenders = consoleCallArguments(content)
+      .filter((args) => FORBIDDEN_IN_LOG.test(args))
+      .map((args) => args.replace(/\s+/g, " ").trim());
+    expect(offenders).toEqual([]);
+  });
+
+  it("prisma/seed.ts still reports the seeded demo accounts", async () => {
+    const content = await readFile(PRISMA_SEED, "utf8");
+    expect(content).toContain("Seeded demo user");
   });
 });
 
