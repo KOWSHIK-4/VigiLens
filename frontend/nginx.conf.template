@@ -8,12 +8,22 @@ server {
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
     gzip_min_length 1024;
 
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options SAMEORIGIN;
-    add_header X-XSS-Protection "1; mode=block";
-    add_header Referrer-Policy strict-origin-when-cross-origin;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()";
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http: https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'";
+    # Explicit request-body cap. nginx would otherwise fall back to its built-in
+    # 1m default, which is both tighter than the 10 MB multer limit the API
+    # declares in backend/src/routes/engine.routes.ts and unenforced in the
+    # other direction: /detect/ is proxied to the AI service, which reads
+    # uploads with no application-level size check at all. One cap, stated
+    # once, keeps the SPA, the API and the AI proxy consistent.
+    client_max_body_size 10m;
+
+    # `always` matters: without it nginx drops add_header on error responses,
+    # so the 413 raised by client_max_body_size above would go out unheadered.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Strict-Transport-Security "max-age=15552000; includeSubDomains; preload" always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http: https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'" always;
 
     location / {
         try_files $uri $uri/ /index.html;
@@ -21,7 +31,17 @@ server {
 
     location /assets/ {
         expires 30d;
-        add_header Cache-Control "public, immutable";
+        add_header Cache-Control "public, immutable" always;
+        # add_header is not additive across levels: a location that sets any
+        # add_header discards every one inherited from the server block, so the
+        # security headers have to be repeated here or hashed assets would be
+        # served without them.
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Strict-Transport-Security "max-age=15552000; includeSubDomains; preload" always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http: https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'" always;
         try_files $uri =404;
     }
 
