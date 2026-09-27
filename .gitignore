@@ -20,10 +20,16 @@ venv/
 .vscode/
 .idea/
 *.db
-prisma/*.db
-prisma/migrations/
 docker/**/.env
 ai/app/output/
 yolo11n.pt
 .vercel/
 
+# Prisma migrations live in backend/prisma/migrations and MUST stay tracked, so
+# there is deliberately no ignore rule for them here.
+#
+# Keep every `.env` ignore above this line and this negation directly below it.
+# Git resolves patterns last-match-wins, so a broader `.env*` appended after
+# this point silently shadows the negation and drops all four .env.example
+# templates (root, ai/, backend/, frontend/) from a fresh clone.
+!.env.example
