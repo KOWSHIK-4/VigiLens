@@ -4,6 +4,27 @@ import { monitorScheduler } from "../engine/monitor";
 import { logAudit } from "../utils/auditLog";
 import { success } from "../utils/apiResponse";
 import { userService } from "../services/user.service";
+import { ApiError } from "../utils/errors";
+
+/**
+ * The scheduler is a process-wide singleton: MonitorScheduler holds one
+ * `running` flag and one timer for the whole process, and loadLoops gathers
+ * loops from every tenant's detectors. Starting and stopping it is therefore
+ * an instance-wide action, not a tenant-scoped one.
+ *
+ * Reading status is still per-tenant (see getStatus), but mutating the
+ * singleton must be limited to an instance administrator. Otherwise a tenant
+ * admin holding monitoring.manage can stop continuous detection for every
+ * other organization on the instance, and start it back up afterwards.
+ */
+function assertInstanceSchedulerControl(req: AuthRequest): void {
+  if (req.userRole !== "super_admin") {
+    throw new ApiError(
+      403,
+      "The monitoring scheduler is instance-wide and can only be started or stopped by a Super Admin",
+    );
+  }
+}
 
 export const monitorController = {
   async getStatus(req: AuthRequest, res: Response, next: NextFunction) {
@@ -21,7 +42,9 @@ export const monitorController = {
 
   async start(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
+      assertInstanceSchedulerControl(req);
+      // Only a super_admin reaches this point, so the status is the
+      // instance-wide view: the singleton's own scope, not a tenant's.
       const actor = await userService.findById(req.userId!).catch(() => null);
       if (!monitorScheduler.isRunning()) {
         monitorScheduler.start();
@@ -35,7 +58,7 @@ export const monitorController = {
           ipAddress: req.ip,
         });
       }
-      success(res, await monitorScheduler.getStatus(scope), 200);
+      success(res, await monitorScheduler.getStatus(undefined), 200);
     } catch (err) {
       next(err);
     }
@@ -43,7 +66,8 @@ export const monitorController = {
 
   async stop(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const scope = req.userRole === "super_admin" ? undefined : req.organizationId ?? undefined;
+      assertInstanceSchedulerControl(req);
+      // Instance-wide view, for the same reason as start().
       const actor = await userService.findById(req.userId!).catch(() => null);
       if (monitorScheduler.isRunning()) {
         monitorScheduler.stop();
@@ -57,7 +81,7 @@ export const monitorController = {
           ipAddress: req.ip,
         });
       }
-      success(res, await monitorScheduler.getStatus(scope), 200);
+      success(res, await monitorScheduler.getStatus(undefined), 200);
     } catch (err) {
       next(err);
     }

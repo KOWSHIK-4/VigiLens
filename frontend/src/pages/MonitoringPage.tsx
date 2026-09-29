@@ -59,7 +59,12 @@ function LoopBadge({ status }: { status: MonitorLoopStatus }) {
 export default function MonitoringPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const canManage = hasPermission(user, "monitoring.manage");
+  // The scheduler is a process-wide singleton spanning every tenant, so
+  // starting and stopping it is an instance-level action reserved for a
+  // Super Admin. `monitoring.manage` alone is not sufficient authority, and
+  // the API rejects the call with 403, so the control is hidden rather than
+  // left to fail.
+  const canManageScheduler = user?.role === "super_admin" && hasPermission(user, "monitoring.manage");
 
   const statusQuery = useQuery({
     queryKey: ["monitor", "status"],
@@ -104,7 +109,7 @@ export default function MonitoringPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {canManage && status && (
+          {canManageScheduler && status && (
             status.running ? (
               <button
                 onClick={() => stopMutation.mutate()}
