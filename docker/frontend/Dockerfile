@@ -1,4 +1,6 @@
-FROM node:20-alpine AS builder
+# Kept in lockstep with the backend image and CI (node >=22.12.0) so a build
+# that passes here matches the runtime the rest of the stack is validated on.
+FROM node:22.12.0-alpine AS builder
 
 WORKDIR /app
 

@@ -1,4 +1,5 @@
-FROM node:20-alpine AS builder
+# node >=22.12.0 is required by package.json "engines" for ESM compatibility.
+FROM node:22.12.0-alpine AS builder
 
 WORKDIR /app
 
@@ -14,7 +15,7 @@ COPY src/ ./src/
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:22.12.0-alpine
 
 WORKDIR /app
 
