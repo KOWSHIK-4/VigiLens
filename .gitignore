@@ -22,8 +22,25 @@ venv/
 *.db
 docker/**/.env
 ai/app/output/
-yolo11n.pt
 .vercel/
+
+# Ultralytics re-downloads yolo11n.pt into the working directory whenever a
+# model is trained or run locally, so the stray root-level copy is build
+# detritus and is ignored.
+#
+# The rule is anchored to the repository root on purpose. Unanchored, it also
+# matched ai/yolo11n.pt, and the only reason that never bit was that the file
+# was already tracked -- .gitignore has no effect on tracked paths. Any
+# `git rm --cached ai/yolo11n.pt` (or a fresh clone that somehow lost it) would
+# have left the ignore rule active, so the weight could not be re-added and the
+# AI image would silently build without it.
+#
+# ai/yolo11n.pt is deliberately committed: it is the default person/vehicle
+# detector weight that docker/ai/Dockerfile copies into the image, so a fresh
+# clone runs real inference without reaching the network. See
+# docs/adding-a-detector.md and docs/limitations.md. Keep it tracked.
+/yolo11n.pt
+!ai/yolo11n.pt
 
 # Prisma migrations live in backend/prisma/migrations and MUST stay tracked, so
 # there is deliberately no ignore rule for them here.
