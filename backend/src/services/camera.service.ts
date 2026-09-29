@@ -4,6 +4,7 @@ import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
 import { stripUrlUserinfo, redactSecrets } from "../utils/redact";
+import { assertOutboundUrlAllowed } from "../utils/ssrf";
 import { settingsService } from "./settings.service";
 import {
   aiServiceClient,
@@ -296,6 +297,63 @@ export async function loadCameraCredentials(
   return credentials;
 }
 
+interface HealthProbeResult {
+  responseTime: number;
+  isHealthy: boolean;
+  message: string | null;
+}
+
+/**
+ * Probes an HTTP camera feed with a HEAD request.
+ *
+ * The camera URL is tenant-controlled and the backend dereferences it here, so
+ * the outbound guard runs first: it refuses the destinations that can only be
+ * an SSRF attempt while leaving RFC1918 space alone, because that is where
+ * on-prem cameras actually live.
+ */
+async function probeHttpCamera(
+  cameraUrl: string,
+  credentials: CaptureCredentials | null,
+  startedAt: number,
+): Promise<HealthProbeResult> {
+  const guard = assertOutboundUrlAllowed(cameraUrl);
+  if (!guard.allowed) {
+    return {
+      responseTime: Date.now() - startedAt,
+      isHealthy: false,
+      message: guard.reason ?? "Camera URL is not permitted",
+    };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const headers: Record<string, string> = {};
+    if (credentials) {
+      // Cameras behind HTTP basic auth must be probed with the stored
+      // credentials, otherwise health checks fail with 401 even though
+      // the stream itself is reachable.
+      headers.Authorization = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
+    }
+
+    const res = await fetch(cameraUrl, { signal: controller.signal, method: "HEAD", headers });
+    clearTimeout(timeout);
+
+    return {
+      responseTime: Date.now() - startedAt,
+      isHealthy: res.ok,
+      message: res.ok ? "Camera responded successfully" : `HTTP ${res.status}`,
+    };
+  } catch (err) {
+    return {
+      responseTime: Date.now() - startedAt,
+      isHealthy: false,
+      message: err instanceof Error ? redactSecrets(err.message) : "Health check failed",
+    };
+  }
+}
+
 export const cameraService = {
   async findAll(params: FindAllParams, organizationId?: string) {
     const { page, limit, search, status, cameraType, teamId, sortBy, sortOrder } = params;
@@ -568,29 +626,11 @@ export const cameraService = {
     const credentials = await loadCameraCredentials(id);
 
     if (camera.cameraType === "ip" && /^https?:\/\//i.test(camera.url)) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-
-        const headers: Record<string, string> = {};
-        if (credentials) {
-          // Cameras behind HTTP basic auth must be probed with the stored
-          // credentials, otherwise health checks fail with 401 even though
-          // the stream itself is reachable.
-          headers.Authorization = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
-        }
-
-        const res = await fetch(camera.url, { signal: controller.signal, method: "HEAD", headers });
-        clearTimeout(timeout);
-
-        responseTime = Date.now() - start;
-        isHealthy = res.ok;
-        message = isHealthy ? "Camera responded successfully" : `HTTP ${res.status}`;
-      } catch (err) {
-        responseTime = Date.now() - start;
-        isHealthy = false;
-        message = err instanceof Error ? redactSecrets(err.message) : "Health check failed";
-      }
+      ({ responseTime, isHealthy, message } = await probeHttpCamera(
+        camera.url,
+        credentials,
+        start,
+      ));
     } else {
       // rtsp / usb / video_file feeds cannot be probed over plain HTTP — the
       // AI service captures an actual frame to verify the feed is reachable.
