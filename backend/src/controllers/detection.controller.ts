@@ -34,7 +34,11 @@ export const detectionController = {
       }
       const camera = await prisma.camera.findUnique({
         where: { id: camera_id },
-        select: { id: true },
+        // The owning organization is needed for the audit row below: this
+        // endpoint is the internal ingestion path used by the AI service and
+        // carries no authenticated actor, so the camera is the only thing
+        // that can supply a tenant scope.
+        select: { id: true, organizationId: true },
       });
       if (!camera) {
         throw new ApiError(400, `Unknown camera "${camera_id}"`, {
@@ -78,6 +82,10 @@ export const detectionController = {
         action: "detection_created",
         module: "detections",
         description: `Detection created: ${detection.label}`,
+        // Without this the row is stored with a null organization, and
+        // auditLog.service.findAll filters on organizationId -- so every
+        // machine detection would be missing from the tenant's audit trail.
+        organizationId: camera.organizationId,
         ...info,
         metadata: { detectionId: detection.id, label: detection.label, cameraId: camera_id },
       });
