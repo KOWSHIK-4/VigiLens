@@ -509,7 +509,17 @@ async assignCameras(id: string, input: { cameraIds?: string[]; assignments?: Det
     }
 
     await prisma.$transaction([
-      prisma.detectorCamera.deleteMany({ where: { aiModelId: id } }),
+      prisma.detectorCamera.deleteMany({
+        where: {
+          aiModelId: id,
+          // Clear only this organization's own assignments. AIModel has no
+          // organizationId, so a detector is shared instance-wide, and an
+          // unfiltered delete here would strip every other tenant's cameras
+          // off the detector the moment one tenant re-assigned its own.
+          // A super_admin (no organizationId) still replaces the full set.
+          ...(organizationId ? { camera: { organizationId } } : {}),
+        },
+      }),
       prisma.detectorCamera.createMany({
         data: rows.map((r) => ({ aiModelId: id, cameraId: r.cameraId, enabled: r.enabled })),
       }),
