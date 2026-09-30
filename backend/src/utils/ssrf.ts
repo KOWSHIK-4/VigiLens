@@ -1,6 +1,6 @@
 /**
  * Outbound URL guard for backend-initiated requests to operator-supplied
- * camera URLs.
+ * URLs (camera sources, webhook receivers).
  *
  * Camera source URLs are tenant-controlled, and the backend dereferences them
  * during a health check. That is a server-side request forgery primitive: a
@@ -104,24 +104,24 @@ export function assertOutboundUrlAllowed(rawUrl: string): UrlGuardResult {
   try {
     parsed = new URL(rawUrl);
   } catch {
-    return { allowed: false, reason: "Camera URL is not a valid absolute URL" };
+    return { allowed: false, reason: "URL is not a valid absolute URL" };
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { allowed: false, reason: `Unsupported camera URL scheme "${parsed.protocol}"` };
+    return { allowed: false, reason: `Unsupported URL scheme "${parsed.protocol}"` };
   }
 
   const host = parsed.hostname.toLowerCase();
 
   if (BLOCKED_HOSTNAMES.has(host)) {
-    return { allowed: false, reason: `Camera URL host "${host}" is not permitted` };
+    return { allowed: false, reason: `URL host "${host}" is not permitted` };
   }
 
   const ipv4Reason = isBlockedIpv4(host);
   if (ipv4Reason) {
     return {
       allowed: false,
-      reason: `Camera URL resolves to a blocked address (${ipv4Reason})`,
+      reason: `URL resolves to a blocked address (${ipv4Reason})`,
     };
   }
 
@@ -129,7 +129,7 @@ export function assertOutboundUrlAllowed(rawUrl: string): UrlGuardResult {
   if (ipv6Reason) {
     return {
       allowed: false,
-      reason: `Camera URL resolves to a blocked address (${ipv6Reason})`,
+      reason: `URL resolves to a blocked address (${ipv6Reason})`,
     };
   }
 

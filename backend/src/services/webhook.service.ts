@@ -3,6 +3,7 @@ import { logger } from "../config/logger";
 import { metricsService } from "./metrics.service";
 import { settingsService } from "./settings.service";
 import { webhookRetryQueue, deliveryIdForEvent } from "./webhookRetryQueue";
+import { assertOutboundUrlAllowed } from "../utils/ssrf";
 import type { SettingValue } from "../settings";
 
 const WEBHOOK_TIMEOUT_MS = 5000;
@@ -114,12 +115,40 @@ async function deliver(
   }
 
   let result: WebhookDispatchResult;
+  // A webhook URL is tenant-supplied and the backend dereferences it, which is
+  // the same SSRF shape the camera guard exists for: without a check, a tenant
+  // can aim deliveries at loopback or the cloud metadata endpoint and read the
+  // outcome through the delivered/failed counters. Apply the guard at send
+  // time as well as at configuration time -- settings rows can predate it, and
+  // the retry queue re-reads them unattended.
+  const guard = assertOutboundUrlAllowed(config.url);
+  if (!guard.allowed) {
+    result = {
+      ok: false,
+      statusCode: null,
+      error: guard.reason ?? "Webhook URL is not permitted",
+      attemptedAt,
+    };
+    status.lastAttemptAt = result.attemptedAt;
+    status.lastStatusCode = null;
+    status.lastError = result.error;
+    status.failedCount += 1;
+    logger.warn("Webhook delivery blocked", {
+      eventId: payload.id,
+      error: result.error ?? undefined,
+    });
+    return result;
+  }
+
   try {
     const res = await fetch(config.url, {
       method: "POST",
       headers,
       body,
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+      // The guard validates the configured URL, so following a redirect would
+      // walk straight past it. A receiver that redirects is treated as failed.
+      redirect: "manual",
     });
     result = {
       ok: res.ok,

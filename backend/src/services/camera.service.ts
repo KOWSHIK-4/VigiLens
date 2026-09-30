@@ -321,7 +321,7 @@ async function probeHttpCamera(
     return {
       responseTime: Date.now() - startedAt,
       isHealthy: false,
-      message: guard.reason ?? "Camera URL is not permitted",
+      message: guard.reason ?? "Camera URL is not permitted (blocked address)",
     };
   }
 
