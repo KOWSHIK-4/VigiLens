@@ -5,13 +5,11 @@ import { rateLimitService } from "../services/rateLimit.service";
 import { userService } from "../services/user.service";
 import { success } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
+import { clientInfo } from "../utils/clientInfo";
 import { ApiError } from "../utils/errors";
 
 function getClientInfo(req: AuthRequest) {
-  return {
-    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-    userAgent: req.headers["user-agent"] || "",
-  };
+  return clientInfo(req);
 }
 
 /**

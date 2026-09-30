@@ -6,12 +6,10 @@ import type { AuthRequest, ChangePasswordInput } from "../types";
 import { config } from "../config";
 import { logger } from "../config/logger";
 import { logAudit } from "../utils/auditLog";
+import { clientInfo } from "../utils/clientInfo";
 
 function getClientInfo(req: AuthRequest) {
-  return {
-    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-    userAgent: req.headers["user-agent"] || "",
-  };
+  return clientInfo(req);
 }
 
 /**

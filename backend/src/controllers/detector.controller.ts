@@ -12,6 +12,7 @@ import { userService } from "../services/user.service";
 import { getMergedDetectorHealth } from "../engine/health";
 import { success, paginated } from "../utils/apiResponse";
 import { logAudit } from "../utils/auditLog";
+import { clientInfo } from "../utils/clientInfo";
 
 type DetectorAuditAction =
   | "detector_created"
@@ -23,10 +24,7 @@ type DetectorAuditAction =
   | "detector_cameras_updated";
 
 function getClientInfo(req: AuthRequest) {
-  return {
-    ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-    userAgent: req.headers["user-agent"] || "",
-  };
+  return clientInfo(req);
 }
 
 async function audit(

@@ -6,6 +6,7 @@ import { metricsService } from "../services/metrics.service";
 import { success, paginated } from "../utils/apiResponse";
 import { ApiError } from "../utils/errors";
 import { logAudit } from "../utils/auditLog";
+import { clientInfo } from "../utils/clientInfo";
 import { sendCsvStream } from "../utils/csvStream";
 import { fleetCorrelationService } from "../services/fleetCorrelationLoader.service";
 import { riskScoreService } from "../services/riskScoreLoader.service";
@@ -74,10 +75,7 @@ export const detectionController = {
         skipAlert: skip_alert === true,
         applyAlertCooldown: res.locals.internal === true,
       });
-      const info = {
-        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-        userAgent: req.headers["user-agent"] || "",
-      };
+      const info = clientInfo(req);
       await logAudit({
         action: "detection_created",
         module: "detections",
@@ -189,10 +187,7 @@ export const detectionController = {
             select: { name: true, email: true },
           })
         : null;
-      const info = {
-        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-        userAgent: req.headers["user-agent"] || "",
-      };
+      const info = clientInfo(req);
       await logAudit({
         userId: req.userId,
         username: actor?.name || "",
