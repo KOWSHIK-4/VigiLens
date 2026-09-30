@@ -127,7 +127,27 @@ const cameraBaseSchema = z.object({
     .min(1, "URL is required")
     .max(2048, "Camera URL must be at most 2048 characters"),
   cameraType: z.enum(["usb", "rtsp", "ip", "video_file"]).default("rtsp"),
-  sourceURL: z.string().url().max(2048).optional().nullable(),
+  // The source URL is the value the browser dereferences in an <img>, so it is
+  // restricted to the schemes a stream can actually use. `z.string().url()`
+  // alone accepts any scheme and would let a stored `javascript:`/`file:` value
+  // ride along in camera payloads. Embedded credentials are stripped on write
+  // (camera.service); operators configure those through the encrypted fields.
+  sourceURL: z
+    .string()
+    .max(2048, "Source URL must be at most 2048 characters")
+    .refine(
+      (value) => {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "rtsp:";
+        } catch {
+          return false;
+        }
+      },
+      "Source URL must be an absolute http, https or rtsp URL",
+    )
+    .optional()
+    .nullable(),
   location: z.string().max(200).optional().nullable(),
   resolution: z.string().regex(/^\d+x\d+$/, "Invalid resolution format (e.g. 1920x1080)").optional().nullable(),
   fps: z.number().int().min(1).max(120).optional().nullable(),

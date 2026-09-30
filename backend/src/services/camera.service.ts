@@ -55,6 +55,24 @@ function sanitizeCameraUrl(url: string, cameraType: string): string {
   return clean;
 }
 
+/**
+ * The `sourceURL` override is the public-facing stream address the browser
+ * loads in an <img>. It gets the same treatment as `url` for two reasons: an
+ * operator pasting `rtsp://user:pass@cam/stream` there would otherwise have
+ * the password stored in plaintext and returned to every camera read, and the
+ * value is rendered in a tag that dereferences whatever scheme it is given.
+ * Operators who need credentials configure them through the encrypted
+ * username/password fields.
+ */
+function sanitizeSourceUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const clean = stripUrlUserinfo(value);
+  if (clean !== value) {
+    logger.warn("Stripped embedded credentials from camera source URL override");
+  }
+  return clean;
+}
+
 function snapshotFilePath(id: string, dir: string): string {
   return path.join(dir, `${id}.jpg`);
 }
@@ -179,6 +197,7 @@ function toApiCamera(camera: CameraRowWithTeam): CameraApiView {
   // Defense in depth: never serve embedded URL credentials even if a legacy
   // row managed to hold userinfo.
   if (rest.url) rest.url = sanitizeCameraUrl(rest.url, String(rest.cameraType ?? "rtsp"));
+  if (rest.sourceURL) rest.sourceURL = sanitizeSourceUrl(rest.sourceURL) as string;
   return {
     ...(rest as Camera),
     hasCredentials: hasStoredCredential(camera),
@@ -440,7 +459,7 @@ export const cameraService = {
         name: data.name,
         url: sanitizeCameraUrl(data.url, String(data.cameraType ?? "rtsp")),
         cameraType: data.cameraType as CameraType,
-        sourceURL: data.sourceURL || null,
+        sourceURL: sanitizeSourceUrl(data.sourceURL),
         location: data.location || null,
         resolution: data.resolution || null,
         fps: data.fps || null,
@@ -515,7 +534,7 @@ export const cameraService = {
           url: sanitizeCameraUrl(data.url, String(requestedType)),
         }),
         ...(data.cameraType !== undefined && { cameraType: data.cameraType as CameraType }),
-        ...(data.sourceURL !== undefined && { sourceURL: data.sourceURL }),
+        ...(data.sourceURL !== undefined && { sourceURL: sanitizeSourceUrl(data.sourceURL) }),
         ...(data.location !== undefined && { location: data.location }),
         ...(data.resolution !== undefined && { resolution: data.resolution }),
         ...(data.fps !== undefined && { fps: data.fps }),
