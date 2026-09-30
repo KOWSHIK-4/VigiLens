@@ -11,8 +11,10 @@ import {
   getSettingCategory,
   getSettingDefinition,
   isHttpUrl,
+  isInstanceScopedSetting,
   isValidSettingValue,
 } from "../settings";
+import { isSafeStorageBasePath } from "../utils/storagePath";
 import type { Prisma, SystemSetting, SystemSettingCategory } from "@prisma/client";
 import { SECRET_MASK } from "../utils/redact";
 
@@ -92,6 +94,20 @@ function invalidateCache() {
   cachedByOrg.clear();
 }
 
+/**
+   * Read view for a tenant: the tenant's own rows plus the instance rows the
+   * host-level settings are served from. At the instance scope both sets are
+   * the same rows, so only one query is issued.
+   */
+async function loadForRead(organizationId = ""): Promise<{ rows: SystemSetting[]; instanceRows: SystemSetting[] }> {
+  const rows = await loadAll(organizationId);
+  if (organizationId === "") {
+    return { rows, instanceRows: rows };
+  }
+  const instanceRows = (await loadAll("")).filter((r) => isInstanceScopedSetting(r.category, r.key));
+  return { rows, instanceRows };
+}
+
 function settingMapFor(category: SettingsCategoryDefinition, rows: SystemSetting[]) {
   return new Map(rows.filter((r) => r.category === category.key).map((r) => [r.key, r]));
 }
@@ -142,16 +158,45 @@ export const settingsService = {
     if (normalized > 0) {
       logger.info("Normalized drifted default settings", { count: normalized });
     }
+
+    // Host-level settings are only ever read at the instance scope, so a
+    // tenant row for one of them (written before these keys were recognized
+    // as instance-wide) is unreachable shadow state. Drop it so the table does
+    // not accumulate rows that look effective but are not.
+    const orphaned = await prisma.systemSetting.findMany({
+      where: { organizationId: { not: "" } },
+      select: { category: true, key: true },
+    });
+    const stale = orphaned.filter((row) => isInstanceScopedSetting(row.category, row.key));
+    if (stale.length > 0) {
+      await prisma.systemSetting.deleteMany({
+        where: {
+          organizationId: { not: "" },
+          OR: stale.map((row) => ({ category: row.category, key: row.key })),
+        },
+      });
+      logger.info("Removed tenant-scoped copies of instance-wide settings", {
+        count: stale.length,
+      });
+    }
     return created;
   },
 
+  /**
+   * Host-level settings (the shared media root, its quota, global retention)
+   * only ever live at the instance scope, so a tenant view has to overlay
+   * them from there instead of reporting the code default. Without the
+   * overlay a tenant would be shown a value the instance is not using.
+   */
   async getAll(organizationId = ""): Promise<SerializedSetting[]> {
-    const rows = await loadAll(organizationId);
+    const { rows, instanceRows } = await loadForRead(organizationId);
     const serialized: SerializedSetting[] = [];
     for (const category of getSettingCategories()) {
       const byKey = settingMapFor(category, rows);
+      const instanceByKey = settingMapFor(category, instanceRows);
       for (const def of category.settings) {
-        serialized.push(serialize(category.key, def, byKey.get(def.key)));
+        const row = def.instanceScoped ? instanceByKey.get(def.key) ?? byKey.get(def.key) : byKey.get(def.key);
+        serialized.push(serialize(category.key, def, row));
       }
     }
     return serialized;
@@ -162,9 +207,13 @@ export const settingsService = {
     if (!definition) {
       throw new ApiError(400, `Unknown settings category "${category}"`);
     }
-    const rows = await loadAll(organizationId);
+    const { rows, instanceRows } = await loadForRead(organizationId);
     const byKey = settingMapFor(definition, rows);
-    return definition.settings.map((def) => serialize(category, def, byKey.get(def.key)));
+    const instanceByKey = settingMapFor(definition, instanceRows);
+    return definition.settings.map((def) => {
+      const row = def.instanceScoped ? instanceByKey.get(def.key) ?? byKey.get(def.key) : byKey.get(def.key);
+      return serialize(category, def, row);
+    });
   },
 
   async update(
@@ -200,6 +249,17 @@ export const settingsService = {
       ) {
         throw new ApiError(400, `Invalid value for setting "${key}"`);
       }
+      // The media root is written to by snapshot capture and probed by the
+      // health check, so reject a root-like path at write time rather than
+      // letting it be stored and only discovered by the prune tool later.
+      if (
+        category === "storage" &&
+        key === "storage_base_path" &&
+        typeof value === "string" &&
+        !isSafeStorageBasePath(value)
+      ) {
+        throw new ApiError(400, `Invalid value for setting "${key}"`);
+      }
     }
 
     // Clients only ever see the masked placeholder for sensitive settings, so
@@ -217,11 +277,15 @@ export const settingsService = {
     await prisma.$transaction(
       effectiveEntries.map(([key, value]) => {
         const def = getSettingDefinition(category, key)!;
+        // Host-level settings are always written at the instance scope: that
+        // is the only scope the consuming services read, and keeping them
+        // here stops a tenant row from shadowing the shared resource.
+        const scope = def.instanceScoped ? "" : organizationId;
         return prisma.systemSetting.upsert({
-          where: { organizationId_category_key: { organizationId, category, key } },
+          where: { organizationId_category_key: { organizationId: scope, category, key } },
           update: { value: value as Prisma.InputJsonValue, updatedBy: actorId ?? null },
           create: {
-            organizationId,
+            organizationId: scope,
             category,
             key,
             label: def.label,
@@ -249,11 +313,16 @@ export const settingsService = {
       throw new ApiError(400, `Unknown settings category "${category}"`);
     }
 
+    // A tenant reset only drops its own overrides; host-level rows are shared
+    // with every other organization and belong to the instance, so the
+    // instance-wide branch below is the only one that may touch them.
+    const orgSettings = definition.settings.filter((def) => !def.instanceScoped);
+
     if (organizationId !== "") {
       // Organization-scoped settings reset by reverting the tenant's own
       // overrides so they fall back to the instance-wide baselines.
       await prisma.systemSetting.deleteMany({
-        where: { organizationId, category },
+        where: { organizationId, category, key: { in: orgSettings.map((def) => def.key) } },
       });
     } else {
       await prisma.$transaction(
@@ -281,7 +350,11 @@ export const settingsService = {
   },
 
   async getValue(category: SystemSettingCategory, key: string, organizationId = ""): Promise<SettingValue | undefined> {
-    const rows = await loadAll(organizationId);
+    // Host-level settings are resolved at the instance scope no matter which
+    // organization asked, so a caller can never observe a tenant row for the
+    // shared media root, quota or retention policy.
+    const scope = isInstanceScopedSetting(category, key) ? "" : organizationId;
+    const rows = await loadAll(scope);
     const row = rows.find((r) => r.category === category && r.key === key);
     if (row) return row.value as SettingValue;
     return getSettingDefinition(category, key)?.defaultValue;

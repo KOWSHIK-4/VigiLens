@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from "express";
 import type { AuthRequest, SettingsCategory } from "../types";
 import { settingsService } from "../services/settings.service";
+import { isInstanceScopedSetting } from "../settings";
 import { rateLimitService } from "../services/rateLimit.service";
 import { userService } from "../services/user.service";
 import { success } from "../utils/apiResponse";
@@ -24,13 +25,29 @@ function settingsScope(req: AuthRequest, category: SettingsCategory): string {
 }
 
 /**
- * Security settings are instance-scoped, so mutating them must be limited to
- * an instance administrator -- a tenant admin with settings.manage must not
- * relax MFA, session age or rate-limit policy for every organization.
+ * Host-level settings (shared media root, disk quota, retention and cleanup
+ * policy) describe one filesystem shared by every organization and are stored
+ * at the instance scope. A tenant admin with settings.manage must not repoint
+ * or resize them for everyone, so a write naming any of them is refused just
+ * like a security-settings write. The gate is per key, not per category:
+ * "storage" also holds per-tenant scheduled-report keys the tenant owns.
  */
-function assertInstanceSettingsWrite(req: AuthRequest, category: SettingsCategory): void {
-  if (category === "security" && req.userRole !== "super_admin") {
-    throw new ApiError(403, "Security settings are instance-wide and can only be changed by a Super Admin");
+function assertInstanceSettingsWrite(
+  req: AuthRequest,
+  category: SettingsCategory,
+  keys: string[] = [],
+): void {
+  if (req.userRole === "super_admin") return;
+  const message =
+    category === "security"
+      ? "Security settings are instance-wide and can only be changed by a Super Admin"
+      : "These settings are instance-wide and can only be changed by a Super Admin";
+  // The whole security category is instance-wide, so any key in it qualifies.
+  if (category === "security") {
+    throw new ApiError(403, message);
+  }
+  if (keys.some((key) => isInstanceScopedSetting(category, key))) {
+    throw new ApiError(403, message);
   }
 }
 
@@ -76,8 +93,8 @@ export const settingsController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.params.category as SettingsCategory;
-      assertInstanceSettingsWrite(req, category);
       const body = req.body as Record<string, string | number | boolean>;
+      assertInstanceSettingsWrite(req, category, Object.keys(body));
       const settings = await settingsService.update(category, body, req.userId, settingsScope(req, category));
       await auditSettingsChange(
         req,

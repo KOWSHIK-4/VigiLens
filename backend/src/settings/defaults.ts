@@ -26,6 +26,15 @@ export interface SettingDefinition {
    * remains available internally via `settingsService.getValue()`.
    */
   sensitive?: boolean;
+  /**
+   * The setting describes a host-level resource shared by every organization
+   * (the media filesystem root, its quota, global retention policy). It is
+   * stored once at the instance scope ("") because that is the only scope the
+   * services that consume it ever read, and only a Super Admin may change it.
+   * Without this flag a tenant write would land at a scope nothing reads, so
+   * the change would silently never take effect.
+   */
+  instanceScoped?: boolean;
 }
 
 export interface SettingsCategoryDefinition {
@@ -287,6 +296,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 365,
         unit: "days",
+        instanceScoped: true,
       },
       {
         key: "video_retention_days",
@@ -297,6 +307,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 730,
         unit: "days",
+        instanceScoped: true,
       },
       {
         key: "snapshot_quality",
@@ -314,6 +325,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         description: "Periodically purge expired images, videos and detections.",
         type: "boolean",
         defaultValue: true,
+        instanceScoped: true,
       },
     ],
   },
@@ -463,6 +475,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         description: "Root directory for snapshots, videos and recordings.",
         type: "string",
         defaultValue: "/data/vigilens",
+        instanceScoped: true,
       },
       {
         key: "max_storage_gb",
@@ -473,6 +486,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 10000,
         unit: "GB",
+        instanceScoped: true,
       },
       {
         key: "low_storage_threshold_gb",
@@ -483,6 +497,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 500,
         unit: "GB",
+        instanceScoped: true,
       },
       {
         key: "cleanup_interval_days",
@@ -493,6 +508,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 30,
         unit: "days",
+        instanceScoped: true,
       },
       {
         key: "report_retention_days",
@@ -503,6 +519,7 @@ export const settingsCategories: SettingsCategoryDefinition[] = [
         min: 1,
         max: 730,
         unit: "days",
+        instanceScoped: true,
       },
       {
         key: "scheduled_reports_enabled",
@@ -654,6 +671,21 @@ export function getSettingDefinition(
   key: string,
 ): SettingDefinition | undefined {
   return settingsByKey.get(`${category}:${key}`);
+}
+
+/** Whether a single setting describes a host-level, instance-wide resource. */
+export function isInstanceScopedSetting(
+  category: SystemSettingCategory,
+  key: string,
+): boolean {
+  return settingsByKey.get(`${category}:${key}`)?.instanceScoped === true;
+}
+
+/** Whether any setting in the category is host-level and Super Admin only. */
+export function categoryHasInstanceScopedSettings(
+  category: SystemSettingCategory,
+): boolean {
+  return settingsByCategory.get(category)?.settings.some((s) => s.instanceScoped) ?? false;
 }
 
 export function isHttpUrl(value: string): boolean {

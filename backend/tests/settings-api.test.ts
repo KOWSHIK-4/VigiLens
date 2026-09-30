@@ -252,6 +252,31 @@ async function run() {
     fail("PATCH settings unknown key", unknownKey);
   }
 
+  // The media root, quota and retention policy describe one filesystem shared
+  // by every organization and are only ever read at the instance scope, so a
+  // tenant admin must not be able to repoint or resize them for everyone.
+  const tenantHostPath = await request(
+    "/settings/storage",
+    { method: "PATCH", body: JSON.stringify({ storage_base_path: "/tmp/tenant-escape" }) },
+    adminToken,
+  );
+  if (tenantHostPath.status === 403) {
+    ok("non-super-admin cannot change the instance-wide storage path (403)");
+  } else {
+    fail("PATCH /settings/storage non-super-admin", tenantHostPath);
+  }
+
+  const tenantHostQuota = await request(
+    "/settings/storage",
+    { method: "PATCH", body: JSON.stringify({ max_storage_gb: 9999 }) },
+    adminToken,
+  );
+  if (tenantHostQuota.status === 403) {
+    ok("non-super-admin cannot change the instance-wide storage quota (403)");
+  } else {
+    fail("PATCH /settings/storage quota non-super-admin", tenantHostQuota);
+  }
+
   const badCategory = await request(
     "/settings/bogus",
     { method: "PATCH", body: JSON.stringify({ system_name: "x" }) },
@@ -261,6 +286,28 @@ async function run() {
     ok("PATCH /settings/:category rejects unknown category (400)");
   } else {
     fail("PATCH settings unknown category", badCategory);
+  }
+
+  const tenantCadence = await request(
+    "/settings/storage",
+    { method: "PATCH", body: JSON.stringify({ report_cadence_days: "7" }) },
+    adminToken,
+  );
+  if (tenantCadence.status === 200) {
+    ok("tenant admin can still change its own report cadence");
+  } else {
+    fail("PATCH /settings/storage tenant-owned key", tenantCadence);
+  }
+
+  const rootStoragePath = await request(
+    "/settings/storage",
+    { method: "PATCH", body: JSON.stringify({ storage_base_path: "/" }) },
+    superAdminToken,
+  );
+  if (rootStoragePath.status === 400) {
+    ok("PATCH settings rejects a filesystem-root storage path (400)");
+  } else {
+    fail("PATCH settings storage root path", rootStoragePath);
   }
 
   const emptyBody = await request(

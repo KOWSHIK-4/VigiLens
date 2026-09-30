@@ -1,8 +1,10 @@
 export {
+  categoryHasInstanceScopedSettings,
   getSettingCategories,
   getSettingCategory,
   getSettingDefinition,
   isHttpUrl,
+  isInstanceScopedSetting,
   isValidSettingValue,
 } from "./defaults";
 export type {

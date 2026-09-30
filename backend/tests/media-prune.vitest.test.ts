@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, rm, readdir, utimes, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pruneMedia, isSafeStorageBasePath, SNAPSHOT_SUBDIR, RECORDINGS_SUBDIR } from "../src/services/mediaPrune.service";
+import { pruneMedia, SNAPSHOT_SUBDIR, RECORDINGS_SUBDIR } from "../src/services/mediaPrune.service";
+import { isSafeStorageBasePath } from "../src/utils/storagePath";
 import { prisma } from "../src/config/prisma";
 
 const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";

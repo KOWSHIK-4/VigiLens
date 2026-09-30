@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { settingsService } from "./settings.service";
+import { isSafeStorageBasePath } from "../utils/storagePath";
 import type { SystemSettingCategory } from "@prisma/client";
 
 export const SNAPSHOT_SUBDIR = "snapshots";
@@ -40,18 +41,6 @@ export interface PruneReport {
   detectionsCutoff: string | null;
   reportsRemoved: number;
   reportsCutoff: string | null;
-}
-
-/**
- * The prune tool only ever touches the two media sub-directories beneath the
- * storage root. Refuse root-like paths so a misconfigured
- * `storage_base_path` can never point the tool at the filesystem root.
- */
-export function isSafeStorageBasePath(basePath: string | undefined): boolean {
-  if (!basePath || !basePath.trim()) return false;
-  const resolved = path.resolve(basePath);
-  const parsed = path.parse(resolved);
-  return parsed.root !== resolved && path.dirname(resolved) !== resolved;
 }
 
 async function resolveStorageBasePath(): Promise<string> {
