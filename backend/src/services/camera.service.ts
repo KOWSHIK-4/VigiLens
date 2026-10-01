@@ -18,6 +18,7 @@ import {
   isEncryptedSecret,
 } from "../utils/crypto";
 import type { Camera, CameraStatus, CameraType, Prisma } from "@prisma/client";
+import { checkCameraUrlForType } from "../types";
 import type { CreateCameraInput, UpdateCameraInput } from "../types";
 
 const SNAPSHOT_TIMEOUT_MS = 10_000;
@@ -527,6 +528,18 @@ export const cameraService = {
     const username = (data.username ?? "").trim();
     const password = data.password ?? "";
     const requestedType = (data.cameraType as CameraType | undefined) ?? existing.cameraType;
+
+    // The per-type URL rule is enforced on create but a partial update could
+    // desynchronize the pair: PATCH { cameraType: "rtsp" } against an existing
+    // http:// url stores a type the URL cannot satisfy, and PATCH { url } alone
+    // against an `ip` camera could point the stored row at any host at all.
+    // Validating the merged result is the only place both effective values are
+    // known, since the request may supply either field, both, or neither.
+    const effectiveUrl = data.url ?? existing.url;
+    const urlCheck = checkCameraUrlForType(effectiveUrl, requestedType);
+    if (!urlCheck.ok) {
+      throw new ApiError(400, urlCheck.message, { code: "INVALID_CAMERA_URL" });
+    }
 
     const credentialUpdate: Record<string, unknown> = {};
     if (password.length > 0) {

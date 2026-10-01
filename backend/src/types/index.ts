@@ -120,6 +120,25 @@ const urlByType = {
   video_file: { pattern: /\.(mp4|avi|mkv|mov)$/i, message: "Video file URL should end with .mp4, .avi, .mkv, or .mov" },
 };
 
+/**
+ * Checks a camera URL against the scheme its declared type requires.
+ *
+ * Exported because `updateCameraSchema` cannot enforce this on its own: a
+ * partial update may carry a `url`, a `cameraType`, or neither, and only the
+ * service knows the effective value of both once the stored row is merged in.
+ * The rule is exported so that merge is validated against the same table the
+ * create path uses, instead of a second copy that can drift from it.
+ */
+export function checkCameraUrlForType(
+  url: string,
+  cameraType: string,
+): { ok: true } | { ok: false; message: string } {
+  const check = urlByType[cameraType as keyof typeof urlByType];
+  if (!check) return { ok: true };
+  if (check.pattern.test(url)) return { ok: true };
+  return { ok: false, message: check.message };
+}
+
 const cameraBaseSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   url: z
@@ -157,12 +176,11 @@ const cameraBaseSchema = z.object({
 });
 
 export const createCameraSchema = cameraBaseSchema.refine(
-  (data) => {
-    const check = urlByType[data.cameraType];
-    if (!check) return true;
-    return check.pattern.test(data.url);
-  },
-  (data) => ({ message: urlByType[data.cameraType]?.message || "Invalid URL for selected camera type", path: ["url"] }),
+  (data) => checkCameraUrlForType(data.url, data.cameraType).ok,
+  (data) => ({
+    message: urlByType[data.cameraType]?.message || "Invalid URL for selected camera type",
+    path: ["url"],
+  }),
 );
 
 export const updateCameraSchema = cameraBaseSchema
