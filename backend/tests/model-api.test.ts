@@ -117,16 +117,19 @@ async function run() {
   }
   ok("backend started and /health responds");
 
+  // model.service writes the same organizationId-less AIModel table the detector
+  // service does, so model mutations are gated to a Super Admin. Log in as one;
+  // a tenant admin holding models.manage is refused by design.
   const login = await request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "admin@vigilens.io", password: "admin123" }),
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
   });
   if (login.status !== 200 || !login.body || typeof login.body !== "object") {
-    fail("admin login", login);
+    fail("super admin login", login);
     return;
   }
   const token = (login.body as { data: { token: string } }).data.token;
-  ok("admin login returns token");
+  ok("super admin login returns token");
 
   const list = await request("/models?page=1&limit=100", {}, token);
   if (list.status !== 200) {

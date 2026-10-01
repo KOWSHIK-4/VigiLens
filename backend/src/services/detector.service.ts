@@ -515,8 +515,9 @@ async assignCameras(id: string, input: { cameraIds?: string[]; assignments?: Det
           // Clear only this organization's own assignments. AIModel has no
           // organizationId, so a detector is shared instance-wide, and an
           // unfiltered delete here would strip every other tenant's cameras
-          // off the detector the moment one tenant re-assigned its own.
-          // A super_admin (no organizationId) still replaces the full set.
+          // off the detector the moment one tenant re-assigned its own. When no
+          // organizationId is supplied there is no tenant to scope to, so the
+          // full set is replaced.
           ...(organizationId ? { camera: { organizationId } } : {}),
         },
       }),

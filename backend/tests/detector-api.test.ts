@@ -124,14 +124,14 @@ async function run() {
 
   const login = await request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "admin@vigilens.io", password: "admin123" }),
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
   });
   if (login.status !== 200 || !login.body || typeof login.body !== "object") {
-    fail("admin login", login);
+    fail("super admin login", login);
     return;
   }
   const token = (login.body as { data: { token: string } }).data.token;
-  ok("admin login returns token");
+  ok("super admin login returns token");
 
   const marketplace = await request("/detectors/marketplace", {}, token);
   if (marketplace.status !== 200) {

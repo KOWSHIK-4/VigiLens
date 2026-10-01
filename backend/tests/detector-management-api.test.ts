@@ -139,6 +139,21 @@ async function run() {
   const adminToken = (adminLogin.body as { data: { token: string } }).data.token;
   ok("admin login returns token");
 
+  // Detectors are instance-wide (AIModel has no organizationId), so mutations
+  // are gated to a Super Admin even for a caller who holds models.manage. The
+  // tenant admin token is kept for reads and for camera assignment, which is
+  // scoped per organization.
+  const superLogin = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
+  });
+  if (superLogin.status !== 200) {
+    fail("super admin login", superLogin);
+    return;
+  }
+  const superToken = (superLogin.body as { data: { token: string } }).data.token;
+  ok("super admin login returns token");
+
   const viewerLogin = await request("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email: "viewer@vigilens.io", password: "admin123" }),
@@ -187,7 +202,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ name: "Fire Detection PRO", version: "2.4.0" }),
     },
-    adminToken,
+    superToken,
   );
   if (
     patched.status === 200 &&
@@ -202,7 +217,7 @@ async function run() {
   const emptyPatch = await request(
     `/detectors/${target.id}`,
     { method: "PATCH", body: JSON.stringify({}) },
-    adminToken,
+    superToken,
   );
   if (emptyPatch.status === 400) {
     ok("PATCH /detectors/:id rejects empty body (400)");
@@ -213,7 +228,7 @@ async function run() {
   const badPatch = await request(
     `/detectors/${target.id}`,
     { method: "PATCH", body: JSON.stringify({ enabled: "yes" }) },
-    adminToken,
+    superToken,
   );
   if (badPatch.status === 400) {
     ok("PATCH /detectors/:id rejects non-boolean enabled (400)");
@@ -225,7 +240,7 @@ async function run() {
   await request(
     `/detectors/${target.id}`,
     { method: "PATCH", body: JSON.stringify({ name: target.name, version: target.version }) },
-    adminToken,
+    superToken,
   );
 
   // --- List filters (lifecycle status, type, enabled) ---
@@ -276,7 +291,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ alertCooldownMs: -100 }),
     },
-    adminToken,
+    superToken,
   );
   if (badCooldown.status === 400) {
     ok("PATCH settings rejects negative alert cooldown (400)");
@@ -290,7 +305,7 @@ async function run() {
       method: "PATCH",
       body: JSON.stringify({ alertCooldownMs: 45000, detectionIntervalMs: 3000, confidenceThreshold: 65 }),
     },
-    adminToken,
+    superToken,
   );
   const goodCooldownBody = goodCooldown.body as {
     data: {
@@ -380,6 +395,60 @@ async function run() {
     fail("PUT cameras mixed body", mixedBody);
   }
 
+  // --- Instance scope: detectors are shared, so mutations are Super Admin only ---
+
+  const tenantAdminPatch = await request(
+    `/detectors/${target.id}`,
+    { method: "PATCH", body: JSON.stringify({ name: "Tenant Admin Was Here" }) },
+    adminToken,
+  );
+  if (tenantAdminPatch.status === 403) {
+    ok("tenant admin cannot edit an instance-wide detector (403)");
+  } else {
+    fail("tenant admin PATCH detector", tenantAdminPatch);
+  }
+
+  const tenantAdminDisable = await request(
+    `/detectors/${target.id}/disable`,
+    { method: "PATCH" },
+    adminToken,
+  );
+  if (tenantAdminDisable.status === 403) {
+    ok("tenant admin cannot disable an instance-wide detector (403)");
+  } else {
+    fail("tenant admin PATCH disable", tenantAdminDisable);
+  }
+
+  const tenantAdminUninstall = await request(
+    `/detectors/${target.id}`,
+    { method: "DELETE" },
+    adminToken,
+  );
+  if (tenantAdminUninstall.status === 403) {
+    ok("tenant admin cannot uninstall an instance-wide detector (403)");
+  } else {
+    fail("tenant admin DELETE detector", tenantAdminUninstall);
+  }
+
+  const tenantAdminSettings = await request(
+    `/detectors/${target.id}/settings`,
+    { method: "PATCH", body: JSON.stringify({ confidenceThreshold: 99 }) },
+    adminToken,
+  );
+  if (tenantAdminSettings.status === 403) {
+    ok("tenant admin cannot rewrite shared detector thresholds (403)");
+  } else {
+    fail("tenant admin PATCH settings", tenantAdminSettings);
+  }
+
+  // The detector name must be untouched by the refused writes above.
+  const afterRefused = await request(`/detectors/${target.id}`, {}, adminToken);
+  if ((afterRefused.body as { data: DetectorRow }).data.name === target.name) {
+    ok("refused tenant-admin writes left the detector unchanged");
+  } else {
+    fail("detector mutated despite 403", afterRefused.body);
+  }
+
   // --- Permission enforcement (viewer can read but never manage) ---
 
   const viewerPatch = await request(
@@ -449,8 +518,8 @@ async function run() {
 
   // --- Enable/disable audit trail ---
 
-  await request(`/detectors/${target.id}/disable`, { method: "PATCH" }, adminToken);
-  await request(`/detectors/${target.id}/enable`, { method: "PATCH" }, adminToken);
+  await request(`/detectors/${target.id}/disable`, { method: "PATCH" }, superToken);
+  await request(`/detectors/${target.id}/enable`, { method: "PATCH" }, superToken);
   const auditAfter = await request(
     "/audit-logs?limit=20&sortBy=timestamp&sortOrder=desc",
     {},

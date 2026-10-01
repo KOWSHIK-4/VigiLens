@@ -67,14 +67,14 @@ async function main() {
 
   const login = await json("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "admin@vigilens.io", password: "admin123" }),
+    body: JSON.stringify({ email: "super@vigilens.io", password: "admin123" }),
   });
   if (login.status !== 200) {
-    fail("admin login", login);
+    fail("super admin login", login);
     return;
   }
   const token = (login.body as { data: { token: string } }).data.token;
-  ok("admin login");
+  ok("super admin login");
 
   const list = await json("/models?page=1&limit=100", {}, token);
   const listBody = list.body as { total: number; data: Array<{ name: string; detectorKey: string }> };
