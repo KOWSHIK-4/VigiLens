@@ -1,21 +1,23 @@
 # node >=22.12.0 is required by package.json "engines" for ESM compatibility.
-FROM node:22.12.0-alpine AS builder
+FROM node:22.13.0-alpine AS builder
 
 WORKDIR /app
 
 RUN apk add --no-cache openssl
 
 COPY package*.json ./
+# The schema is needed during npm ci so prisma's postinstall hook can generate
+# the client before the TypeScript build runs.
+COPY prisma/ ./prisma/
 RUN npm ci
 
 COPY tsconfig.json ./
-COPY prisma/ ./prisma/
 COPY src/ ./src/
 
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:22.12.0-alpine
+FROM node:22.13.0-alpine
 
 WORKDIR /app
 
