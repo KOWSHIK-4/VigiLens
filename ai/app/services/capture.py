@@ -16,6 +16,8 @@ from pathlib import Path
 
 import cv2
 
+from app.ssrf import assert_source_allowed
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_CAMERA_TYPES = ("usb", "rtsp", "ip", "video_file")
@@ -62,12 +64,23 @@ def open_capture(source: str, camera_type: str, open_timeout_ms: int) -> cv2.Vid
     them after ``VideoCapture()`` returns is too late, because the
     constructor has already blocked on the network handshake (a dead rtsp
     endpoint would stall the caller for the OS-level TCP timeout).
+
+    Network sources pass the outbound guard first. This is the point where the
+    socket is actually opened, so it is the last place the check can be
+    enforced; the backend applies an equivalent guard before forwarding, and
+    both are needed because this is where a bypass would do the most damage.
     """
     source_is_str = isinstance(source, str)
     is_network = (
         camera_type in ("rtsp", "ip")
         or (source_is_str and str(source).startswith(("rtsp://", "rtmp://", "http://", "https://")))
     )
+    if is_network:
+        try:
+            assert_source_allowed(str(source))
+        except ValueError as exc:
+            raise CaptureError(str(exc)) from exc
+
     if is_network and open_timeout_ms > 0:
         return cv2.VideoCapture(
             str(source),

@@ -27,6 +27,7 @@
 import { config } from "../config";
 import { logger } from "../config/logger";
 import { prisma } from "../config/prisma";
+import { assertCameraSourceAllowed } from "../utils/ssrf";
 import { engineService } from "./engineService";
 import { aiServiceClient, type AiServiceClient, type CaptureCredentials } from "./aiClient";
 import {
@@ -159,6 +160,24 @@ export class AiServiceFrameSource implements FrameSource {
   ) {}
 
   async capture(camera: MonitorCameraRef, videoPosSeconds: number): Promise<{ buffer: Buffer }> {
+    // The scheduler dereferences stored camera sources on its own, with no API
+    // call to trigger it, so the outbound guard has to run here as well as in
+    // the request-driven capture path. `usb`/`video_file` sources are local
+    // device and filesystem paths and are not network destinations.
+    if (camera.cameraType !== "usb" && camera.cameraType !== "video_file") {
+      const guard = assertCameraSourceAllowed(camera.url);
+      if (!guard.allowed) {
+        logger.warn("Blocked camera source at the outbound guard", {
+          cameraId: camera.id,
+          cameraType: camera.cameraType,
+          reason: guard.reason ?? "Camera source is not permitted",
+        });
+        throw new Error(
+          guard.reason ?? "Camera source is not permitted (blocked address)",
+        );
+      }
+    }
+
     const credentials = await this.loadCredentials(camera.id).catch(() => null);
     const buffer = await this.client.captureFrame(
       camera.url,

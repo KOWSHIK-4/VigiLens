@@ -30,6 +30,10 @@
  * still reaches the target. Closing that requires pinning the resolved IP and
  * re-validating each hop, which conflicts with cameras that legitimately sit
  * behind redirects. Worth revisiting if the threat model demands it.
+ *
+ * The camera-source guard below widens the scheme set to RTSP and is applied at
+ * every point the backend dereferences a camera source, because the AI service
+ * capture path was otherwise an unguarded second door to the same network.
  */
 
 /** Hostnames that are always an SSRF target, never a camera. */
@@ -94,6 +98,13 @@ export interface UrlGuardResult {
 }
 
 /**
+ * Schemes the backend will dereference on a tenant's behalf. `rtsp`/`rtsps`
+ * are included because the AI service hands the camera source straight to
+ * OpenCV/FFMPEG, which speaks RTSP and nothing else useful for a stream.
+ */
+const CAMERA_SOURCE_SCHEMES = new Set(["http:", "https:", "rtsp:", "rtsps:"]);
+
+/**
  * Returns whether the backend may dereference this URL on the tenant's behalf.
  * Non-HTTP schemes are rejected outright: the HTTP health-check branch only
  * ever runs for http/https, and handing `file:` or `gopher:` through to `fetch`
@@ -111,6 +122,47 @@ export function assertOutboundUrlAllowed(rawUrl: string): UrlGuardResult {
     return { allowed: false, reason: `Unsupported URL scheme "${parsed.protocol}"` };
   }
 
+  return checkHostAgainstGuard(parsed);
+}
+
+/**
+ * Camera-source variant of {@link assertOutboundUrlAllowed}, widening the
+ * accepted schemes to RTSP.
+ *
+ * Camera sources reach the network through two very different doors: the HTTP
+ * health probe uses `fetch` and accepts only http/https, while the frame
+ * capture path forwards the string to the AI service, which passes it to
+ * `cv2.VideoCapture` and FFMPEG. That second door is a broader SSRF surface
+ * than the first, and it was reachable precisely because no guard ran on it.
+ * Applying one guard to both doors keeps the covered set honest: a source that
+ * is refused for the capture path is also refused for the probe, and vice
+ * versa.
+ *
+ * Local sources are deliberately not routed through here: `usb` and
+ * `video_file` rows legitimately hold device paths and filesystem paths, and
+ * those are not network destinations. Callers are responsible for skipping
+ * the guard for those two camera types.
+ */
+export function assertCameraSourceAllowed(rawUrl: string): UrlGuardResult {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { allowed: false, reason: "Camera source is not a valid absolute URL" };
+  }
+
+  if (!CAMERA_SOURCE_SCHEMES.has(parsed.protocol)) {
+    return {
+      allowed: false,
+      reason: `Unsupported camera source scheme "${parsed.protocol}"`,
+    };
+  }
+
+  return checkHostAgainstGuard(parsed);
+}
+
+/** Applies the hostname and IP-range rules to an already-parsed URL. */
+function checkHostAgainstGuard(parsed: URL): UrlGuardResult {
   const host = parsed.hostname.toLowerCase();
 
   if (BLOCKED_HOSTNAMES.has(host)) {

@@ -4,7 +4,7 @@ import { prisma } from "../config/prisma";
 import { logger } from "../config/logger";
 import { ApiError } from "../utils/errors";
 import { stripUrlUserinfo, redactSecrets } from "../utils/redact";
-import { assertOutboundUrlAllowed } from "../utils/ssrf";
+import { assertOutboundUrlAllowed, assertCameraSourceAllowed } from "../utils/ssrf";
 import { settingsService } from "./settings.service";
 import {
   aiServiceClient,
@@ -320,6 +320,45 @@ interface HealthProbeResult {
   responseTime: number;
   isHealthy: boolean;
   message: string | null;
+}
+
+/**
+ * `usb` and `video_file` sources are device paths and filesystem paths rather
+ * than network destinations, so there is nothing for the SSRF guard to judge.
+ * Every other camera type is dereferenced by the backend -- `fetch` for the
+ * HTTP probe, the AI service (and therefore OpenCV/FFMPEG) for frame capture --
+ * so all of them pass the guard first.
+ */
+function isLocalCameraSource(cameraType: string): boolean {
+  return cameraType === "usb" || cameraType === "video_file";
+}
+
+/**
+ * Runs the outbound guard over a camera source that is about to be
+ * dereferenced. Returns a failed health-probe result when the source is
+ * refused, so callers can treat a blocked source exactly like an unreachable
+ * one instead of leaking the reason through an unchecked fetch.
+ */
+function guardCameraSource(
+  cameraUrl: string,
+  cameraType: string,
+  startedAt: number,
+): HealthProbeResult | null {
+  if (isLocalCameraSource(cameraType)) return null;
+
+  const guard = assertCameraSourceAllowed(cameraUrl);
+  if (guard.allowed) return null;
+
+  const reason = guard.reason ?? "Camera URL is not permitted (blocked address)";
+  logger.warn("Blocked camera source at the outbound guard", {
+    cameraType,
+    reason,
+  });
+  return {
+    responseTime: Date.now() - startedAt,
+    isHealthy: false,
+    message: reason,
+  };
 }
 
 /**
@@ -653,21 +692,32 @@ export const cameraService = {
     } else {
       // rtsp / usb / video_file feeds cannot be probed over plain HTTP — the
       // AI service captures an actual frame to verify the feed is reachable.
-      try {
-        await client.captureFrame(
-          camera.url,
-          camera.cameraType,
-          0,
-          SNAPSHOT_TIMEOUT_MS,
-          credentials ?? undefined,
-        );
-        responseTime = Date.now() - start;
-        isHealthy = true;
-        message = "Frame captured successfully";
-      } catch (err) {
-        responseTime = Date.now() - start;
-        isHealthy = false;
-        message = err instanceof Error ? redactSecrets(err.message) : "Health check failed";
+      //
+      // That capture is a backend-initiated dereference of a tenant-controlled
+      // source, exactly like the HTTP probe above, so the guard runs here too.
+      // Without it an `rtsp` row pointing at loopback or the metadata endpoint
+      // was fetched by the AI service with no check at all — which is the
+      // majority of cameras, so this was the default path, not an edge case.
+      const blocked = guardCameraSource(camera.url, camera.cameraType, start);
+      if (blocked) {
+        ({ responseTime, isHealthy, message } = blocked);
+      } else {
+        try {
+          await client.captureFrame(
+            camera.url,
+            camera.cameraType,
+            0,
+            SNAPSHOT_TIMEOUT_MS,
+            credentials ?? undefined,
+          );
+          responseTime = Date.now() - start;
+          isHealthy = true;
+          message = "Frame captured successfully";
+        } catch (err) {
+          responseTime = Date.now() - start;
+          isHealthy = false;
+          message = err instanceof Error ? redactSecrets(err.message) : "Health check failed";
+        }
       }
     }
 
@@ -727,6 +777,18 @@ export const cameraService = {
     const credentials = await loadCameraCredentials(id);
     const startedAt = Date.now();
     try {
+      // The capture path forwards the source to the AI service, which hands it
+      // to `cv2.VideoCapture`. Guard it first: a refused source must never
+      // reach the fetcher, and the frame is written to disk and served back at
+      // /thumbnail on success, which makes this a readable oracle rather than
+      // a blind one.
+      const blocked = guardCameraSource(camera.url, camera.cameraType, startedAt);
+      if (blocked) {
+        throw new ApiError(422, blocked.message ?? "Camera source is not permitted", {
+          code: "CAMERA_SOURCE_BLOCKED",
+        });
+      }
+
       const frame = await client.captureFrame(
         camera.url,
         camera.cameraType,
