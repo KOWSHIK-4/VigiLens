@@ -57,7 +57,7 @@ at close (`git status` clean, `origin/main`).
 
 - **Where:**
   - `frontend/nginx.conf.template:50-64` — `location /detect/` is a public proxy to the AI service
-  - `frontend/docker-entrypoint.d/15-internal-key-header.sh:6-13` — the shared internal key is injected server-side on every `/detect/` request
+  - `frontend/nginx.conf.template:81` — the shared internal key is substituted into the proxy config server-side at container start, so it is injected on every `/detect/` request
   - `ai/app/routes/detection.py:27` — key guard is the *only* protection; there is **no user authentication, session check, permission check, or rate limit**
   - `ai/app/routes/detection.py:308-316` — `/detect/webcam` takes untrusted `camera_id`, `device`, `detector`, `snapshot_enabled`, `confidence`
   - `ai/app/routes/detection.py:358-402` — `device` is passed straight into `cv2.VideoCapture(...)` (arbitrary URL / file path → SSRF / local-file probing)
@@ -181,9 +181,9 @@ at close (`git status` clean, `origin/main`).
   scope is later fixed without containing the path. No API-exposed path to exploit it today.
 - **Public `/health` endpoints** reveal filesystem paths and versions when the backend
   port is reachable directly; keep behind the proxy/firewall.
-- **AI internal-key is injection-based.** `INTERNAL_KEY_HEADER` (and the value) are baked
-  into the running nginx config; keep the secret out of logs and ensure the frontend
-  image is only readable by deployers.
+- **AI internal-key is injection-based.** `${INTERNAL_API_KEY}` is substituted by envsubst
+  into the rendered nginx config, so the value is baked into the running config; keep the
+  secret out of logs and ensure the frontend image is only readable by deployers.
 
 ---
 
