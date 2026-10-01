@@ -24,16 +24,13 @@
  *
  * Everything else, including all RFC1918 space, stays permitted.
  *
- * Known residual risk, deliberately not addressed here: `fetch` resolves DNS
- * itself and follows redirects, so a hostname that resolves to a blocked
- * address (DNS rebinding), or an allowed host that 302s to a blocked address,
- * still reaches the target. Closing that requires pinning the resolved IP and
- * re-validating each hop, which conflicts with cameras that legitimately sit
- * behind redirects. Worth revisiting if the threat model demands it.
- *
- * The camera-source guard below widens the scheme set to RTSP and is applied at
- * every point the backend dereferences a camera source, because the AI service
- * capture path was otherwise an unguarded second door to the same network.
+ * Known residual risk: `fetch` resolves DNS itself, so a hostname that resolves
+ * to a blocked address (DNS rebinding) still reaches the target. Closing that
+ * requires pinning the resolved IP, which conflicts with cameras that
+ * legitimately sit behind DNS. Redirects are no longer part of this for the
+ * guarded callers, which set `redirect: "manual"` so an allowed host cannot
+ * 302 past the check -- but the AI-service capture path follows redirects
+ * inside FFMPEG, where that option has no effect.
  */
 
 /** Hostnames that are always an SSRF target, never a camera. */

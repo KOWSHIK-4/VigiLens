@@ -396,8 +396,27 @@ async function probeHttpCamera(
       headers.Authorization = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`;
     }
 
-    const res = await fetch(cameraUrl, { signal: controller.signal, method: "HEAD", headers });
+    const res = await fetch(cameraUrl, {
+      signal: controller.signal,
+      method: "HEAD",
+      headers,
+      // The guard validates the configured URL, so following a redirect would
+      // walk straight past it: an allowed host could 302 to 169.254.169.254 or
+      // loopback and the guard would never see the second hop. A camera that
+      // redirects is reported unhealthy rather than chased.
+      redirect: "manual",
+    });
     clearTimeout(timeout);
+
+    // With redirect: "manual" a 3xx surfaces here rather than being chased, so
+    // report it as the misconfiguration it is instead of a bare status code.
+    if (res.status >= 300 && res.status < 400) {
+      return {
+        responseTime: Date.now() - startedAt,
+        isHealthy: false,
+        message: `Camera redirected (HTTP ${res.status}); redirects are not followed`,
+      };
+    }
 
     return {
       responseTime: Date.now() - startedAt,
