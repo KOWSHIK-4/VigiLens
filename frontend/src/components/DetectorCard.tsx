@@ -20,7 +20,10 @@ import DetectorRuntimeStatusBadge from "./DetectorRuntimeStatusBadge";
 interface DetectorCardProps {
   detector: MarketplaceDetector;
   busy?: boolean;
+  /** Tenant-scoped: assigning this instance-wide detector to own cameras. */
   canManage?: boolean;
+  /** Instance-wide: install, enable, configure, edit, restart, uninstall. */
+  canManageInstance?: boolean;
   availability?: DetectorAvailability;
   engineType?: DetectorEngineType;
   onToggle: (detector: MarketplaceDetector) => void;
@@ -53,6 +56,7 @@ export default function DetectorCard({
   detector,
   busy,
   canManage = true,
+  canManageInstance = canManage,
   availability,
   engineType,
   onToggle,
@@ -180,9 +184,13 @@ export default function DetectorCard({
             role="switch"
             aria-checked={enabled}
             onClick={() => onToggle(detector)}
-            disabled={busy || !canManage}
+            disabled={busy || !canManageInstance}
             aria-label={`${enabled ? "Disable" : "Enable"} ${detector.name}`}
-            title={canManage ? undefined : "You don’t have permission to change detectors"}
+            title={
+              canManageInstance
+                ? undefined
+                : "Only a Super Admin can enable or disable detectors for the whole instance"
+            }
             className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
               enabled ? "bg-brand-600" : "bg-gray-300"
             }`}
@@ -196,7 +204,7 @@ export default function DetectorCard({
         ) : (
           <button
             onClick={() => onInstall(detector)}
-            disabled={busy || !canManage}
+            disabled={busy || !canManageInstance}
             className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
@@ -206,7 +214,7 @@ export default function DetectorCard({
 
         {isInstalled ? (
           <div className="flex items-center gap-1">
-            {canManage && (
+            {canManageInstance && (
               <>
                 <button
                   onClick={() => onConfigure(detector)}
@@ -216,15 +224,6 @@ export default function DetectorCard({
                   title="Configure"
                 >
                   <Settings className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onCameras(detector)}
-                  disabled={busy}
-                  className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
-                  aria-label={`Assign cameras to ${detector.name}`}
-                  title="Assign cameras"
-                >
-                  <Camera className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => onEdit(detector)}
@@ -245,6 +244,17 @@ export default function DetectorCard({
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </>
+            )}
+            {canManage && (
+              <button
+                onClick={() => onCameras(detector)}
+                disabled={busy}
+                className="p-2 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                aria-label={`Assign cameras to ${detector.name}`}
+                title="Assign cameras"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
             )}
             <button
               onClick={() => onDetails(detector)}

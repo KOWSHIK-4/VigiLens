@@ -14,7 +14,7 @@ import { detectorService } from "@/services/detectors";
 import { engineService } from "@/services/engine";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { hasPermission } from "@/utils/permissions";
+import { hasPermission, isSuperAdmin } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import DetectorCard from "@/components/DetectorCard";
 import DetectorConfigDialog from "@/components/DetectorConfigDialog";
@@ -57,6 +57,7 @@ export default function DetectorsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canManage = hasPermission(user, "models.manage");
+  const canManageInstance = isSuperAdmin(user);
   const [tab, setTab] = useState<Tab>("installed");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -230,13 +231,26 @@ export default function DetectorsPage() {
         </div>
       </div>
 
+      {canManage && !canManageInstance && (
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <p>
+            Detectors run <strong>instance-wide</strong>, shared by every
+            organization, so installing, enabling, configuring, editing and
+            restarting them is restricted to Super Admins. You can still assign
+            your own cameras to any installed detector.
+          </p>
+        </div>
+      )}
+
       {!canManage && (
         <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
           <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <p>
-            You have <strong>view-only</strong> access to AI detectors. To enable,
-            configure, edit, install, or assign cameras to detection models, ask an
-            administrator for the <strong>Manage AI Models</strong> permission.
+            You have <strong>view-only</strong> access to AI detectors. To assign
+            cameras to detection models, ask an administrator for the{" "}
+            <strong>Manage AI Models</strong> permission. Installing and configuring
+            detectors is restricted to Super Admins.
           </p>
         </div>
       )}
@@ -378,6 +392,7 @@ export default function DetectorsPage() {
               detector={detector}
               busy={isBusy(detector)}
               canManage={canManage}
+              canManageInstance={canManageInstance}
               availability={descriptorByKey.get(detector.key)?.availability}
               engineType={descriptorByKey.get(detector.key)?.type}
               onToggle={(d) =>
@@ -409,6 +424,7 @@ export default function DetectorsPage() {
       <DetectorDetailsDrawer
         detector={selectedDetector}
         canManage={canManage}
+        canManageInstance={canManageInstance}
         onClose={() => setDetailsFor(null)}
         onConfigure={(d) => {
           setDetailsFor(null);

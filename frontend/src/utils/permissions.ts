@@ -26,6 +26,19 @@ export const ROLE_ORDER: string[] = [
 
 type PermissionLike = string | Permission;
 
+/**
+ * Detectors and models are shared instance-wide -- they carry no
+ * organizationId, unlike cameras, alerts and incidents -- so the backend
+ * restricts their mutations to super_admin rather than to the tenant-level
+ * models.manage permission. Use this to hide controls that would only ever
+ * come back as a 403.
+ */
+export function isSuperAdmin(
+  user: Pick<User, "permissions" | "role"> | null | undefined,
+): boolean {
+  return user?.role === "super_admin";
+}
+
 export function hasPermission(
   user: Pick<User, "permissions" | "role"> | null | undefined,
   permissionKey: string,

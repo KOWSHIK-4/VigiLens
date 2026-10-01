@@ -20,7 +20,7 @@ import { modelService } from "@/services/models";
 import { showToast } from "@/utils/toast";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { useAuth } from "@/hooks/useAuth";
-import { hasPermission } from "@/utils/permissions";
+import { hasPermission, isSuperAdmin } from "@/utils/permissions";
 import ModelStatusBadge from "@/components/ModelStatusBadge";
 import {
   AddModelDialog,
@@ -169,7 +169,10 @@ function TableSkeleton() {
 export default function ModelsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const canManage = hasPermission(user, "models.manage");
+  // Every model mutation is instance-wide: AIModel has no organizationId, and
+  // one inference process serves every tenant, so the backend gates these on
+  // super_admin rather than on models.manage.
+  const canManageInstance = isSuperAdmin(user);
   const canRead = hasPermission(user, "models.read");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
@@ -351,7 +354,7 @@ export default function ModelsPage() {
             configure detectors
           </p>
         </div>
-        {canManage ? (
+        {canManageInstance ? (
           <button
             className="btn-primary inline-flex items-center gap-2"
             onClick={() => setAddOpen(true)}
@@ -362,7 +365,7 @@ export default function ModelsPage() {
         ) : (
           <span
             className="inline-flex items-center gap-2 text-sm text-gray-400"
-            title="You don't have permission to add models"
+            title="Only a Super Admin can change instance-wide AI models"
           >
             <ShieldAlert className="w-4 h-4" />
             View only
@@ -492,7 +495,7 @@ export default function ModelsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <ConfidenceSlider
                         model={model}
-                        disabled={!canManage}
+                        disabled={!canManageInstance}
                         onCommit={(m, threshold) =>
                           thresholdMutation.mutate({ model: m, threshold })
                         }
@@ -501,7 +504,7 @@ export default function ModelsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <Switch
                         checked={model.enabled}
-                        disabled={!canManage}
+                        disabled={!canManageInstance}
                         label={`${model.enabled ? "Disable" : "Enable"} ${model.name}`}
                         onToggle={() =>
                           toggleMutation.mutate({
@@ -518,7 +521,7 @@ export default function ModelsPage() {
                       {new Date(model.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {canManage ? (
+                      {canManageInstance ? (
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => loadMutation.mutate(model)}
