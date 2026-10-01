@@ -19,6 +19,16 @@ DROP TYPE "RoleValue";
 ALTER TABLE "role_permissions"
   ADD CONSTRAINT "role_permissions_role_name_fkey" FOREIGN KEY ("role_name") REFERENCES "roles"("name") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- Seed the four system roles the enum previously carried so the users FK
+-- below can be added and existing users keep a resolvable role.
+INSERT INTO "roles" ("name", "description", "is_system")
+VALUES
+  ('super_admin', 'Full unrestricted access to every VigiLens resource', true),
+  ('admin', 'Manage users, cameras, AI models and view analytics & reports', true),
+  ('operator', 'Monitor cameras and detections, control streams and manage alerts', true),
+  ('viewer', 'Read-only access to monitoring data and reports', true)
+ON CONFLICT ("name") DO NOTHING;
+
 ALTER TABLE "users"
   ADD CONSTRAINT "users_role_fkey" FOREIGN KEY ("role") REFERENCES "roles"("name") ON DELETE RESTRICT ON UPDATE CASCADE;
 
