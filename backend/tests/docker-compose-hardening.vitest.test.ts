@@ -33,6 +33,22 @@ async function readCompose(): Promise<string> {
   return readFile(COMPOSE_PATH, "utf8");
 }
 
+/**
+ * Grace-period lookup for one service block.
+ *
+ * `\s*` already spans newlines, so the body does not need a `(?:.|\n)` catch
+ * all -- and must not use one: in JS, `.` does not match `\r`, so that idiom
+ * silently fails to cross a CRLF boundary and returns null for a file that is
+ * correct in every other respect. Git checks the file out with CRLF whenever
+ * core.autocrlf is on, which is the default on Windows.
+ */
+function gracePeriodSeconds(content: string, service: string): number | null {
+  const block = new RegExp(`^ {2}${service}:\\s*$([\\s\\S]*?)(?=^ {2}\\S|\\z)`, "m").exec(content);
+  if (!block) return null;
+  const match = /stop_grace_period:\s*(\d+)s/.exec(block[1]);
+  return match ? Number(match[1]) : null;
+}
+
 function collectEnvRefs(content: string): ComposeEnvRef[] {
   const refs: ComposeEnvRef[] = [];
   const lines = content.split(/\r?\n/);
@@ -88,12 +104,8 @@ describe("docker-compose production hardening", () => {
 
   it("gives the database and backend stop grace periods for clean drains", async () => {
     const content = await readCompose();
-    const backendGrace = /backend:\s*(?:.|\n)*?stop_grace_period: (\d+)s/.exec(content);
-    expect(backendGrace).not.toBeNull();
-    expect(Number(backendGrace?.[1])).toBeGreaterThanOrEqual(20);
-
-    const postgresGrace = /postgres:\s*(?:.|\n)*?stop_grace_period: (\d+)s/.exec(content);
-    expect(postgresGrace).not.toBeNull();
+    expect(gracePeriodSeconds(content, "backend")).toBeGreaterThanOrEqual(20);
+    expect(gracePeriodSeconds(content, "postgres")).toBeGreaterThanOrEqual(20);
   });
 
   it("never writes a real secret as an inline literal", async () => {
