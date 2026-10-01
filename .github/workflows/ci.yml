@@ -10,7 +10,7 @@ env:
   # Must satisfy backend/package.json "engines": node >=22.12.0. Running CI on
   # an older runtime lets a build pass here while the shipped image fails to
   # start, so this is kept in lockstep with the Dockerfiles.
-  NODE_VERSION: "22.12.0"
+  NODE_VERSION: "22.13.0"
 
 jobs:
   frontend:

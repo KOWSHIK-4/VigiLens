@@ -1,6 +1,6 @@
 # Kept in lockstep with the backend image and CI (node >=22.12.0) so a build
 # that passes here matches the runtime the rest of the stack is validated on.
-FROM node:22.12.0-alpine AS builder
+FROM node:22.13.0-alpine AS builder
 
 WORKDIR /app
 
@@ -21,12 +21,9 @@ RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 # The stock nginx entrypoint renders /etc/nginx/templates/*.template into
-# conf.d via envsubst; 15-internal-key-header.sh (runs before it, scripts
-# execute in name order) exports the header directive from the runtime
-# INTERNAL_API_KEY secret.
+# conf.d via envsubst, so the ${INTERNAL_API_KEY} in the template is
+# substituted from the runtime secret at container start.
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY docker-entrypoint.d/15-internal-key-header.sh /docker-entrypoint.d/15-internal-key-header.sh
-RUN chmod +x /docker-entrypoint.d/15-internal-key-header.sh
 
 EXPOSE 80
 
