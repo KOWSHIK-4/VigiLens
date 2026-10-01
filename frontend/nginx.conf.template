@@ -78,7 +78,7 @@ server {
         # Injected at container start from the INTERNAL_API_KEY secret so
         # the AI service's guarded stream/stats endpoints accept proxied
         # browser requests without the key ever reaching the client.
-        ${INTERNAL_KEY_HEADER}
+        proxy_set_header X-Internal-Key "${INTERNAL_API_KEY}";
         proxy_buffering off;
         proxy_read_timeout 3600s;
     }
