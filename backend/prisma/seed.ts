@@ -112,6 +112,11 @@ export const rolePermissionMap: Record<string, string[]> = {
     "models.run",
     "alerts.read",
     "alerts.manage",
+    "analytics.read",
+    "reports.read",
+    "monitoring.read",
+    "users.read",
+    "audit.read",
   ],
   viewer: [
     "dashboard.view",
