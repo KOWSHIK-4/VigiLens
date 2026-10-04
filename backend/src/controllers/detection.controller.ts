@@ -116,6 +116,18 @@ export const detectionController = {
     }
   },
 
+  async getSnapshot(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const buffer = await detectionService.getSnapshotBuffer(id, req.organizationId, req.teamScopeId);
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "private, max-age=60");
+      return res.send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async exportCSV(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const q = req.query as unknown as DetectionQueryInput;

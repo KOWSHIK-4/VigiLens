@@ -6,3 +6,4 @@ tests
 *.log
 Dockerfile
 .dockerignore
+app/output

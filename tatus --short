@@ -1,0 +1,20 @@
+ ai/.dockerignore                                |   1 [32m+[m
+ ai/app/detectors/yolo.py                        | 110 [32m++++++++++++++++[m[31m-[m
+ ai/app/main.py                                  |   2 [32m+[m
+ ai/app/routes/capture.py                        |  23 [32m++[m[31m--[m
+ ai/app/routes/detection.py                      | 157 [32m+++++++++++++++++++[m[31m-----[m
+ ai/app/services/capture.py                      |  30 [32m+++++[m
+ backend/prisma/seed.ts                          |  44 [32m++++[m[31m---[m
+ backend/src/controllers/camera.controller.ts    |  23 [32m+++[m[31m-[m
+ backend/src/controllers/detection.controller.ts |  12 [32m++[m
+ backend/src/detectors/defaults.ts               |   4 [32m+[m[31m-[m
+ backend/src/engine/aiClient.ts                  |  52 [32m++++++++[m
+ backend/src/engine/alerts.ts                    |  12 [32m++[m
+ backend/src/routes/camera.routes.ts             |  13 [32m++[m
+ backend/src/routes/detection.routes.ts          |   7 [32m++[m
+ backend/src/services/camera.service.ts          |  39 [32m++++++[m
+ backend/src/services/detection.service.ts       |  84 [32m++++++++++++[m[31m-[m
+ backend/tests/internal-api.test.ts              | 124 [32m+++++++++++++++++++[m
+ docker/ai/Dockerfile                            |  28 [32m++++[m[31m-[m
+ frontend/src/services/engine.ts                 |   6 [32m+[m[31m-[m
+ 19 files changed, 692 insertions(+), 79 deletions(-)

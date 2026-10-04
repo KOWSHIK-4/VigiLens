@@ -60,7 +60,11 @@ export const engineService = {
   async processLive(key: string, cameraId: string, videoPosSeconds = 0) {
     const { data } = await api.post<{ success: boolean; data: EngineLiveProcessResponse }>(
       `/engines/${key}/process-live`,
-      null,
+      // An empty JSON object, not `null`: this request carries everything in
+      // query params, but a `null` body would still be sent as
+      // `Content-Type: application/json` with zero bytes and rejected as
+      // malformed JSON by the backend body parser.
+      {},
       { params: { camera_id: cameraId, video_pos_seconds: videoPosSeconds } },
     );
     return data.data;

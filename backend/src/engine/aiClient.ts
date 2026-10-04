@@ -60,6 +60,13 @@ export interface AiServiceClient {
     timeoutMs?: number,
     credentials?: CaptureCredentials,
   ): Promise<Buffer>;
+  /**
+   * Fetch an annotated snapshot the AI service wrote to its output directory.
+   * The filename must be a bare name (no separators); the AI service rejects
+   * anything else. Used by the detection snapshot endpoint so browsers never
+   * talk to the AI service directly.
+   */
+  fetchOutputFile(filename: string, timeoutMs?: number): Promise<Buffer>;
   isReachable(): Promise<boolean>;
 }
 
@@ -397,6 +404,51 @@ export class HttpAiServiceClient implements AiServiceClient {
       const buffer = Buffer.from(await response.arrayBuffer());
       if (buffer.length === 0) {
         throw new AiServiceError("invalid_payload", "AI service returned an empty frame");
+      }
+      return buffer;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async fetchOutputFile(filename: string, timeoutMs = this.timeoutMs): Promise<Buffer> {
+    // Only a bare file name is ever forwarded, so a stored reference can
+    // never be turned into a path that escapes the AI output directory.
+    if (!filename || filename !== filename.split(/[\\/]/).join("") || filename.startsWith(".")) {
+      throw new AiServiceError("invalid_payload", "Invalid snapshot filename");
+    }
+
+    const url = new URL(`/internal/output/${encodeURIComponent(filename)}`, this.baseUrl);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: this.internalKeyHeaders(),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new AiServiceError("timeout", `AI service timed out after ${timeoutMs}ms fetching a snapshot`);
+        }
+        throw new AiServiceError("unreachable", "AI service is unreachable", null);
+      }
+
+      if (!response.ok) {
+        throw new AiServiceError(
+          "http",
+          `AI service could not serve snapshot "${filename}": ${response.status}`,
+          response.status,
+        );
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length === 0) {
+        throw new AiServiceError("invalid_payload", "AI service returned an empty snapshot");
+      }
+      if (buffer.length > MAX_RESPONSE_BYTES) {
+        throw new AiServiceError("invalid_payload", "AI service snapshot exceeded the maximum allowed size");
       }
       return buffer;
     } finally {

@@ -13,7 +13,15 @@ from app.detectors.base import BaseDetector, Detection
 
 logger = logging.getLogger(__name__)
 
-# COCO class id -> name for the YOLOv11 model.
+# Canonical COCO class id -> name for the YOLOv11 checkpoints, verified
+# against the `names` mapping ultralytics reports for yolo11n.pt. This table is
+# only a fallback used before a model is loaded: once a checkpoint is available
+# its own `names` mapping is authoritative (see YoloDetector._resolve_class_names),
+# so a label can never drift from the weights the service actually runs.
+#
+# Completing the table does not broaden what a detector reports: admission is
+# still gated solely by each detector's `class_filter`, and both configured
+# detectors (person=[0], vehicle=[2,3,5,7]) only ever select ids defined here.
 COCO_NAMES = {
     0: "person",
     1: "bicycle",
@@ -24,7 +32,77 @@ COCO_NAMES = {
     6: "train",
     7: "truck",
     8: "boat",
-}
+    9: "traffic light",
+    10: "fire hydrant",
+    11: "stop sign",
+    12: "parking meter",
+    13: "bench",
+    14: "bird",
+    15: "cat",
+    16: "dog",
+    17: "horse",
+    18: "sheep",
+    19: "cow",
+    20: "elephant",
+    21: "bear",
+    22: "zebra",
+    23: "giraffe",
+    24: "backpack",
+    25: "umbrella",
+    26: "handbag",
+    27: "tie",
+    28: "suitcase",
+    29: "frisbee",
+    30: "skis",
+    31: "snowboard",
+    32: "sports ball",
+    33: "kite",
+    34: "baseball bat",
+    35: "baseball glove",
+    36: "skateboard",
+    37: "surfboard",
+    38: "tennis racket",
+    39: "bottle",
+    40: "wine glass",
+    41: "cup",
+    42: "fork",
+    43: "knife",
+    44: "spoon",
+    45: "bowl",
+    46: "banana",
+    47: "apple",
+    48: "sandwich",
+    49: "orange",
+    50: "broccoli",
+    51: "carrot",
+    52: "hot dog",
+    53: "pizza",
+    54: "donut",
+    55: "cake",
+    56: "chair",
+    57: "couch",
+    58: "potted plant",
+    59: "bed",
+    60: "dining table",
+    61: "toilet",
+    62: "tv",
+    63: "laptop",
+    64: "mouse",
+    65: "remote",
+    66: "keyboard",
+    67: "cell phone",
+    68: "microwave",
+    69: "oven",
+    70: "toaster",
+    71: "sink",
+    72: "refrigerator",
+    73: "book",
+    74: "clock",
+    75: "vase",
+    76: "scissors",
+    77: "teddy bear",
+    78: "hair drier",
+    79: "toothbrush",}
 
 DEFAULT_INFERENCE_TIMEOUT_S = 30.0
 DEFAULT_MAX_RETRIES = 2
@@ -102,7 +180,11 @@ class YoloDetector(BaseDetector):
     ):
         self._detector_name = detector_name
         self._class_filter = class_filter
-        self._class_names = class_names or COCO_NAMES
+        # An explicit `class_names` mapping (e.g. PersonDetector narrowing to
+        # {0: "person"}) always wins. Otherwise the loaded checkpoint's own
+        # `names` mapping is used, falling back to COCO_NAMES before load.
+        self._class_names = class_names
+        self._model_class_names: Optional[dict] = None
         self._conf_threshold = confidence_threshold
         self._inference_timeout_s = inference_timeout_s
         self._max_retries = max_retries
@@ -135,6 +217,26 @@ class YoloDetector(BaseDetector):
             self._status.model_loaded = False
             self._status.last_error = str(exc)
             logger.error("Failed to load model %s: %s", self._model_name, exc)
+
+    def _resolve_class_names(self) -> dict:
+        """Class id -> name mapping for labelling detections.
+
+        Precedence: an explicit `class_names` override, then the loaded
+        checkpoint's own `names` mapping, then the static COCO fallback. The
+        checkpoint is authoritative so labels always describe the weights that
+        produced the detection, even if a checkpoint uses a different class
+        ordering than the bundled table assumes.
+        """
+        if self._class_names:
+            return self._class_names
+        if self._model_class_names is None and self._model is not None:
+            raw = getattr(self._model, "names", None)
+            if isinstance(raw, dict):
+                try:
+                    self._model_class_names = {int(k): str(v) for k, v in raw.items()}
+                except (TypeError, ValueError):
+                    self._model_class_names = None
+        return self._model_class_names or COCO_NAMES
 
     def _ensure_model_loaded(self) -> None:
         """Lazily (re)load the model if it is missing, bounded by a cooldown.
@@ -220,7 +322,7 @@ class YoloDetector(BaseDetector):
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 detections.append(
                     Detection(
-                        class_name=self._class_names.get(cls_id, str(cls_id)),
+                        class_name=self._resolve_class_names().get(cls_id, str(cls_id)),
                         confidence=round(box_conf, 4),
                         bbox=(x1, y1, x2, y2),
                     )

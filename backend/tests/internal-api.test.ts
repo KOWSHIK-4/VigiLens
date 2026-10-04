@@ -109,6 +109,10 @@ const VALID_BODY = {
   metadata: { source: "webcam", detector_type: "person_detector" },
 };
 
+/** Uuid used by the stream-source fixture so the assertion is deterministic. */
+const STREAM_SOURCE_CAMERA_ID = "9f3b6c21-7a54-4c0e-9a2d-1c8e5b7d4f30";
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 async function run() {
   try {
     TEST_PORT = await resolveTestPort(TEST_PORT_BASE, TEST_PORT_RANGE);
@@ -254,8 +258,128 @@ async function run() {
   }
 
   console.log(`\nInternal API security tests: ${passed} passed, ${failed} failed`);
+  await runStreamSourceTests(validKey);
+  console.log(`\nTotal: ${passed} passed, ${failed} failed`);
   if (server) killProcessTree(server);
   process.exit(failed === 0 ? 0 : 1);
+}
+
+/**
+ * `GET /api/cameras/internal/:id/stream-source` lets the AI service resolve the
+ * feed an operator configured for a camera. It exposes decrypted credentials,
+ * so it must be gated exactly like ingestion: internal key only, and the
+ * canonical UUID id format must still be enforced.
+ */
+async function runStreamSourceTests(validKey: string) {
+  console.log("\nTesting GET /cameras/internal/:id/stream-source ...");
+
+  // Self-contained fixture so the assertions do not depend on seed data.
+  const { prisma } = await import("../src/config/prisma");
+  const camera = await prisma.camera.create({
+    data: {
+      id: STREAM_SOURCE_CAMERA_ID,
+      name: "internal-api stream-source fixture",
+      organizationId: DEFAULT_ORG_ID,
+      url: "/recordings/demo.mp4",
+      cameraType: "video_file",
+      status: "offline",
+    },
+  });
+
+  try {
+    const noKey = await request(`/cameras/internal/${camera.id}/stream-source`);
+    if (noKey.status === 401) {
+      ok("GET /cameras/internal/:id/stream-source without key returns 401");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source without key returns 401", noKey.status);
+    }
+
+    const wrongKeyRes = await request(`/cameras/internal/${camera.id}/stream-source`, {
+      headers: { "X-Internal-Key": "definitely-not-the-key" },
+    });
+    if (wrongKeyRes.status === 401) {
+      ok("GET /cameras/internal/:id/stream-source with wrong key returns 401");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source with wrong key returns 401", wrongKeyRes.status);
+    }
+
+    // A user session must not bypass the internal key on a credential-exposing route.
+    const login = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "admin@vigilens.io", password: "admin123" }),
+    });
+    const token =
+      login.status === 200 && login.body
+        ? (login.body as { data: { token: string } }).data.token
+        : "";
+    const sessionOnly = await request(`/cameras/internal/${camera.id}/stream-source`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (sessionOnly.status === 401) {
+      ok("a user session alone cannot read camera credentials (401)");
+    } else {
+      fail("a user session alone cannot read camera credentials", sessionOnly.status);
+    }
+
+    // The UUID contract must survive: the legacy slug format is not accepted here.
+    const badId = await request("/cameras/internal/not-a-uuid/stream-source", {
+      headers: { "X-Internal-Key": validKey },
+    });
+    if (badId.status === 400) {
+      ok("GET /cameras/internal/:id/stream-source rejects a non-uuid id (400)");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source rejects a non-uuid id", badId);
+    }
+
+    // A well-formed but unknown uuid must 404 rather than leak or hang.
+    const unknownId = await request(
+      "/cameras/internal/00000000-0000-4000-8000-000000000000/stream-source",
+      { headers: { "X-Internal-Key": validKey } },
+    );
+    if (unknownId.status === 404) {
+      ok("GET /cameras/internal/:id/stream-source 404s an unknown uuid");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source 404s an unknown uuid", unknownId);
+    }
+
+    // The configured source is returned to the trusted caller.
+    const resolved = await request(`/cameras/internal/${camera.id}/stream-source`, {
+      headers: { "X-Internal-Key": validKey },
+    });
+    const data = (resolved.body as { data?: Record<string, unknown> } | null)?.data;
+    if (
+      resolved.status === 200 &&
+      data?.cameraType === "video_file" &&
+      data?.url === "/recordings/demo.mp4" &&
+      data?.cameraId === camera.id
+    ) {
+      ok("GET /cameras/internal/:id/stream-source returns the configured source");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source returns the configured source", resolved);
+    }
+
+    // Encrypted feed credentials must arrive decrypted for the AI service.
+    await prisma.camera.update({
+      where: { id: camera.id },
+      data: { username: "operator", password: "s3cret" },
+    });
+    const withCreds = await request(`/cameras/internal/${camera.id}/stream-source`, {
+      headers: { "X-Internal-Key": validKey },
+    });
+    const credData = (withCreds.body as { data?: Record<string, unknown> } | null)?.data;
+    if (
+      withCreds.status === 200 &&
+      credData?.username === "operator" &&
+      credData?.password === "s3cret"
+    ) {
+      ok("GET /cameras/internal/:id/stream-source decrypts feed credentials");
+    } else {
+      fail("GET /cameras/internal/:id/stream-source decrypts feed credentials", withCreds);
+    }
+  } finally {
+    await prisma.camera.deleteMany({ where: { id: camera.id } });
+    await prisma.$disconnect();
+  }
 }
 
 run();

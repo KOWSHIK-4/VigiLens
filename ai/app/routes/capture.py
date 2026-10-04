@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response
 
 from app.config import settings
 from app.security import verify_internal_key
-from app.services.capture import SUPPORTED_CAMERA_TYPES, CaptureError, capture_frame
+from app.services.capture import (
+    SUPPORTED_CAMERA_TYPES,
+    CaptureError,
+    capture_frame,
+    merge_source_credentials,
+)
 
 # Frame capture pulls a stream by URL, so the endpoint doubles as a potential
 # network open proxy. Only the backend engine is allowed to call it: every
@@ -43,21 +48,7 @@ def _merge_credentials(
     If the source URL already contains userinfo it is left untouched (legacy
     deployments or operators who embed creds directly in the URL).
     """
-    if not camera_user or not camera_pass:
-        return source
-    try:
-        from urllib.parse import urlparse, urlunparse
-        parsed = urlparse(source)
-        if parsed.username or parsed.password:
-            return source  # Already present — do not double-encode.
-        # Rebuild with credentials.
-        userinfo = f"{camera_user}:{camera_pass}"
-        netloc = f"{userinfo}@{parsed.hostname or ''}"
-        if parsed.port:
-            netloc += f":{parsed.port}"
-        return urlunparse(parsed._replace(netloc=netloc))
-    except Exception:
-        return source
+    return merge_source_credentials(source, camera_user, camera_pass)
 
 
 @router.get("/capture")

@@ -13,6 +13,7 @@ monitoring scheduler does not keep re-processing the first frame forever.
 
 import logging
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import cv2
 
@@ -25,6 +26,35 @@ SUPPORTED_CAMERA_TYPES = ("usb", "rtsp", "ip", "video_file")
 
 class CaptureError(Exception):
     """Raised when a frame cannot be captured from a source."""
+
+
+def merge_source_credentials(
+    source: str,
+    camera_user: str | None,
+    camera_pass: str | None,
+) -> str:
+    """Inject per-request camera credentials into a source URL.
+
+    OpenCV authenticates network feeds through URL userinfo, so the plaintext
+    username/password have to be recombined here. Callers keep the secrets out
+    of query strings and logs and pass them out-of-band instead.
+
+    If the source URL already contains userinfo it is left untouched (legacy
+    deployments or operators who embed creds directly in the URL).
+    """
+    if not camera_user or not camera_pass:
+        return source
+    try:
+        parsed = urlparse(source)
+        if parsed.username or parsed.password:
+            return source  # Already present -- do not double-encode.
+        userinfo = f"{camera_user}:{camera_pass}"
+        netloc = f"{userinfo}@{parsed.hostname or ''}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+    except Exception:
+        return source
 
 
 def resolve_video_path(source: str, media_root: str | None = None) -> str:

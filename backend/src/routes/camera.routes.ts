@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { cameraController } from "../controllers/camera.controller";
 import { authenticate } from "../middleware/auth";
+import { requireInternalKey } from "../middleware/internal";
 import { requirePermission } from "../middleware/permissions";
 import { enforceTeamVisibility } from "../middleware/teamVisibility";
 import { validate } from "../middleware/validate";
@@ -13,6 +14,18 @@ import {
 } from "../types";
 
 const router = Router();
+
+// Service-to-service source resolution. Declared before `authenticate` so it
+// is guarded by the shared internal key rather than a user session: the AI
+// service needs the raw feed URL plus credentials to open the configured
+// camera, and it has no user token. The literal `internal` segment keeps it
+// from colliding with the `:id` routes below.
+router.get(
+  "/internal/:id/stream-source",
+  requireInternalKey,
+  validate(cameraIdSchema, "params"),
+  cameraController.getStreamSource,
+);
 
 router.use(authenticate);
 

@@ -23,7 +23,7 @@ export const defaultDetectorDefinitions: DetectorDefinition[] = [
     supportedInput: ["image", "video", "webcam"],
     defaultConfidenceThreshold: 50,
     gpuSupported: true,
-    modelPath: "/models/person/yolo11n.pt",
+    modelPath: "/app/yolo11n.pt",
     inferenceTimeMs: 24,
     classFilter: ["person"],
     defaultConfiguration: {
@@ -48,7 +48,7 @@ export const defaultDetectorDefinitions: DetectorDefinition[] = [
     supportedInput: ["image", "video", "webcam"],
     defaultConfidenceThreshold: 50,
     gpuSupported: true,
-    modelPath: "/models/vehicle/yolo11n.pt",
+    modelPath: "/app/yolo11n.pt",
     inferenceTimeMs: 34,
     classFilter: ["car", "truck", "bus", "motorcycle"],
     defaultConfiguration: {

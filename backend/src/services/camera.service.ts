@@ -184,6 +184,19 @@ type CameraApiView = Omit<
 type CameraRowWithTeam = Camera & { team?: { id: string; name: string } | null };
 
 /**
+ * The minimum an external capture process needs to open a camera: where the
+ * frames come from and, for protected feeds, how to authenticate. Credentials
+ * are decrypted here and travel only over the internal service network.
+ */
+export interface CameraStreamSource {
+  cameraId: string;
+  url: string;
+  cameraType: CameraType;
+  username: string | null;
+  password: string | null;
+}
+
+/**
  * Redacts credentials and enriches the row with the derived display status
  * and the `hasCredentials` flag. This is a second line of defence on top of
  * the global Prisma scrub (`config/prisma.ts`) to guarantee credential
@@ -489,6 +502,32 @@ export const cameraService = {
       },
     });
     return camera ? toApiCamera(camera) : null;
+  },
+
+  /**
+   * Resolves the raw capture source for a camera so the AI service can open
+   * the very stream the operator configured, instead of guessing a device.
+   *
+   * This is the machine-to-machine counterpart of `findById`: it returns the
+   * `url`/`cameraType` pair plus the decrypted credentials, and is only ever
+   * reachable through the shared internal key (see `requireInternalKey`), so
+   * the credentials never ride on a browser session.
+   */
+  async getStreamSource(id: string): Promise<CameraStreamSource | null> {
+    const camera = await prisma.camera.findUnique({
+      where: { id },
+      select: { id: true, url: true, cameraType: true },
+    });
+    if (!camera) return null;
+
+    const credentials = await loadCameraCredentials(id);
+    return {
+      cameraId: camera.id,
+      url: camera.url,
+      cameraType: camera.cameraType,
+      username: credentials?.username ?? null,
+      password: credentials?.password ?? null,
+    };
   },
 
   async create(data: CreateCameraInput, organizationId?: string) {

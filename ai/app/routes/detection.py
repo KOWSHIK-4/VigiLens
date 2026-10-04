@@ -16,7 +16,13 @@ from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.detectors.yolo import InferenceError
 from app.security import verify_internal_key
-from app.services.capture import usb_device_index
+from app.services.camera_source import ResolvedSource, resolve_camera_source
+from app.services.capture import (
+    CaptureError,
+    open_capture,
+    resolve_video_path,
+    usb_device_index,
+)
 from app.services.detector import detector_service
 from app.services.stats import stream_stats
 from app.services.tracker import IouTracker
@@ -86,15 +92,81 @@ def resolve_webcam_device(device: str) -> int | str:
     return value
 
 
-def _open_webcam(device: int | str) -> cv2.VideoCapture:
-    """Open a webcam device, falling back to the default backend."""
-    if isinstance(device, int):
-        cap = cv2.VideoCapture(device, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(device)
-    else:
-        cap = cv2.VideoCapture(device)
-    return cap
+def _open_source(resolved: ResolvedSource) -> cv2.VideoCapture:
+    """Open a camera's configured source for live streaming.
+
+    Reuses the single-frame capture path's opener so the stream honours the
+    same rules as snapshots: USB indices are parsed from the device path,
+    ``video_file`` sources resolve against ``MEDIA_ROOT`` when the configured
+    path is relative, and network feeds pass the outbound SSRF guard and get
+    bounded open/read timeouts.
+    """
+    timeout_ms = settings.capture_open_timeout_ms
+    if resolved.camera_type == "usb":
+        index = usb_device_index(resolved.source)
+        if index is None:
+            raise CaptureError(f"Cannot parse USB device index from '{resolved.source}'")
+        return open_capture(index, "usb", timeout_ms)
+    if resolved.is_file:
+        return open_capture(
+            resolve_video_path(resolved.source, settings.media_root),
+            "video_file",
+            timeout_ms,
+        )
+    return open_capture(resolved.source, resolved.camera_type, timeout_ms)
+
+
+def _resolve_stream_source(camera_id: str, device: str) -> ResolvedSource:
+    """Decide which source a live stream should open.
+
+    The camera the operator selected wins: its configured feed is fetched from
+    the backend so every camera type works on this one endpoint. Only when
+    there is no resolvable camera (an ad-hoc ``?device=`` style request, or a
+    camera the backend cannot describe) do we fall back to the legacy local
+    device selector.
+    """
+    resolved = resolve_camera_source(camera_id)
+    if resolved is not None:
+        return resolved
+    return ResolvedSource(
+        source=resolve_webcam_device(device),
+        camera_type="usb",
+        is_file=False,
+    )
+
+
+def _unavailable_frame(reason: str) -> bytes:
+    """Render a single diagnostic frame for a source that will not open.
+
+    The browser needs a decodable image (an empty body would just look like a
+    broken request), and the reason has to be readable by the operator
+    instead of a generic failure.
+    """
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(
+        frame,
+        "Camera unavailable",
+        (150, 210),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 0, 255),
+        2,
+    )
+    cv2.putText(
+        frame,
+        reason[:64],
+        (40, 260),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 0, 255),
+        1,
+    )
+    _, buf = cv2.imencode(".jpg", frame)
+    return (
+        b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+        + buf.tobytes()
+        + b"\r\n"
+    )
 
 
 class _FPSCounter:
@@ -213,7 +285,10 @@ def _detect_image_sync(
     out_path = str(OUTPUT_DIR / f"{uuid.uuid4().hex}.jpg")
     detector_obj = detector_service.get(detector)
     annotated = detector_obj.draw(image, detections)
-    cv2.imwrite(out_path, annotated)
+    # Report an output path only when the annotated frame was really written.
+    if not cv2.imwrite(out_path, annotated):
+        logger.warning("Could not write annotated frame: %s", out_path)
+        out_path = ""
     _prune_output_dir()
 
     h, w = image.shape[:2]
@@ -356,25 +431,22 @@ async def detect_webcam(
             logger.warning("Failed to save detection to backend", exc_info=True)
 
     def generate():
-        device_value = resolve_webcam_device(device)
-        cap = _open_webcam(device_value)
+        try:
+            resolved = _resolve_stream_source(camera_id, device)
+            cap = _open_source(resolved)
+        except CaptureError as exc:
+            logger.error("Cannot open camera source: %s", exc)
+            yield _unavailable_frame(str(exc))
+            return
+
         if not cap.isOpened():
-            logger.error("Could not open webcam device %r", device_value)
-            err_img = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(
-                err_img,
-                "Camera unavailable - device not found or in use",
-                (30, 240),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 0, 255),
-                2,
+            logger.error(
+                "Could not open camera source %r (%s)",
+                resolved.source,
+                resolved.camera_type,
             )
-            _, buf = cv2.imencode(".jpg", err_img)
-            yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                + buf.tobytes()
-                + b"\r\n"
+            yield _unavailable_frame(
+                f"Cannot open {resolved.camera_type} source"
             )
             return
 
@@ -389,23 +461,33 @@ async def detect_webcam(
         try:
             while True:
                 ret, frame = cap.read()
-                if not ret:
+                if not ret or frame is None:
+                    # A recorded clip is a finite file, so reaching the end is
+                    # the normal case rather than a fault: rewind and keep
+                    # going so it plays continuously like a live feed.
+                    if resolved.is_file:
+                        cap.set(cv2.CAP_PROP_POS_MSEC, 0)
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            tracker.reset()
+                            consecutive_failures = 0
+                            continue
                     consecutive_failures += 1
                     if consecutive_failures > MAX_CONSECUTIVE_READ_FAILURES:
                         logger.warning(
-                            "Webcam read failed repeatedly, attempting reconnect"
+                            "Camera read failed repeatedly, attempting reconnect"
                         )
                         cap.release()
                         reconnected = False
                         for _ in range(RECONNECT_ATTEMPTS):
                             time.sleep(RECONNECT_DELAY_SECONDS)
-                            cap = _open_webcam(device_value)
+                            cap = _open_source(resolved)
                             if cap.isOpened():
                                 reconnected = True
                                 break
                         if not reconnected:
                             logger.error(
-                                "Webcam disconnected and could not be reopened"
+                                "Camera disconnected and could not be reopened"
                             )
                             break
                         tracker.reset()
@@ -460,8 +542,15 @@ async def detect_webcam(
                     image_path = ""
                     if snapshot_enabled:
                         snapshot_name = f"webcam_{int(time.time())}_{frame_no}.jpg"
-                        image_path = str(OUTPUT_DIR / snapshot_name)
-                        cv2.imwrite(image_path, annotated)
+                        candidate = str(OUTPUT_DIR / snapshot_name)
+                        # Only report an image reference when the frame really
+                        # landed on disk. An unchecked imwrite failure used to
+                        # persist a path to a file that was never created,
+                        # which made every thumbnail permanently unavailable.
+                        if cv2.imwrite(candidate, annotated):
+                            image_path = candidate
+                        else:
+                            logger.warning("Could not write detection snapshot: %s", candidate)
                         if frame_no % (snapshot_interval * 10) == 0:
                             _prune_output_dir()
 

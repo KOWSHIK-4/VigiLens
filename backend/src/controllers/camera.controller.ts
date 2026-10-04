@@ -1,4 +1,4 @@
-import type { Response, NextFunction } from "express";
+import type { Response, NextFunction, Request } from "express";
 import type { AuthRequest } from "../types";
 import type { CameraStatus, CameraType } from "@prisma/client";
 import { cameraService } from "../services/camera.service";
@@ -294,6 +294,27 @@ export const cameraController = {
 
 res.setHeader("Content-Type", "image/jpeg");
         return res.send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * Machine-to-machine source resolution for the AI service, which has to open
+   * the operator-configured feed rather than guess a local device. Guarded by
+   * the shared internal key instead of a user session, because the payload
+   * carries decrypted feed credentials.
+   */
+  async getStreamSource(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const source = await cameraService.getStreamSource(id);
+      if (!source) {
+        return error(res, "Camera not found", 404);
+      }
+      // Never cache: credentials and source resolution must be re-read.
+      res.setHeader("Cache-Control", "no-store");
+      success(res, source);
     } catch (err) {
       next(err);
     }

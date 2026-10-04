@@ -35,6 +35,13 @@ router.get(
   detectionController.getAll,
 );
 router.get(
+  "/:id/snapshot",
+  requirePermission("detections.read"),
+  enforceTeamVisibility,
+  validate(detectionIdSchema, "params"),
+  detectionController.getSnapshot,
+);
+router.get(
   "/:id/risk",
   requirePermission("detections.read"),
   enforceTeamVisibility,

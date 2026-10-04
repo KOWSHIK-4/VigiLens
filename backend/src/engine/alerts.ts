@@ -5,6 +5,18 @@
  * at most one alert per (detector, camera, class) within the configured
  * `alertCooldownMs`. The cooldown registry is shared across pipeline
  * runs so repeated frames do not flood the alert queue.
+ *
+ * Scope: the registry is deliberately in-process state. That is correct for
+ * the single-instance deployment this project ships — one shared instance
+ * across both the engine pipeline and machine-to-machine ingestion means a
+ * repeated frame can never double-raise an alert. Two consequences to be
+ * aware of: a backend restart clears the window (so a restart during an
+ * active incident can allow one extra alert per key), and horizontally
+ * scaled replicas each keep their own window. Neither needs a schema change
+ * today; if either becomes real, the minimal durable form is an
+ * `alert_cooldowns` table keyed by (detector_key, camera_id, class_name)
+ * holding `next_allowed_at`, claimed with a single conditional upsert inside
+ * the alert transaction rather than a read-then-write.
  */
 
 import { logger } from "../config/logger";

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { defaultDetectorDefinitions } from "../src/detectors/defaults";
 
@@ -274,10 +274,10 @@ async function main() {
   });
 
   const entrance = await prisma.camera.upsert({
-    where: { id: "demo-camera-1" },
+    where: { id: '9c6ad3c0-bd20-45c5-a366-6c0928aed921' },
     update: { organizationId: defaultOrg.id },
     create: {
-      id: "demo-camera-1",
+      id: '9c6ad3c0-bd20-45c5-a366-6c0928aed921',
       name: "Main Entrance",
       url: "rtsp://camera-stream",
       cameraType: "rtsp",
@@ -292,10 +292,10 @@ async function main() {
   });
 
   const parking = await prisma.camera.upsert({
-    where: { id: "demo-camera-2" },
+    where: { id: '8e2c6af5-5ca9-4f3e-b64b-3f827e34846d' },
     update: { organizationId: defaultOrg.id },
     create: {
-      id: "demo-camera-2",
+      id: '8e2c6af5-5ca9-4f3e-b64b-3f827e34846d',
       name: "Parking Lot",
       url: "rtsp://parking-cam",
       cameraType: "rtsp",
@@ -310,10 +310,10 @@ async function main() {
   });
 
   const lobby = await prisma.camera.upsert({
-    where: { id: "demo-camera-3" },
+    where: { id: 'fc1b5b97-d8ef-4c2a-8ff2-633cd6247b7f' },
     update: { organizationId: defaultOrg.id },
     create: {
-      id: "demo-camera-3",
+      id: 'fc1b5b97-d8ef-4c2a-8ff2-633cd6247b7f',
       name: "Lobby USB",
       url: "/dev/video0",
       cameraType: "usb",
@@ -327,10 +327,10 @@ async function main() {
   });
 
   const warehouse = await prisma.camera.upsert({
-    where: { id: "demo-camera-4" },
+    where: { id: '6c08a57f-a142-4005-9d24-aa8c61b54381' },
     update: { organizationId: defaultOrg.id },
     create: {
-      id: "demo-camera-4",
+      id: '6c08a57f-a142-4005-9d24-aa8c61b54381',
       name: "Warehouse IP",
       url: "http://192.168.1.100:8080/video",
       cameraType: "ip",
@@ -344,16 +344,20 @@ async function main() {
   });
 
   const demoFile = await prisma.camera.upsert({
-    where: { id: "demo-camera-5" },
+    where: { id: '1fb60624-4288-42dd-ac8f-9e650ce8a21e' },
     update: { organizationId: defaultOrg.id },
     create: {
-      id: "demo-camera-5",
+      id: '1fb60624-4288-42dd-ac8f-9e650ce8a21e',
       name: "Demo Recording",
-      url: "/recordings/demo.mp4",
+      // Real people on purpose: the person clip is what makes the detection ->
+      // persistence -> alerting path verifiable end to end. /recordings/demo.mp4
+      // (synthetic scene, no detectable people) is still baked into the image
+      // for deployments that want a liveness-only source.
+      url: "/recordings/person_test.mp4",
       cameraType: "video_file",
       location: "Local Storage",
-      resolution: "1920x1080",
-      fps: 24,
+      resolution: "720x960",
+      fps: 10,
       isHealthy: true,
       status: "offline",
       organizationId: defaultOrg.id,
@@ -400,9 +404,15 @@ async function main() {
   const personModel = await prisma.aIModel.findUnique({ where: { detectorKey: "person" } });
   const vehicleModel = await prisma.aIModel.findUnique({ where: { detectorKey: "vehicle" } });
   const cameraAssignments = [
-    { modelId: personModel?.id, cameraId: "demo-camera-1", enabled: true },
-    { modelId: personModel?.id, cameraId: "demo-camera-2", enabled: true },
-    { modelId: vehicleModel?.id, cameraId: "demo-camera-2", enabled: true },
+    // Demo Recording is the only seeded camera backed by a bundled video file,
+    // so continuous monitoring has a real frame source to run against. The
+    // remaining assignments point at cameras whose sources are unreachable in
+    // a default deployment, which is why monitoring appears inactive until a
+    // reachable source is assigned.
+    { modelId: personModel?.id, cameraId: '1fb60624-4288-42dd-ac8f-9e650ce8a21e', enabled: true },
+    { modelId: personModel?.id, cameraId: '9c6ad3c0-bd20-45c5-a366-6c0928aed921', enabled: true },
+    { modelId: personModel?.id, cameraId: '8e2c6af5-5ca9-4f3e-b64b-3f827e34846d', enabled: true },
+    { modelId: vehicleModel?.id, cameraId: '8e2c6af5-5ca9-4f3e-b64b-3f827e34846d', enabled: true },
   ];
   for (const assignment of cameraAssignments) {
     if (!assignment.modelId) continue;

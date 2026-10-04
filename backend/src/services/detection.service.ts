@@ -15,9 +15,46 @@ import {
   type EventCorrelationSummary,
 } from "./correlation";
 import { detectorCooldownCache } from "../utils/detectorCooldownCache";
+import { aiServiceClient, AiServiceError } from "../engine/aiClient";
 
 /** Nested camera rows only need display fields on read paths. */
 const cameraView = { select: { id: true, name: true, location: true } };
+
+/**
+ * Reduces a stored detection image reference to the bare snapshot file name.
+ * Rows written by the AI live-stream path hold the AI container's own output
+ * path (for example /app/app/output/webcam_1.jpg), which the browser can never
+ * resolve. Only the final name component is kept, so a stored value can never
+ * address anything outside the AI output directory.
+ */
+export function resolveSnapshotFilename(imageUrl?: string | null): string | null {
+  const raw = (imageUrl ?? "").trim();
+  if (!raw) return null;
+  // A genuine absolute URL points at something the browser already loads
+  // directly, so there is no AI-side file to proxy.
+  if (/^https?:\/\//i.test(raw)) return null;
+  const name = raw.split(/[\\/]/).pop() ?? "";
+  if (!name || name === "." || name === ".." || name.startsWith(".")) return null;
+  if (name.includes("..")) return null;
+  return /\.(jpe?g|png|webp)$/i.test(name) ? name : null;
+}
+
+/**
+ * Browser-facing image URL for a detection. Internal AI output references are
+ * rewritten to the authenticated snapshot endpoint, which the frontend already
+ * fetches as a blob with the session token.
+ */
+function snapshotImageUrl(detection: { id: string; imageUrl: string }): string {
+  if (/^https?:\/\//i.test(detection.imageUrl)) return detection.imageUrl;
+  return resolveSnapshotFilename(detection.imageUrl) ? `/detections/${detection.id}/snapshot` : "";
+}
+
+type WithSnapshotUrl<T extends { id: string; imageUrl: string }> = Omit<T, "imageUrl"> & { imageUrl: string };
+
+/** Rewrites an internal snapshot reference into an authenticated API path. */
+function withSnapshotUrl<T extends { id: string; imageUrl: string }>(detection: T): WithSnapshotUrl<T> {
+  return { ...detection, imageUrl: snapshotImageUrl(detection) };
+}
 
 /** Shared dedup registry for machine-to-machine ingestion alerts. */
 const alertCooldownRegistry = sharedAlertCooldownRegistry;
@@ -187,6 +224,9 @@ async function computeDetectionStats(organizationId?: string, teamScopeId?: stri
     alertsByType,
   ] = await Promise.all([
     prisma.detection.count({ where: { ...scope, ...teamScope } }),
+    // Despite the legacy field name, this counts detections whose severity
+    // ladder resolved to "critical" -- it is not a count of rows in the alerts
+    // table. The dashboard labels it "Critical Detections" accordingly.
     prisma.detection.count({ where: { ...scope, ...teamScope, status: "critical" } }),
     prisma.camera.count({ where: { ...camScope, ...teamCamScope, status: "online" } }),
     prisma.detection.findMany({
@@ -230,7 +270,7 @@ async function computeDetectionStats(organizationId?: string, teamScopeId?: stri
     avgConfidence,
     detectionsOverTime: detectionsOverTime as { date: string; count: number }[],
     alertsByType: alertsByType as { label: string; count: number }[],
-    recentDetections,
+    recentDetections: recentDetections.map(withSnapshotUrl),
   };
 }
 
@@ -456,7 +496,7 @@ export const detectionService = {
       prisma.detection.count({ where }),
     ]);
 
-    return { data, total };
+    return { data: data.map(withSnapshotUrl), total };
   },
 
   async findRecentByDetectorKey(detectorKey: string, limit = 25, organizationId?: string) {
@@ -478,7 +518,45 @@ export const detectionService = {
       throw new ApiError(404, "Detection not found");
     }
 
-    return detection;
+    return withSnapshotUrl(detection);
+  },
+
+  /**
+   * Streams the annotated snapshot for a detection, proxied from the AI
+   * service. Read access is tenancy-scoped exactly like fetching the detection
+   * itself, and the stored reference is reduced to a bare file name so no
+   * stored value can reach outside the AI output directory.
+   */
+  async getSnapshotBuffer(id: string, organizationId?: string, teamScopeId?: string) {
+    const detection = await prisma.detection.findFirst({
+      where: { id, ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
+      select: { id: true, imageUrl: true },
+    });
+
+    if (!detection) {
+      throw new ApiError(404, "Detection not found");
+    }
+
+    const filename = resolveSnapshotFilename(detection.imageUrl);
+    if (!filename) {
+      throw new ApiError(404, "No snapshot available for this detection yet");
+    }
+
+    try {
+      return await aiServiceClient.fetchOutputFile(filename);
+    } catch (err) {
+      // A snapshot the AI service no longer holds (it prunes old frames) is a
+      // missing asset, not a server fault; anything else is an upstream fault.
+      if (err instanceof AiServiceError && err.reason === "http" && err.status === 404) {
+        throw new ApiError(404, "Snapshot is no longer available on the AI service");
+      }
+      if (err instanceof AiServiceError) {
+        throw new ApiError(502, `AI service could not serve the detection snapshot: ${err.message}`, {
+          code: "AI_SNAPSHOT_UNAVAILABLE",
+        });
+      }
+      throw err;
+    }
   },
 
   async remove(id: string, organizationId?: string, teamScopeId?: string) {

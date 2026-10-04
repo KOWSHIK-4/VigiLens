@@ -10,6 +10,7 @@ from app.config import settings
 from app.routes.health import router as health_router
 from app.routes.detection import router as detection_router
 from app.routes.capture import router as capture_router
+from app.routes.output import router as output_router
 from app.services.detector import detector_service  # registers PersonDetector on import
 
 logging.basicConfig(
@@ -87,3 +88,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(detection_router)
 app.include_router(capture_router)
+app.include_router(output_router)
