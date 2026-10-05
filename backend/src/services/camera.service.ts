@@ -397,10 +397,14 @@ async function probeHttpCamera(
     };
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+  // Declared outside the try so the finally below can reach it on every path.
+  // The abort timer is the only thing keeping a hung camera from pinning this
+  // request open forever, so it has to be armed before the fetch and cleared
+  // on the way out regardless of how the fetch ends.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
 
+  try {
     const headers: Record<string, string> = {};
     if (credentials) {
       // Cameras behind HTTP basic auth must be probed with the stored
@@ -419,7 +423,6 @@ async function probeHttpCamera(
       // redirects is reported unhealthy rather than chased.
       redirect: "manual",
     });
-    clearTimeout(timeout);
 
     // With redirect: "manual" a 3xx surfaces here rather than being chased, so
     // report it as the misconfiguration it is instead of a bare status code.
@@ -442,6 +445,13 @@ async function probeHttpCamera(
       isHealthy: false,
       message: err instanceof Error ? redactSecrets(err.message) : "Health check failed",
     };
+  } finally {
+    // Every failure path reaches here: abort timeout, ECONNREFUSED, DNS
+    // failure, TLS error. Clearing on the success path alone left a live 5s
+    // timer per failed probe, and the health monitor ticks once a second, so a
+    // broad camera outage piled up thousands of armed timers holding their
+    // AbortController and response closure.
+    clearTimeout(timeout);
   }
 }
 

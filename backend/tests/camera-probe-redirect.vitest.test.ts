@@ -91,4 +91,34 @@ describe("HTTP camera probe redirect handling", () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     expect((fetchMock.mock.calls[0][1] as RequestInit).redirect).toBe("manual");
   });
+
+  it("clears the abort timer when the probe fails", async () => {
+    // The 5s abort timer used to be cleared only on the success path, so every
+    // failing probe left an armed timer holding its AbortController. The health
+    // monitor ticks once a second, so an outage accumulated one live timer per
+    // camera per tick.
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(Object.assign(new Error("ECONNREFUSED"), { code: "ECONNREFUSED" })),
+    );
+
+    const cameraService = await probe("http://203.0.113.10/stream");
+    await cameraService.healthCheck("cam-1", { captureFrame: vi.fn() } as never, "org-1");
+
+    expect(clearSpy).toHaveBeenCalled();
+  });
+
+  it("clears the abort timer when the probe succeeds", async () => {
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers() }),
+    );
+
+    const cameraService = await probe("http://203.0.113.10/stream");
+    await cameraService.healthCheck("cam-1", { captureFrame: vi.fn() } as never, "org-1");
+
+    expect(clearSpy).toHaveBeenCalled();
+  });
 });
