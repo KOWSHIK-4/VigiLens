@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { assertOutboundUrlAllowed } from "../src/utils/ssrf";
+import { assertCameraSourceAllowed, assertOutboundUrlAllowed } from "../src/utils/ssrf";
 
 describe("assertOutboundUrlAllowed", () => {
   describe("blocks SSRF targets", () => {
@@ -33,6 +33,26 @@ describe("assertOutboundUrlAllowed", () => {
     it("blocks IPv6 loopback and IMDS", () => {
       expect(assertOutboundUrlAllowed("http://[::1]:8080/").allowed).toBe(false);
       expect(assertOutboundUrlAllowed("http://[fd00:ec2::254]/latest/").allowed).toBe(false);
+    });
+
+    it("blocks IPv4-mapped IPv6 literals, which is how loopback and IMDS hide", () => {
+      // `new URL()` normalises these to hex form before the guard reads them,
+      // so the IPv4 rules only fire if the mapped form is unpacked first. Both
+      // spellings are listed because the dotted form is what a tenant types.
+      expect(assertOutboundUrlAllowed("http://[::ffff:127.0.0.1]/").allowed).toBe(false);
+      expect(assertOutboundUrlAllowed("http://[::ffff:7f00:1]:8080/").allowed).toBe(false);
+      expect(assertOutboundUrlAllowed("http://[::ffff:169.254.169.254]/latest/").allowed).toBe(
+        false,
+      );
+      expect(assertOutboundUrlAllowed("http://[::ffff:a9fe:a9fe]/latest/").allowed).toBe(false);
+    });
+
+    it("blocks the unspecified addresses, which are aliases for loopback", () => {
+      // Neither 0.0.0.0 nor :: is inside a blocked CIDR, but the OS routes both
+      // to localhost, so leaving them open hands out the API host.
+      expect(assertOutboundUrlAllowed("http://0.0.0.0:8080/").allowed).toBe(false);
+      expect(assertOutboundUrlAllowed("http://[::]/").allowed).toBe(false);
+      expect(assertOutboundUrlAllowed("http://[::ffff:0.0.0.0]/").allowed).toBe(false);
     });
 
     it("blocks non-HTTP schemes", () => {
@@ -71,6 +91,17 @@ describe("assertOutboundUrlAllowed", () => {
 
     it("allows credentials and ports in the URL", () => {
       expect(assertOutboundUrlAllowed("http://admin:secret@10.0.0.5:8080/").allowed).toBe(true);
+    });
+
+    it("still allows mapped IPv6 addresses that are not blocked", () => {
+      // Unpacking the mapped form must not turn into a blanket IPv6 deny: a
+      // camera on an RFC1918 address is the primary deployment and may be
+      // written in either spelling.
+      expect(assertOutboundUrlAllowed("http://[::ffff:10.0.0.42]:8080/").allowed).toBe(true);
+      expect(assertOutboundUrlAllowed("http://[::ffff:a00:a2a]/").allowed).toBe(true);
+      expect(assertCameraSourceAllowed("rtsp://[::ffff:192.168.1.100]:554/live").allowed).toBe(
+        true,
+      );
     });
 
     it("is case-insensitive about the hostname", () => {

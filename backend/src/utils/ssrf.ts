@@ -31,6 +31,12 @@
  * guarded callers, which set `redirect: "manual"` so an allowed host cannot
  * 302 past the check -- but the AI-service capture path follows redirects
  * inside FFMPEG, where that option has no effect.
+ *
+ * One caveat that bit us and is worth stating: this guard reads
+ * `URL.hostname`, and WHATWG parsing normalises IPv4-mapped IPv6 literals
+ * (`http://[::ffff:127.0.0.1]/`) into hex form (`[::ffff:7f00:1]`) before we
+ * ever see them. A dotted-quad comparison silently misses those, so the
+ * mapped form has to be unpacked explicitly -- see `ipv4MappedToQuad`.
  */
 
 /** Hostnames that are always an SSRF target, never a camera. */
@@ -72,6 +78,9 @@ function isBlockedIpv4(host: string): string | null {
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return null;
   const octets = host.split(".").map((o) => Number(o));
   if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return null;
+  // The unspecified address sits outside every blocked CIDR but is routed to
+  // loopback by the OS, so it is an alias for 127.0.0.1 in practice.
+  if (host === "0.0.0.0") return "loopback";
   const ipInt = ipv4ToInt(host);
   for (const range of BLOCKED_IPV4) {
     if (matchesCidr(ipInt, range.network, range.prefix)) return range.label;
@@ -79,13 +88,56 @@ function isBlockedIpv4(host: string): string | null {
   return null;
 }
 
+/**
+ * Unpacks an IPv4-mapped (or IPv4-compatible) IPv6 address back to dotted-quad
+ * form, or returns null when the address is not one.
+ *
+ * `new URL()` rewrites `http://[::ffff:127.0.0.1]/` to hostname `[::ffff:7f00:1]`
+ * and `http://[::ffff:169.254.169.254]/` to `[::ffff:a9fe:a9fe]`. Neither form
+ * matches a dotted-quad pattern, so without this the guard waved through
+ * `::ffff:7f00:1` -- a loopback -- and `::ffff:a9fe:a9fe` -- the cloud metadata
+ * endpoint -- while blocking the plain IPv4 spellings of the same two hosts.
+ *
+ * Accepts both spellings of the tail: `::ffff:127.0.0.1` (dotted, which WHATWG
+ * hands us for an already-normalised literal in some inputs) and the hex form
+ * above. `::a.b.c.d` (IPv4-compatible) is unpacked too since it routes the same
+ * way; `::` and `::1` are the unspecified and loopback addresses and are
+ * handled by the caller.
+ */
+function ipv4MappedToQuad(normalized: string): string | null {
+  const mapped = /^::(?:ffff:)?(?:(\d{1,3}(?:\.\d{1,3}){3})|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(
+    normalized,
+  );
+  if (mapped) {
+    if (mapped[1]) return mapped[1];
+    const high = parseInt(mapped[2], 16);
+    const low = parseInt(mapped[3], 16);
+    return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+  }
+  return null;
+}
+
 function isBlockedIpv6(host: string): string | null {
   const normalized = host.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
   if (normalized === "::1") return "loopback";
+  // The unspecified address. It is not loopback by name, but every stack routes
+  // it to localhost, so it reaches the API host just as loopback does.
+  if (normalized === "::") return "loopback";
   // fe80::/10 -- link-local, same rationale as IPv4 link-local.
   if (/^fe[89ab][0-9a-f]:/.test(normalized)) return "link-local/metadata";
   // EC2 IMDSv6 endpoint, explicitly.
   if (normalized === "fd00:ec2::254") return "link-local/metadata";
+
+  // IPv4-mapped / IPv4-compatible: defer to the IPv4 rules so the two
+  // spellings of a host cannot disagree about whether it is blocked.
+  const quad = ipv4MappedToQuad(normalized);
+  if (quad) {
+    const reason = isBlockedIpv4(quad);
+    if (reason) return reason;
+    // 0.0.0.0 in mapped form (::ffff:0.0.0.0) is the unspecified address and
+    // routes to loopback, which is not itself inside a blocked CIDR.
+    if (quad === "0.0.0.0") return "loopback";
+  }
   return null;
 }
 
