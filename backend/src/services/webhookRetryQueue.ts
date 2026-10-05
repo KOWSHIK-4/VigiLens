@@ -25,6 +25,24 @@ export type WebhookDeliver =
     Promise<{ ok: boolean; error?: string | null }>;
 
 /**
+ * Ceilings for the two in-memory buffers. Both are hard caps: the queue holds
+ * full alert payloads, so without them a tenant whose receiver never accepts a
+ * delivery grows this process's heap without limit.
+ */
+export const DEFAULT_MAX_PENDING = 1_000;
+export const DEFAULT_MAX_DEAD_LETTERS = 500;
+
+export interface WebhookRetryQueueLimits {
+  maxPending: number;
+  maxDeadLetters: number;
+}
+
+const DEFAULT_LIMITS: WebhookRetryQueueLimits = {
+  maxPending: DEFAULT_MAX_PENDING,
+  maxDeadLetters: DEFAULT_MAX_DEAD_LETTERS,
+};
+
+/**
  * In-memory bounded retry queue for webhook deliveries. Failed deliveries are
  * retried with bounded exponential backoff; an entry that exhausts its
  * attempts is surfaced via `getDeadLetters` so operators can inspect events
@@ -33,19 +51,35 @@ export type WebhookDeliver =
  * The queue is deliberately process-local — it is rebuilt from the event
  * stream rather than persisting (see phase docs for the trade-off). It never
  * overlaps runs: `processDue` awaits a full pass.
+ *
+ * Bounding is enforced on both buffers. `enqueue` sheds the oldest pending
+ * entry once `maxPending` is reached, and a dead letter is dropped the same way
+ * once `maxDeadLetters` is reached. Overflow is the right behaviour here: the
+ * alternative is an OOM, and a retry that has not been attempted yet is worth
+ * less than one already in flight. Every drop is logged, so a tenant whose
+ * receiver is black-holing can be told their alerts are being discarded
+ * instead of silently vanishing.
  */
 export class WebhookRetryQueue {
   private pending: WebhookQueueEntry[] = [];
   private deadLetters: WebhookQueueEntry[] = [];
+  /** Ids currently in `pending`, so the enqueue dedupe check is not O(n). */
+  private pendingIds = new Set<string>();
   private deliver: WebhookDeliver;
   private readonly defaultDeliver: WebhookDeliver;
   private readonly config: RetryPolicyConfig;
+  private readonly limits: WebhookRetryQueueLimits;
   private running = false;
 
-  constructor(deliver: WebhookDeliver, config: RetryPolicyConfig = DEFAULT_RETRY_POLICY) {
+  constructor(
+    deliver: WebhookDeliver,
+    config: RetryPolicyConfig = DEFAULT_RETRY_POLICY,
+    limits: Partial<WebhookRetryQueueLimits> = {},
+  ) {
     this.defaultDeliver = deliver;
     this.deliver = deliver;
     this.config = config;
+    this.limits = { ...DEFAULT_LIMITS, ...limits };
   }
 
   /** Swaps the active delivery implementation (e.g. wiring the real HTTP client). */
@@ -69,7 +103,17 @@ export class WebhookRetryQueue {
   /** Queues the first delivery attempt of an event. Idempotent per event. */
   enqueue(eventType: WebhookEventType, eventId: string, payload: Record<string, unknown>): void {
     const id = deliveryKeyFor(eventType, eventId);
-    if (this.pending.some((entry) => entry.id === id)) return;
+    if (this.pendingIds.has(id)) return;
+    if (this.pending.length >= this.limits.maxPending) {
+      const shed = this.pending.shift();
+      if (shed) {
+        this.pendingIds.delete(shed.id);
+        logger.warn("Webhook retry queue full, dropped oldest pending delivery", {
+          droppedDeliveryId: shed.id,
+          maxPending: this.limits.maxPending,
+        });
+      }
+    }
     this.pending.push({
       id,
       eventType,
@@ -79,6 +123,7 @@ export class WebhookRetryQueue {
       nextAttemptAt: 0,
       lastError: null,
     });
+    this.pendingIds.add(id);
   }
 
   /** Attempts every pending delivery whose next attempt is due. */
@@ -101,7 +146,7 @@ export class WebhookRetryQueue {
           );
           if (result.ok) {
             succeeded += 1;
-            this.pending = this.pending.filter((e) => e.id !== entry.id);
+            this.removePending(entry.id);
             continue;
           }
           failed += 1;
@@ -122,8 +167,15 @@ export class WebhookRetryQueue {
             entry.attempt = decision.nextAttempt;
           } else {
             entry.lastError = "retries exhausted";
+            this.removePending(entry.id);
+            if (this.deadLetters.length >= this.limits.maxDeadLetters) {
+              const dropped = this.deadLetters.shift();
+              logger.warn("Webhook dead-letter buffer full, dropped oldest entry", {
+                droppedDeliveryId: dropped?.id,
+                maxDeadLetters: this.limits.maxDeadLetters,
+              });
+            }
             this.deadLetters.push(entry);
-            this.pending = this.pending.filter((e) => e.id !== entry.id);
           }
         } catch (err) {
           failed += 1;
@@ -147,6 +199,13 @@ export class WebhookRetryQueue {
   clear(): void {
     this.pending = [];
     this.deadLetters = [];
+    this.pendingIds.clear();
+  }
+
+  /** Drops a delivery from `pending` and keeps the id index in step. */
+  private removePending(id: string): void {
+    this.pendingIds.delete(id);
+    this.pending = this.pending.filter((e) => e.id !== id);
   }
 }
 

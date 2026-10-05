@@ -139,6 +139,45 @@ describe("WebhookRetryQueue", () => {
     await first;
   });
 
+  it("stops accepting new deliveries once pending is full, shedding the oldest", async () => {
+    // Without a cap, a receiver that never accepts a delivery grows this
+    // queue by one full alert payload per alert, forever.
+    const queue = new WebhookRetryQueue(failDeliver, DEFAULT_RETRY_POLICY, { maxPending: 3 });
+    for (let i = 1; i <= 5; i += 1) queue.enqueue("alert", `evt-${i}`, { id: `evt-${i}` });
+
+    expect(queue.pendingCount).toBe(3);
+    // The two oldest are gone, the three newest are still queued.
+    expect(queue.getPendingSnapshot().map((e) => e.eventId)).toEqual(["evt-3", "evt-4", "evt-5"]);
+  });
+
+  it("keeps the dedupe check correct after shedding an entry", async () => {
+    const queue = new WebhookRetryQueue(failDeliver, DEFAULT_RETRY_POLICY, { maxPending: 2 });
+    queue.enqueue("alert", "evt-1", { id: "evt-1" });
+    queue.enqueue("alert", "evt-2", { id: "evt-2" });
+    queue.enqueue("alert", "evt-3", { id: "evt-3" });
+    // evt-1 was shed to make room, so re-enqueuing it must be honoured rather
+    // than swallowed by a stale id still sitting in the index.
+    queue.enqueue("alert", "evt-1", { id: "evt-1" });
+    expect(queue.getPendingSnapshot().map((e) => e.eventId)).toEqual(["evt-3", "evt-1"]);
+
+    // A duplicate of something still queued is still a no-op.
+    queue.enqueue("alert", "evt-3", { id: "evt-3" });
+    expect(queue.pendingCount).toBe(2);
+  });
+
+  it("bounds the dead-letter buffer and keeps the newest entries", async () => {
+    const queue = new WebhookRetryQueue(failDeliver, { ...DEFAULT_RETRY_POLICY, maxAttempts: 1 }, {
+      maxDeadLetters: 2,
+    });
+    for (const id of ["evt-1", "evt-2", "evt-3"]) queue.enqueue("alert", id, { id });
+
+    await queue.processDue(0);
+
+    expect(queue.deadLetterCount).toBe(2);
+    expect(queue.getDeadLettersSnapshot().map((e) => e.eventId)).toEqual(["evt-2", "evt-3"]);
+    expect(queue.pendingCount).toBe(0);
+  });
+
   it("preserves the attempt number and payload across retries", async () => {
     const attempts: number[] = [];
     const queue = new WebhookRetryQueue(async (_type, _id, payload, attempt) => {
