@@ -7,6 +7,10 @@ source types:
 - ``rtsp`` / ``ip``: a stream URL handed to OpenCV verbatim
 - ``video_file``: a video file path (absolute, or relative to ``MEDIA_ROOT``)
 
+A ``video_file`` source carrying a network scheme is refused rather than
+resolved: the camera type is caller-supplied, so it cannot be trusted to
+agree with the string that actually reaches OpenCV.
+
 Video files advance their read position between captures so the continuous
 monitoring scheduler does not keep re-processing the first frame forever.
 """
@@ -17,7 +21,11 @@ from urllib.parse import urlparse, urlunparse
 
 import cv2
 
-from app.ssrf import assert_source_allowed
+from app.ssrf import (
+    assert_source_allowed,
+    has_network_scheme,
+    is_network_source,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +70,20 @@ def resolve_video_path(source: str, media_root: str | None = None) -> str:
 
     Absolute paths win; otherwise the source is resolved relative to the
     configured media root when a file exists there.
+
+    A source carrying a network scheme is refused here rather than being
+    wrapped in a :class:`~pathlib.Path`. ``Path`` rewrites a URL into a
+    filesystem-shaped string (``rtsp://host/x`` becomes ``rtsp:\\host\\x`` on
+    Windows, ``rtsp:/host/x`` elsewhere), which destroys the very evidence
+    :func:`app.ssrf.assert_source_allowed` and the network open timeouts decide
+    on. Refusing at the entry point keeps a URL visible as a URL for the whole
+    rest of the path.
     """
+    if has_network_scheme(source):
+        raise CaptureError(
+            f"Camera source '{source}' is a URL, not a video_file path; "
+            "use the rtsp or ip camera type for network sources"
+        )
     path = Path(source)
     if path.is_absolute():
         return str(path)
@@ -100,11 +121,9 @@ def open_capture(source: str, camera_type: str, open_timeout_ms: int) -> cv2.Vid
     enforced; the backend applies an equivalent guard before forwarding, and
     both are needed because this is where a bypass would do the most damage.
     """
-    source_is_str = isinstance(source, str)
-    is_network = (
-        camera_type in ("rtsp", "ip")
-        or (source_is_str and str(source).startswith(("rtsp://", "rtmp://", "http://", "https://")))
-    )
+    # Classified from the parsed scheme, never a string prefix: see
+    # `app.ssrf.has_network_scheme` for why a prefix test is not equivalent.
+    is_network = is_network_source(camera_type, str(source))
     if is_network:
         try:
             assert_source_allowed(str(source))

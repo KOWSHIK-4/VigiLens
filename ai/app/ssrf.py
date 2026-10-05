@@ -39,6 +39,25 @@ BLOCKED_HOSTNAMES = frozenset(
 _NETWORK_SCHEMES = frozenset({"http", "https", "rtsp", "rtsps", "rtmp"})
 
 
+def has_network_scheme(source: str) -> bool:
+    """True when ``source`` parses as a URL this worker would fetch.
+
+    Classification reads the parsed scheme, never a string prefix. A prefix
+    test is defeated by any normalisation that touches the separator before the
+    check runs -- ``Path("rtsp://host/x").__str__()`` collapses the double slash
+    to ``rtsp:/host/x`` on both POSIX and Windows -- and a source that slips
+    past the classifier also skips the network open timeouts, so the same bug
+    reads as an unbounded blocking connect.
+    """
+    if not isinstance(source, str):
+        return False
+    try:
+        scheme = urlsplit(source).scheme.lower()
+    except ValueError:
+        return False
+    return scheme in _NETWORK_SCHEMES
+
+
 def _is_blocked_ip(host: str) -> bool:
     """True when a literal IP is one of the always-an-attack ranges."""
     try:
@@ -110,12 +129,14 @@ def assert_source_allowed(source: str) -> None:
 def is_network_source(camera_type: str, source: str) -> bool:
     """True when this source is a network destination the guard applies to.
 
-    ``usb`` and ``video_file`` are local by definition; every other camera
-    type is treated as a network source, matching how ``open_capture`` decides
-    whether to apply its network timeouts.
+    ``usb`` and ``video_file`` are local by definition, but a source carrying a
+    network scheme is a network source whichever camera type claims it -- the
+    type is caller-supplied and the string is what actually gets opened. Every
+    other camera type is treated as a network source, matching how
+    ``open_capture`` decides whether to apply its network timeouts.
     """
+    if has_network_scheme(source):
+        return True
     if camera_type in ("usb", "video_file"):
         return False
-    if str(source).startswith(("rtsp://", "rtmp://", "http://", "https://")):
-        return True
     return camera_type in ("rtsp", "ip")
