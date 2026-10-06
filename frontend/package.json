@@ -10,6 +10,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
+    "test": "npm run test:e2e",
     "test:e2e": "node tests/e2e-verify.mjs"
   },
   "dependencies": {

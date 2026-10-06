@@ -108,9 +108,10 @@ Honest list of what VigiLens does and does not do in its current form.
   aggregate, so a deployment that intentionally omits inference is not held
   permanently unready. AI-dependent endpoints return HTTP 502
   (`AI_SERVICE_UNREACHABLE`); no unrelated route fails because of it.
-- The frontend package defines `test:e2e` but no `npm test` script, so a bare
-  `npm test` in `frontend/` fails with "Missing script". Typecheck, lint, the
-  production build, and the E2E harness are the available frontend gates.
+- The frontend package's `npm test` is an alias for `test:e2e` (the Node
+  harness that boots backend + frontend and drives the API). There is no
+  separate unit-test runner in `frontend/`; typecheck, lint, the production
+  build, and the E2E harness are the available frontend gates.
 
 ## Frontend
 
