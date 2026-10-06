@@ -1,11 +1,14 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 
-python-multipart==0.0.19
+python-multipart==0.0.20
 opencv-python-headless==4.10.0.84
 ultralytics==8.3.48
-numpy>=1.26.0
-Pillow==11.0.0
+# Pinned (not >=) so a fresh install cannot pull an untested major. 1.26.4 is
+# the last 1.26.x release and is what opencv-python-headless 4.10 and
+# ultralytics 8.3.x are validated against.
+numpy==1.26.4
+Pillow==11.3.0
 pydantic==2.10.3
 python-dotenv==1.0.1
 httpx==0.28.1
