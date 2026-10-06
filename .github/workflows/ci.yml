@@ -119,4 +119,12 @@ jobs:
 
       - run: ruff check .
 
+      # OSV/pip-audit gate for the runtime pins. The 2026-09-25 certification
+      # called out the AI service's Python set as the least-verified surface;
+      # this fails the build when a pinned package has a published advisory.
+      - name: Audit Python dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - run: python -m pytest
