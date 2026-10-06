@@ -246,13 +246,17 @@ async function checkStorage(): Promise<ServiceHealth> {
     const availableBytes = Number(stats.bavail) * Number(stats.bsize);
     const totalBytes = Number(stats.blocks) * Number(stats.bsize);
 
+    // /health/ready is unauthenticated. The free/total figures are useful to
+    // operators; the absolute filesystem path is not, and leaking it hands an
+    // unauthenticated caller a map of the host layout. The path stays in the
+    // server log (below) where deployers can still find it.
     return {
       name,
       label,
       status: "healthy",
       responseTimeMs: Date.now() - start,
       lastChecked: nowIso(),
-      detail: `${basePath} (${formatBytes(availableBytes)} free of ${formatBytes(totalBytes)})`,
+      detail: `${formatBytes(availableBytes)} free of ${formatBytes(totalBytes)}`,
     };
   } catch (error) {
     logger.warn("Storage health check failed", { error, basePath });
@@ -260,7 +264,7 @@ async function checkStorage(): Promise<ServiceHealth> {
       name,
       label,
       Date.now() - start,
-      `${basePath}: ${error instanceof Error ? error.message : "Storage unavailable"}`,
+      `Storage unavailable: ${error instanceof Error ? error.message : "Storage unavailable"}`,
     );
   }
 }
