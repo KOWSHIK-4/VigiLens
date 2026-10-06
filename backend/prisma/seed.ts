@@ -432,7 +432,8 @@ async function main() {
     });
   }
 
-  const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);  const staleModels = await prisma.aIModel.findMany({
+  const registeredKeys = defaultDetectorDefinitions.map((d) => d.key);
+  const staleModels = await prisma.aIModel.findMany({
     where: { detectorKey: { notIn: registeredKeys } },
   });
   if (freshSeed && staleModels.length > 0) {
