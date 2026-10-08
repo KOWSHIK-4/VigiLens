@@ -27,8 +27,19 @@ export function csvLine(values: unknown[]): string {
  */
 export const MAX_EXPORT_ROWS = 100_000;
 
+/**
+ * Resumes once the socket can take more data — or as soon as it is gone.
+ * Settling only on "drain" parks the export coroutine forever when the client
+ * disconnects mid-download: a destroyed response emits "close", never "drain",
+ * so the row iterator (and its DB cursor) would be leaked per aborted export.
+ */
 async function waitForDrain(res: Response): Promise<void> {
-  await new Promise<void>((resolve) => res.once("drain", resolve));
+  await new Promise<void>((resolve) => {
+    const settle = () => resolve();
+    res.once("drain", settle);
+    res.once("close", settle);
+    res.once("error", settle);
+  });
 }
 
 /**
@@ -47,7 +58,7 @@ export async function sendCsvStream(
     res.write(csvHeaderLine(headers));
     let written = 0;
     for await (const row of rows) {
-      if (res.writableEnded) return;
+      if (res.writableEnded || res.destroyed) return;
       if (written >= maxRows) {
         logger.warn("CSV export truncated at row cap", { maxRows });
         res.write(`# Export truncated at the first ${maxRows} rows\n`);

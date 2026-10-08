@@ -6,9 +6,13 @@ import { csvHeaderLine, csvLine, sendCsvStream } from "../src/utils/csvStream";
  * socket (write() returning false) and fire drain callbacks manually.
  */
 function makeResponse(blockAfterWrites = Infinity) {
-  const drainListeners: Array<() => void> = [];
+  const listeners: Array<{ event: string; cb: () => void }> = [];
+  const fire = (event: string) => {
+    for (const { event: e, cb } of listeners.splice(0).filter((l) => l.event === event)) cb();
+  };
   const res = {
     writableEnded: false,
+    destroyed: false,
     chunks: [] as string[],
     writesRemaining: blockAfterWrites,
     destroyedError: null as Error | null,
@@ -22,19 +26,25 @@ function makeResponse(blockAfterWrites = Infinity) {
       res.writesRemaining -= 1;
       return res.writesRemaining >= 0;
     },
-    once(_event: string, cb: () => void) {
-      drainListeners.push(cb);
+    once(event: string, cb: () => void) {
+      listeners.push({ event, cb });
     },
     end() {
       res.writableEnded = true;
     },
     destroy(err?: Error) {
       res.writableEnded = true;
+      res.destroyed = true;
       res.destroyedError = err ?? new Error("destroyed");
     },
     relieve() {
       res.writesRemaining = Infinity;
-      for (const cb of drainListeners.splice(0)) cb();
+      fire("drain");
+    },
+    /** Client aborted: a real socket emits "close" and never "drain". */
+    disconnect() {
+      res.destroyed = true;
+      fire("close");
     },
   };
   return res;
@@ -96,6 +106,21 @@ describe("sendCsvStream", () => {
     })());
     expect(res.destroyedError).not.toBeNull();
     expect(res.destroyedError?.message).toBe("boom");
+  });
+
+  it("stops streaming when the client disconnects mid-download", async () => {
+    const res = makeResponse(1); // header write bounces → parks in waitForDrain
+    const done = sendCsvStream(res, ["H"], rows([["a"], ["b"]]));
+
+    await Promise.resolve();
+    expect(res.chunks.join("")).toBe("H\n");
+    expect(res.writableEnded).toBe(false);
+
+    res.disconnect(); // abort while parked: "close" fires, "drain" never does
+    await done;
+
+    expect(res.chunks.join("")).toBe("H\n");
+    expect(res.writableEnded).toBe(false);
   });
 
   it("stops writing once the response has ended", async () => {
