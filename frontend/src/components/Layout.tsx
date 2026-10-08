@@ -26,7 +26,7 @@ import { alertService } from "@/services/alerts";
 import { useRealtime } from "@/hooks/useRealtime";
 import ToastItem from "./Toast";
 import { showToast, useToast } from "@/utils/toast";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasPermission } from "@/utils/permissions";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -94,9 +94,19 @@ export default function Layout() {
 
   // Push-driven toasts + badge increments via SSE instead of 5s polling.
   const { events } = useRealtime({ enabled: canSeeAlerts });
+  // `events` is an accumulating log (newest first) whose identity changes on
+  // every inbound message, so the effect below re-runs over already-handled
+  // entries each time. Track what has been processed to avoid duplicate
+  // toasts and an over-counted badge; the set is pruned to the live window
+  // so it cannot grow without bound.
+  const handledEventIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!events.length) return;
+    let handledAny = false;
     for (const evt of events) {
+      if (handledEventIds.current.has(evt.id)) break;
+      handledEventIds.current.add(evt.id);
+      handledAny = true;
       if (evt.type === "alert" && evt.data.event === "alert_created") {
         showToast({
           severity: (evt.data.severity ?? "info") as "info" | "warning" | "critical",
@@ -107,6 +117,12 @@ export default function Layout() {
           ["alerts", "unread-count"],
           (prev: number | undefined) => (prev ?? 0) + 1,
         );
+      }
+    }
+    if (handledAny) {
+      const liveIds = new Set(events.map((evt) => evt.id));
+      for (const id of handledEventIds.current) {
+        if (!liveIds.has(id)) handledEventIds.current.delete(id);
       }
     }
   }, [events, queryClient]);
