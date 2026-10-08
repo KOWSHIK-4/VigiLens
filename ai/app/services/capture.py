@@ -16,6 +16,7 @@ monitoring scheduler does not keep re-processing the first frame forever.
 """
 
 import logging
+import re
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -30,6 +31,19 @@ from app.ssrf import (
 logger = logging.getLogger(__name__)
 
 SUPPORTED_CAMERA_TYPES = ("usb", "rtsp", "ip", "video_file")
+
+# Userinfo pattern for redacting credentials from error messages / logs.
+_USERINFO_RE = re.compile(r"(://[^:/\s@]+:)[^@/\s]+(@)")
+
+
+def redact_source(source: str) -> str:
+    """Strip embedded credentials from a source string for display/logging.
+
+    Feed URLs carry the merged username/password in their userinfo, so any
+    error message or log line that embeds the source would otherwise publish
+    the camera password to wherever logs are shipped.
+    """
+    return _USERINFO_RE.sub(r"\1***\2", source)
 
 
 class CaptureError(Exception):

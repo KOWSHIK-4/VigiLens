@@ -1,6 +1,5 @@
 import asyncio
 import functools
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response
 
@@ -11,6 +10,7 @@ from app.services.capture import (
     CaptureError,
     capture_frame,
     merge_source_credentials,
+    redact_source,
 )
 
 # Frame capture pulls a stream by URL, so the endpoint doubles as a potential
@@ -22,14 +22,6 @@ router = APIRouter(tags=["capture"], dependencies=[Depends(verify_internal_key)]
 #: cannot drive an unbounded look-up or hand the worker an oversized string.
 _MAX_SOURCE_LENGTH = 4096
 _MAX_TYPE_LENGTH = 32
-
-# Userinfo pattern for redacting credentials from error messages / logs.
-_USERINFO_RE = re.compile(r"(://[^:/\s@]+:)[^@/\s]+(@)")
-
-
-def _redact_source(source: str) -> str:
-    """Strip embedded credentials from a source string for display/logging."""
-    return _USERINFO_RE.sub(r"\1***\2", source)
 
 
 def _merge_credentials(
@@ -80,7 +72,7 @@ async def capture(
             ),
         )
     except CaptureError as exc:
-        raise HTTPException(status_code=502, detail=_redact_source(str(exc))) from exc
+        raise HTTPException(status_code=502, detail=redact_source(str(exc))) from exc
 
     return Response(
         content=jpeg,

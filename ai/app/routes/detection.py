@@ -20,6 +20,7 @@ from app.services.camera_source import ResolvedSource, resolve_camera_source
 from app.services.capture import (
     CaptureError,
     open_capture,
+    redact_source,
     resolve_video_path,
     usb_device_index,
 )
@@ -435,14 +436,17 @@ async def detect_webcam(
             resolved = _resolve_stream_source(camera_id, device)
             cap = _open_source(resolved)
         except CaptureError as exc:
-            logger.error("Cannot open camera source: %s", exc)
-            yield _unavailable_frame(str(exc))
+            # The error text embeds the merged source, which can carry the
+            # feed's username/password: redact before it reaches logs or the
+            # frame handed to the viewer.
+            logger.error("Cannot open camera source: %s", redact_source(str(exc)))
+            yield _unavailable_frame(redact_source(str(exc)))
             return
 
         if not cap.isOpened():
             logger.error(
                 "Could not open camera source %r (%s)",
-                resolved.source,
+                redact_source(resolved.source),
                 resolved.camera_type,
             )
             yield _unavailable_frame(

@@ -58,6 +58,17 @@ def test_resolve_video_path(tmp_path):
     assert capture_service.resolve_video_path("missing.mp4", str(media)) == "missing.mp4"
 
 
+def test_redact_source_strips_feed_credentials():
+    # The merged source carries the camera password in its userinfo; log and
+    # error surfaces must never publish it.
+    assert (
+        capture_service.redact_source("rtsp://operator:s3cret@cam/stream")
+        == "rtsp://operator:***@cam/stream"
+    )
+    assert capture_service.redact_source("/dev/video0") == "/dev/video0"
+    assert capture_service.redact_source("file:///media/clip.mp4") == "file:///media/clip.mp4"
+
+
 def test_capture_route_requires_source():
     response = client.get("/capture")
     assert response.status_code == 422
