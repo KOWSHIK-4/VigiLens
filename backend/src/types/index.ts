@@ -704,8 +704,8 @@ export const auditLogQuerySchema = z.object({
   ]).optional(),
   module: z.string().max(100).optional(),
   status: z.enum(["success", "failed"]).optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: dateStringSchema.optional(),
+  dateTo: dateStringSchema.optional(),
   sortBy: z.enum(["timestamp", "action", "module", "status", "username", "email"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
@@ -713,12 +713,12 @@ export const auditLogQuerySchema = z.object({
 export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
 
 /** The CSV export ignores paging/sorting but honours the same filters. */
-export const auditLogExportQuerySchema = auditLogQuerySchema
-  .omit({ page: true, limit: true, sortBy: true, sortOrder: true })
-  .extend({
-    dateFrom: dateStringSchema.optional(),
-    dateTo: dateStringSchema.optional(),
-  });
+export const auditLogExportQuerySchema = auditLogQuerySchema.omit({
+  page: true,
+  limit: true,
+  sortBy: true,
+  sortOrder: true,
+});
 
 export const settingsCategorySchema = z.enum([
   "general",

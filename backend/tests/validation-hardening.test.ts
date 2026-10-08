@@ -179,6 +179,7 @@ async function run() {
   );
 
   // --- Audit logs ---
+  await expectStatus("audit list rejects a bad dateFrom", 400, "/audit-logs?dateFrom=zzz", token);
   await expectStatus("audit export rejects a bad dateFrom", 400, "/audit-logs/export?dateFrom=zzz", token);
   await expectStatus("audit export accepts valid filters", 200, "/audit-logs/export?action=user_login", token);
   await expectStatus("audit log :id must be a uuid", 400, "/audit-logs/nope", token);
