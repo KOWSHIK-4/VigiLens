@@ -22,6 +22,24 @@ def test_detect_image_rejects_non_image_files():
     assert response.status_code == 400
 
 
+def test_detect_video_stages_upload_into_a_missing_output_dir(tmp_path, monkeypatch):
+    # app/output is gitignored, so a fresh checkout has no OUTPUT_DIR. Staging
+    # the upload must create it rather than crash with FileNotFoundError.
+    from app.routes import detection
+
+    missing_dir = tmp_path / "fresh-output"
+    monkeypatch.setattr(detection, "OUTPUT_DIR", missing_dir)
+
+    response = client.post(
+        "/detect/video",
+        files={"file": ("clip.mp4", b"not a real video", "video/mp4")},
+    )
+
+    assert missing_dir.is_dir()
+    # The garbage payload fails later, at video decode -- not at file staging.
+    assert "No such file" not in str(response.json().get("detail"))
+
+
 def test_detectors_requires_internal_key_when_auth_forced(monkeypatch):
     monkeypatch.setenv("AI_REQUIRE_AUTH", "true")
     response = client.get("/detect/detectors")

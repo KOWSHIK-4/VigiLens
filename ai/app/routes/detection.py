@@ -313,6 +313,9 @@ async def detect_video(
     if not file.content_type or not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
 
+    # OUTPUT_DIR is gitignored and may not exist on a fresh checkout: stage the
+    # upload into it explicitly, like every other writer in this module does.
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename).suffix or ".mp4"
     tmp_path = str(OUTPUT_DIR / f"in_{uuid.uuid4().hex}{suffix}")
 
