@@ -82,7 +82,7 @@ export default function DetectionsPage() {
     [filters, page, sortBy, sortOrder],
   );
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ["detections", queryFilters],
     queryFn: () => detectionService.getAll(queryFilters),
     refetchInterval: autoRefresh ? 10000 : false,
@@ -311,6 +311,19 @@ export default function DetectionsPage() {
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+        </div>
+      ) : isError ? (
+        <div className="card flex flex-col items-center gap-3 border-red-200 bg-red-50 py-10 text-center">
+          <ShieldAlert className="w-8 h-8 text-red-500" />
+          <div>
+            <p className="font-semibold text-red-700">Failed to load detections</p>
+            <p className="mt-1 text-sm text-red-600">
+              The detections service could not be reached.
+            </p>
+          </div>
+          <button onClick={() => refetch()} className="btn-secondary">
+            Try again
+          </button>
         </div>
       ) : (
         <>
