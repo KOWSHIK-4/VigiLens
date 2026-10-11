@@ -34,6 +34,8 @@ def is_insecure_internal_key(value: str | None) -> bool:
     if not value:
         return True
     trimmed = value.strip()
+    if trimmed == _INSECURE_KEY:
+        return True
     if len(trimmed) < _MIN_SECRET_LENGTH:
         return True
     return bool(_PLACEHOLDER_PATTERN.search(trimmed))
