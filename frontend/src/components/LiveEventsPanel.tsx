@@ -59,11 +59,9 @@ export default function LiveEventsPanel() {
                 <ShieldAlert className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               ) : (
                 <span
-                  className={`shrink-0 mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${getSeverityStyle(
-                    (event.data.severity ?? "info") as "info" | "warning" | "critical",
-                  )}`}
+                  className={`shrink-0 mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${getSeverityStyle(event.data.severity ?? "info").badge}`}
                 >
-                  {event.data.severity ?? "info"}
+                  {getSeverityStyle(event.data.severity ?? "info").label}
                 </span>
               )}
               <div className="min-w-0 flex-1">
