@@ -48,7 +48,6 @@ const statusFilters: Array<{ value: "" | UserStatus; label: string }> = [
 
 const sortableColumns = [
   { key: "name", label: "Name" },
-  { key: "email", label: "Email" },
   { key: "role", label: "Role" },
   { key: "status", label: "Status" },
   { key: "lastLogin", label: "Last Login" },
@@ -71,7 +70,7 @@ function TableSkeleton() {
           <tbody className="divide-y divide-gray-100 animate-pulse">
             {Array.from({ length: 8 }, (_, i) => (
               <tr key={i}>
-                {Array.from({ length: 7 }, (__, j) => (
+                {Array.from({ length: 6 }, (__, j) => (
                   <td key={j} className="px-4 py-4">
                     <div className="h-4 bg-gray-200 rounded" />
                   </td>
