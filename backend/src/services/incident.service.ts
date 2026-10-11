@@ -158,8 +158,10 @@ function orderBy(sortBy?: string, sortOrder?: string): Prisma.IncidentOrderByWit
     case "priority":
     case "title":
       return [{ [sortBy]: direction } as Prisma.IncidentOrderByWithRelationInput, { openedAt: "desc" }];
+    case "openedAt":
     case "createdAt":
     case "updatedAt":
+      return [{ [sortBy]: direction } as Prisma.IncidentOrderByWithRelationInput, { id: "desc" }];
     default:
       return [{ openedAt: "desc" }, { id: "desc" }];
   }
