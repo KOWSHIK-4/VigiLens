@@ -42,8 +42,9 @@ const filters = [
 
 const sortableColumns = [
   { key: "name", label: "Model" },
-  { key: "confidenceThreshold", label: "Confidence" },
+  { key: "version", label: "Version" },
   { key: "status", label: "Status" },
+  { key: "confidenceThreshold", label: "Confidence" },
   { key: "enabled", label: "Enabled" },
   { key: "gpuSupported", label: "GPU" },
   { key: "updatedAt", label: "Updated" },
@@ -152,7 +153,7 @@ function TableSkeleton() {
           <tbody className="divide-y divide-gray-100 animate-pulse">
             {Array.from({ length: 8 }, (_, i) => (
               <tr key={i}>
-                {Array.from({ length: 7 }, (__, j) => (
+                {Array.from({ length: 8 }, (__, j) => (
                   <td key={j} className="px-4 py-4">
                     <div className="h-4 bg-gray-200 rounded" />
                   </td>
