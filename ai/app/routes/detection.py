@@ -317,7 +317,7 @@ async def detect_video(
     # OUTPUT_DIR is gitignored and may not exist on a fresh checkout: stage the
     # upload into it explicitly, like every other writer in this module does.
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = Path(file.filename).suffix or ".mp4"
+    suffix = Path(file.filename or "").suffix or ".mp4"
     tmp_path = str(OUTPUT_DIR / f"in_{uuid.uuid4().hex}{suffix}")
 
     try:
@@ -336,6 +336,7 @@ async def detect_video(
             confidence,
             processor,
         )
+        _prune_output_dir()
 
         return {
             "success": True,
