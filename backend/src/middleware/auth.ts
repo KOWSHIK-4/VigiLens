@@ -169,8 +169,16 @@ export async function authenticate(
     req.teamId = user.teamId ?? undefined;
     req.permissions = await permissionService.getPermissionsForRole(user.role, user.organizationId);
     next();
-  } catch {
-    return apiError(res, "Invalid or expired token", 401);
+  } catch (err) {
+    // Only a malformed, expired, or forged token is an auth failure. The try
+    // body also runs database lookups and permission resolution, so treating
+    // every throw as 401 would report an outage as a bad credential and hide
+    // it from monitoring. Anything that is not a JWT error is an internal
+    // fault and belongs to the error handler (500).
+    if (err instanceof jwt.JsonWebTokenError) {
+      return apiError(res, "Invalid or expired token", 401);
+    }
+    return next(err);
   }
 }
 
