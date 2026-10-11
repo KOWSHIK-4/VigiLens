@@ -16,7 +16,7 @@ export function csvCell(value: unknown): string {
 
 export function toCsv(headers: string[], rows: Array<Array<unknown>>): string {
   return [
-    headers.join(","),
+    headers.map(csvCell).join(","),
     ...rows.map((row) => row.map(csvCell).join(",")),
   ].join("\n");
 }

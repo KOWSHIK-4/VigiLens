@@ -12,7 +12,7 @@ import { csvCell } from "./csv";
 import { logger } from "../config/logger";
 
 export function csvHeaderLine(headers: string[]): string {
-  return headers.join(",") + "\n";
+  return headers.map(csvCell).join(",") + "\n";
 }
 
 export function csvLine(values: unknown[]): string {
@@ -35,10 +35,26 @@ export const MAX_EXPORT_ROWS = 100_000;
  */
 async function waitForDrain(res: Response): Promise<void> {
   await new Promise<void>((resolve) => {
-    const settle = () => resolve();
-    res.once("drain", settle);
-    res.once("close", settle);
-    res.once("error", settle);
+    const cleanup = () => {
+      res.off("drain", onDrain);
+      res.off("close", onClose);
+      res.off("error", onError);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onClose = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      resolve();
+    };
+    res.once("drain", onDrain);
+    res.once("close", onClose);
+    res.once("error", onError);
   });
 }
 
