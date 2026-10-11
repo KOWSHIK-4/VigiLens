@@ -104,7 +104,8 @@ def _open_source(resolved: ResolvedSource) -> cv2.VideoCapture:
     """
     timeout_ms = settings.capture_open_timeout_ms
     if resolved.camera_type == "usb":
-        index = usb_device_index(resolved.source)
+        source = resolved.source
+        index = source if isinstance(source, int) else usb_device_index(source)
         if index is None:
             raise CaptureError(f"Cannot parse USB device index from '{resolved.source}'")
         return open_capture(index, "usb", timeout_ms)
@@ -449,9 +450,10 @@ async def detect_webcam(
         if not cap.isOpened():
             logger.error(
                 "Could not open camera source %r (%s)",
-                redact_source(resolved.source),
+                redact_source(str(resolved.source)),
                 resolved.camera_type,
             )
+            cap.release()
             yield _unavailable_frame(
                 f"Cannot open {resolved.camera_type} source"
             )
@@ -488,7 +490,14 @@ async def detect_webcam(
                         reconnected = False
                         for _ in range(RECONNECT_ATTEMPTS):
                             time.sleep(RECONNECT_DELAY_SECONDS)
-                            cap = _open_source(resolved)
+                            try:
+                                cap = _open_source(resolved)
+                            except CaptureError as exc:
+                                logger.error(
+                                    "Cannot reopen camera source: %s",
+                                    redact_source(str(exc)),
+                                )
+                                continue
                             if cap.isOpened():
                                 reconnected = True
                                 break
