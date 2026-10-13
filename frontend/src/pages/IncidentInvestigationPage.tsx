@@ -249,6 +249,7 @@ export default function IncidentInvestigationPage() {
           label="Assignee"
           value={detail.assignedToName ?? "Unassigned"}
           icon={<User className="w-4 h-4" />}
+          variant="text"
         />
       </div>
 
@@ -549,10 +550,12 @@ function TimelineItem({
   label,
   value,
   icon,
+  variant = "timestamp",
 }: {
   label: string;
   value: string | null;
   icon: React.ReactNode;
+  variant?: "timestamp" | "text";
 }) {
   return (
     <div className="card p-3">
@@ -562,7 +565,11 @@ function TimelineItem({
       </div>
       <p className="text-sm font-semibold text-gray-900">
         {value ? (
-          <span title={formatDateTime(value)}>{formatRelativeTime(value)}</span>
+          variant === "text" ? (
+            <span title={value}>{value}</span>
+          ) : (
+            <span title={formatDateTime(value)}>{formatRelativeTime(value)}</span>
+          )
         ) : (
           <span className="text-gray-400 font-normal">—</span>
         )}
