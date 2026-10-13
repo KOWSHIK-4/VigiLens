@@ -27,6 +27,24 @@ function buildWhereWithWindow(
 
 export const REPORT_TRUNCATION_NOTICE = `Report truncated at the first ${MAX_REPORT_ROWS} rows; refine the date range for full data.`;
 
+/**
+ * Interprets a report date range. A date-only upper bound (as produced by the
+ * `<input type="date">` controls, `YYYY-MM-DD`) names a whole calendar day, so
+ * it is extended to the final millisecond; treating it as midnight would drop
+ * every event recorded on the requested last day.
+ */
+export function resolveDateWindow(dateRange: { from: string; to: string }): {
+  from: Date;
+  to: Date;
+} {
+  const from = new Date(dateRange.from);
+  const to = new Date(dateRange.to);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateRange.to)) {
+    return { from, to: new Date(to.getTime() + 24 * 60 * 60 * 1000 - 1) };
+  }
+  return { from, to };
+}
+
 interface GenerateReportInput {
   title: string;
   type: ReportType;
@@ -83,8 +101,7 @@ async function buildReportData(
   format: "pdf" | "csv",
   organizationId?: string,
 ): Promise<string | Buffer> {
-  const from = new Date(dateRange.from);
-  const to = new Date(dateRange.to);
+  const { from, to } = resolveDateWindow(dateRange);
   const where = buildWhereWithWindow(from, to, organizationId);
 
   switch (type) {
