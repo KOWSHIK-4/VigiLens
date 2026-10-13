@@ -136,18 +136,21 @@ export default function AuditLogsPage() {
         sortOrder,
       }),
     refetchInterval: 15000,
+    enabled: canRead,
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["audit-logs", "stats"],
     queryFn: () => auditLogService.getStats(),
     refetchInterval: 30000,
+    enabled: canRead,
   });
 
   const { data: chartData, isLoading: chartsLoading } = useQuery({
     queryKey: ["audit-logs", "charts"],
     queryFn: () => auditLogService.getChartData(),
     refetchInterval: 60000,
+    enabled: canRead,
   });
 
   const logs = data?.data ?? [];
@@ -216,6 +219,24 @@ export default function AuditLogsPage() {
   };
 
   const selectClasses = "input text-sm py-2";
+
+  if (!canRead) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Audit Logs</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Complete history of actions taken across the platform
+          </p>
+        </div>
+        <div className="card text-center py-8">
+          <p className="text-gray-500 text-sm">
+            You do not have permission to view audit logs. Contact your administrator.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -520,14 +541,6 @@ export default function AuditLogsPage() {
         <AuditLogChartsSkeleton />
       ) : (
         <AuditLogCharts data={chartData} />
-      )}
-
-      {!canRead && (
-        <div className="card text-center py-8">
-          <p className="text-gray-500 text-sm">
-            You do not have permission to view audit logs. Contact your administrator.
-          </p>
-        </div>
       )}
 
       <AuditLogDetailsDrawer log={selected} onClose={() => setSelected(null)} />
