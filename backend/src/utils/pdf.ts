@@ -65,7 +65,7 @@ export function buildPdfDocument(title: string, lines: string[]): Buffer {
       const fontSize = index === 0 && lineIndex === 0 ? FONT_SIZE_TITLE : FONT_SIZE_BODY;
       const y = MARGIN_TOP - lineIndex * LINE_HEIGHT;
       if (y < LINE_HEIGHT) return;
-      stream += `/F1 ${fontSize} Tf\n${LEFT_MARGIN} ${y} Td\n(${escapePdfString(line)}) Tj\n`;
+      stream += `/F1 ${fontSize} Tf\n1 0 0 1 ${LEFT_MARGIN} ${y} Tm\n(${escapePdfString(line)}) Tj\n`;
     });
     stream += "ET";
 
