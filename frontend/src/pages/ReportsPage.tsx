@@ -99,6 +99,13 @@ export default function ReportsPage() {
     mutationFn: async ({ id, format }: { id: string; format: "pdf" | "csv" }) => {
       await reportService.download(id, format);
     },
+    onError: () => {
+      showToast({
+        severity: "critical",
+        title: "Download failed",
+        message: "Could not download the report. Please try again.",
+      });
+    },
   });
 
   const reports = data?.data ?? [];
