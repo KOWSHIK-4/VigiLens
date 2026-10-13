@@ -170,11 +170,10 @@ async function checkAI(): Promise<ServiceHealth> {
 
   const start = Date.now();
   const url = `${config.ai.serviceUrl}/health`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_HEALTH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), AI_HEALTH_TIMEOUT_MS);
     const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (!response.ok) {
       return degradedService(
@@ -207,6 +206,8 @@ async function checkAI(): Promise<ServiceHealth> {
       Date.now() - start,
       error instanceof Error ? error.message : "AI service unreachable",
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
