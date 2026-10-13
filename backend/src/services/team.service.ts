@@ -214,9 +214,20 @@ export const teamService = {
       throw new ApiError(400, "User is not a member of this team");
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { teamId: null },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { teamId: null },
+      });
+      // A departing lead must not linger as the team's lead: the role
+      // requires membership, so leaving it set would orphan the pointer and
+      // block any future lead assignment until it is cleared manually.
+      if (team.leadId === userId) {
+        await tx.team.update({
+          where: { id: team.id },
+          data: { leadId: null },
+        });
+      }
     });
     logger.info("Team member removed", { teamId: team.id, userId, organizationId });
     return { success: true, teamId: team.id, userId };
