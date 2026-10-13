@@ -430,7 +430,7 @@ export default function DetectionsPage() {
                                       ? "bg-yellow-500"
                                       : "bg-red-500"
                                 }`}
-                                style={{ width: `${detection.confidence * 100}%` }}
+                                style={{ width: `${Math.min(100, detection.confidence * 100)}%` }}
                               />
                             </div>
                             <span className="text-sm text-gray-600 w-10 text-right">
