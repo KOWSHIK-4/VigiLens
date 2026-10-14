@@ -147,6 +147,7 @@ class DetectorService:
             out_path = str(out_dir / f"processed_{Path(video_path).stem}_{uuid.uuid4().hex[:8]}.mp4")
             writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
             if not writer.isOpened():
+                writer.release()
                 raise ValueError(f"Could not open output writer at '{out_path}'")
 
             all_detections: list[list[dict]] = []
