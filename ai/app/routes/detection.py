@@ -506,6 +506,7 @@ async def detect_webcam(
                             if cap.isOpened():
                                 reconnected = True
                                 break
+                            cap.release()
                         if not reconnected:
                             logger.error(
                                 "Camera disconnected and could not be reopened"
