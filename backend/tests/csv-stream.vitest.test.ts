@@ -55,8 +55,8 @@ async function* rows(arr: Array<Array<unknown>>): AsyncGenerator<Array<unknown>>
 }
 
 describe("csvHeaderLine", () => {
-  it("joins headers with commas and a trailing newline", () => {
-    expect(csvHeaderLine(["ID", "Label"])).toBe("ID,Label\n");
+  it("escapes header cells, joining them with commas and a trailing newline", () => {
+    expect(csvHeaderLine(["ID", "Label"])).toBe('"ID","Label"\n');
   });
 });
 
@@ -80,7 +80,7 @@ describe("sendCsvStream", () => {
       [3, 4],
     ]));
     expect(res.writableEnded).toBe(true);
-    expect(res.chunks.join("")).toBe("A,B\n\"1\",\"2\"\n\"3\",\"4\"\n");
+    expect(res.chunks.join("")).toBe("\"A\",\"B\"\n\"1\",\"2\"\n\"3\",\"4\"\n");
     expect(res.headers["Content-Type"]).toBe("text/csv; charset=utf-8");
   });
 
@@ -89,13 +89,13 @@ describe("sendCsvStream", () => {
     const done = sendCsvStream(res, ["H"], rows([["a"], ["b"]]));
 
     await Promise.resolve();
-    expect(res.chunks.join("")).toBe("H\n"); // paused at the first row
+    expect(res.chunks.join("")).toBe("\"H\"\n"); // paused at the first row
     expect(res.writableEnded).toBe(false);
 
     res.relieve();
     await done;
     expect(res.writableEnded).toBe(true);
-    expect(res.chunks.join("")).toBe("H\n\"a\"\n\"b\"\n");
+    expect(res.chunks.join("")).toBe("\"H\"\n\"a\"\n\"b\"\n");
   });
 
   it("destroys the response if the iterator errors mid-stream", async () => {
@@ -113,13 +113,13 @@ describe("sendCsvStream", () => {
     const done = sendCsvStream(res, ["H"], rows([["a"], ["b"]]));
 
     await Promise.resolve();
-    expect(res.chunks.join("")).toBe("H\n");
+    expect(res.chunks.join("")).toBe("\"H\"\n");
     expect(res.writableEnded).toBe(false);
 
     res.disconnect(); // abort while parked: "close" fires, "drain" never does
     await done;
 
-    expect(res.chunks.join("")).toBe("H\n");
+    expect(res.chunks.join("")).toBe("\"H\"\n");
     expect(res.writableEnded).toBe(false);
   });
 
@@ -130,6 +130,6 @@ describe("sendCsvStream", () => {
       res.end();
       yield ["never"];
     })());
-    expect(res.chunks.join("")).toBe("H\n\"first\"\n");
+    expect(res.chunks.join("")).toBe("\"H\"\n\"first\"\n");
   });
 });

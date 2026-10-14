@@ -46,7 +46,7 @@ describe("report CSV output", () => {
 
   it("renders whole rows safely", () => {
     const csv = toCsv(["ID", "Label"], [["d1", 'person, "tall"']]);
-    expect(csv).toBe('ID,Label\n"d1","person, ""tall"""');
+    expect(csv).toBe('"ID","Label"\n"d1","person, ""tall"""');
   });
 
   it("neutralizes spreadsheet formula prefixes", () => {
