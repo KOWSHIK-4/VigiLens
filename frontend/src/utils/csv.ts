@@ -18,7 +18,10 @@ export function csvCell(value: unknown): string {
 }
 
 export function buildClientCSV(headers: string[], rows: Array<Array<unknown>>): string {
-  return [headers.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n");
+  return [
+    headers.map(csvCell).join(","),
+    ...rows.map((row) => row.map(csvCell).join(",")),
+  ].join("\n");
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
