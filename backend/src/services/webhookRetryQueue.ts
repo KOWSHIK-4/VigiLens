@@ -137,6 +137,8 @@ export class WebhookRetryQueue {
       const due = this.pending.filter((entry) => entry.nextAttemptAt <= nowMs);
       for (const entry of due) {
         attempted += 1;
+        let ok = false;
+        let error: string | null = null;
         try {
           const result = await this.deliver(
             entry.eventType,
@@ -144,42 +146,46 @@ export class WebhookRetryQueue {
             entry.payload,
             entry.attempt,
           );
-          if (result.ok) {
-            succeeded += 1;
-            this.removePending(entry.id);
-            continue;
-          }
-          failed += 1;
-          entry.lastError = result.error ?? "webhook delivery failed";
-          const decision = decideRetry({
-            attempt: entry.attempt,
-            ok: false,
-            nowMs,
-            deadlineMs,
-            config: this.config,
-          });
-          if (decision.retry && decision.nextRetryAtMs !== null) {
-            // Apply jitter around the policy delay so retries spread out.
-            const rawDelay = retryDelayFor(entry.attempt + 1, this.config);
-            const jitteredDelay =
-              rawDelay > 0 ? jitterAround(rawDelay, this.config.jitter, Math.random()) : rawDelay;
-            entry.nextAttemptAt = nowMs + jitteredDelay;
-            entry.attempt = decision.nextAttempt;
-          } else {
-            entry.lastError = "retries exhausted";
-            this.removePending(entry.id);
-            if (this.deadLetters.length >= this.limits.maxDeadLetters) {
-              const dropped = this.deadLetters.shift();
-              logger.warn("Webhook dead-letter buffer full, dropped oldest entry", {
-                droppedDeliveryId: dropped?.id,
-                maxDeadLetters: this.limits.maxDeadLetters,
-              });
-            }
-            this.deadLetters.push(entry);
-          }
+          ok = result.ok;
+          error = result.error ?? null;
         } catch (err) {
-          failed += 1;
-          entry.lastError = err instanceof Error ? err.message : String(err);
+          error = err instanceof Error ? err.message : String(err);
+        }
+        if (ok) {
+          succeeded += 1;
+          this.removePending(entry.id);
+          continue;
+        }
+        failed += 1;
+        entry.lastError = error ?? "webhook delivery failed";
+        // A thrown delivery is handled exactly like a rejected one: the retry
+        // policy is applied so the entry backs off instead of being retried on
+        // every pass forever (its nextAttemptAt was already due).
+        const decision = decideRetry({
+          attempt: entry.attempt,
+          ok: false,
+          nowMs,
+          deadlineMs,
+          config: this.config,
+        });
+        if (decision.retry && decision.nextRetryAtMs !== null) {
+          // Apply jitter around the policy delay so retries spread out.
+          const rawDelay = retryDelayFor(entry.attempt + 1, this.config);
+          const jitteredDelay =
+            rawDelay > 0 ? jitterAround(rawDelay, this.config.jitter, Math.random()) : rawDelay;
+          entry.nextAttemptAt = nowMs + jitteredDelay;
+          entry.attempt = decision.nextAttempt;
+        } else {
+          entry.lastError = "retries exhausted";
+          this.removePending(entry.id);
+          if (this.deadLetters.length >= this.limits.maxDeadLetters) {
+            const dropped = this.deadLetters.shift();
+            logger.warn("Webhook dead-letter buffer full, dropped oldest entry", {
+              droppedDeliveryId: dropped?.id,
+              maxDeadLetters: this.limits.maxDeadLetters,
+            });
+          }
+          this.deadLetters.push(entry);
         }
       }
     } finally {
