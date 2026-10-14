@@ -199,10 +199,12 @@ class YoloDetector(BaseDetector):
         self._model = None
         self._model_name = model_name
         # Bounds how often a detector whose model failed to load retries the
-        # (potentially expensive) reload. 0.0 so the first inference request
-        # after a failed boot tries once, then subsequent attempts are gated
-        # by MODEL_RELOAD_COOLDOWN_S to avoid hammering a broken model file.
-        self._last_reload_attempt = 0.0
+        # (potentially expensive) reload. The sentinel is a full cooldown in
+        # the past so the first inference request always tries once -- even on
+        # a host whose monotonic clock is younger than the cooldown -- then
+        # subsequent attempts are gated by MODEL_RELOAD_COOLDOWN_S to avoid
+        # hammering a broken model file.
+        self._last_reload_attempt = -MODEL_RELOAD_COOLDOWN_S
         self._load_model()
 
     def _load_model(self) -> None:
