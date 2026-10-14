@@ -356,6 +356,10 @@ async def detect_video(
             status_code=status_code,
             detail={"error": str(e), "reason": e.reason, "attempts": e.attempts},
         ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
