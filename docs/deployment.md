@@ -63,6 +63,13 @@ serverless platform — that address can never resolve there.
 
 ```bash
 cp .env.example .env
+
+# The stack boots with NODE_ENV=production and rejects the example
+# placeholders. Generate unique values for the signing/crypto secrets before
+# the first start:
+#   JWT_SECRET, INTERNAL_API_KEY, BACKEND_INTERNAL_KEY, CAMERA_CREDENTIALS_KEY
+#     -> openssl rand -hex 32
+#   POSTGRES_PASSWORD -> any strong, non-default value
 docker compose up -d
 ```
 

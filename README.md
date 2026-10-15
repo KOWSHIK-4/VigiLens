@@ -40,6 +40,12 @@ cd VigiLens
 # Copy environment variables
 cp .env.example .env
 
+# Compose runs the services with NODE_ENV=production, which refuses the
+# example placeholders. Replace them with real values before first boot:
+#   JWT_SECRET, INTERNAL_API_KEY, BACKEND_INTERNAL_KEY, CAMERA_CREDENTIALS_KEY
+#   -> openssl rand -hex 32   (POSTGRES_PASSWORD -> any strong value)
+# See docs/deployment.md for the full checklist.
+
 # Start all services
 docker compose up -d
 
