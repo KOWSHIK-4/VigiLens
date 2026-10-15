@@ -3,9 +3,9 @@
 This file provides guidance for AI agents working in this repository.
 
 ## Project structure
-- rontend/ - React + Vite + TypeScript app
-- ackend/ - Express + TypeScript + Prisma API
-- i/ - FastAPI + Ultralytics YOLO service
+- frontend/ - React + Vite + TypeScript app
+- backend/ - Express + TypeScript + Prisma API
+- ai/ - FastAPI + Ultralytics YOLO service
 - docker/ - Docker configs
 - docs/ - Documentation
 
