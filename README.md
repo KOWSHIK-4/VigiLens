@@ -51,7 +51,7 @@ open http://localhost
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+ (CI and Docker build on 22.13)
 - Python 3.12+
 - Docker & Docker Compose
 - PostgreSQL 16 (optional, Docker handles this)
