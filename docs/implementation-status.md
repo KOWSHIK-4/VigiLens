@@ -22,7 +22,7 @@ Status of every VigiLens capability against the three-tier rubric:
 | Analytics & reports | IMPLEMENTED | Trends, per-camera/per-detector stats |
 | System monitoring | IMPLEMENTED | Health endpoints, scheduler status, metrics |
 | Frontend (18 pages) | IMPLEMENTED | Dashboard, live camera, models, detectors, cameras, detections, analytics, reports, alerts, incidents, incident investigation, monitoring, audit, settings, users, roles, system monitoring, security dashboard |
-| CI pipelines | IMPLEMENTED | Backend + AI checks in GitHub Actions; backend job runs migrate → seed → lint → typecheck → build → vitest → full e2e (`npm test`) against a real PostgreSQL 16 test database |
+| CI pipelines | IMPLEMENTED | Frontend, backend + AI checks in GitHub Actions; backend job runs migrate → seed → lint → typecheck → build → vitest → full e2e (`npm test`) against a real PostgreSQL 16 test database |
 
 ## Real-time detection engine
 
