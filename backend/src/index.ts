@@ -61,6 +61,12 @@ app.use((req, res, next) => {
 app.use(securityHeaders());
 app.use(cacheControlNoStore());
 
+// Assign the request ID and start the per-request log/metrics scope before
+// any middleware that can answer or reject a request on its own (body parser
+// 400s, rate-limiter 429s), so every response carries X-Request-Id and is
+// recorded, as docs/api.md promises.
+app.use(requestContext);
+
 app.use(
   cors({
     origin: config.cors.origin,
@@ -79,7 +85,6 @@ app.use(express.json({ limit: "2mb" }));
 // their own stricter limit (see auth.routes).
 app.use(rateLimitService.middleware);
 
-app.use(requestContext);
 
 // Compress API responses end-to-end. The SSE stream is excluded explicitly:
 // EventSource consumers would have no way to negotiate the encoding the way

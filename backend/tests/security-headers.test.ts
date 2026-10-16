@@ -174,6 +174,22 @@ async function run() {
   if (h.get("x-request-id")) ok("X-Request-Id correlation header is present");
   else fail("X-Request-Id correlation header is present");
 
+  // The body parser rejects malformed JSON before the route runs; the
+  // request-context middleware still has to stamp the 400 with a correlation
+  // id so the error can be traced in logs.
+  const malformed = await rawFetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: '{"email": broken',
+  });
+  if (malformed.status === 400) ok("malformed JSON body returns 400");
+  else fail("malformed JSON body returns 400", malformed.status);
+  if (malformed.headers.get("x-request-id")) {
+    ok("X-Request-Id is present on body-parser 400 responses");
+  } else {
+    fail("X-Request-Id is present on body-parser 400 responses");
+  }
+
   // 2) CORS preflight honors the configured allowlist.
   const preflightAllowed = await rawFetch("/api/auth/login", {
     method: "OPTIONS",
