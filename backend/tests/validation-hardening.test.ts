@@ -177,6 +177,18 @@ async function run() {
     token,
     { method: "POST", body: longUrlBody },
   );
+  await expectStatus(
+    "camera health-logs limit=5000 is rejected",
+    400,
+    "/cameras/00000000-0000-4000-8000-000000000000/health-logs?limit=5000",
+    token,
+  );
+  await expectStatus(
+    "camera health-logs accepts a valid limit",
+    200,
+    "/cameras/00000000-0000-4000-8000-000000000000/health-logs?limit=10",
+    token,
+  );
 
   // --- Audit logs ---
   await expectStatus("audit list rejects a bad dateFrom", 400, "/audit-logs?dateFrom=zzz", token);

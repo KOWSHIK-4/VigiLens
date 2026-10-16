@@ -200,6 +200,10 @@ export const cameraQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
+export const cameraHealthLogsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
 export const assignCameraTeamSchema = z.object({
   teamId: z.string().uuid("Invalid team id").nullable(),
 });

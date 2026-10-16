@@ -8,6 +8,7 @@ import { validate } from "../middleware/validate";
 import {
   cameraIdSchema,
   cameraQuerySchema,
+  cameraHealthLogsQuerySchema,
   createCameraSchema,
   updateCameraSchema,
   assignCameraTeamSchema,
@@ -70,6 +71,7 @@ router.get(
   requirePermission("cameras.read"),
   enforceTeamVisibility,
   validate(cameraIdSchema, "params"),
+  validate(cameraHealthLogsQuerySchema, "query"),
   cameraController.getHealthLogs,
 );
 

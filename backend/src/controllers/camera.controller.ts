@@ -239,12 +239,8 @@ export const cameraController = {
   async getHealthLogs(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const logs = await cameraService.getHealthLogs(
-        id,
-        Number(req.query.limit) || 50,
-        req.organizationId,
-        req.teamScopeId,
-      );
+      const { limit } = req.query as unknown as { limit: number };
+      const logs = await cameraService.getHealthLogs(id, limit, req.organizationId, req.teamScopeId);
       success(res, logs);
     } catch (err) {
       next(err);
