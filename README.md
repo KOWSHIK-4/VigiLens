@@ -99,7 +99,9 @@ variables — those are embedded into the client bundle at build time.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_API_URL` | `http://localhost:4000/api` | Backend API base URL |
-| `VITE_WS_URL` | `ws://localhost:4000` | WebSocket URL for realtime events |
+
+Realtime updates use server-sent events (`GET /api/realtime/events`), which
+reuse the `VITE_API_URL` base — there is no separate WebSocket URL.
 
 ### Backend (Express/TypeScript)
 
@@ -110,8 +112,8 @@ variables — those are embedded into the client bundle at build time.
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `JWT_SECRET` | Yes | HS256 signing key (min 32 chars). Generate with `openssl rand -hex 32` |
 | `JWT_EXPIRES_IN` | No | Token lifetime (default `7d`) |
-| `AI_SERVICE_URL` | Yes | AI service base URL (e.g. `http://localhost:8000`) |
-| `CORS_ORIGIN` | Yes | Comma-separated allowed origins |
+| `AI_SERVICE_URL` | No | AI service base URL (default `http://localhost:8000`). Required for live inference; unset means the AI service is reported as `not_configured` |
+| `CORS_ORIGIN` | No | Comma-separated allowed origins (default: the deployed frontend domains plus `http://localhost:5173`) |
 | `INTERNAL_API_KEY` | Yes | Shared secret for AI↔backend communication. Must match `BACKEND_INTERNAL_KEY` on the AI service |
 | `CAMERA_CREDENTIALS_KEY` | Yes | 32-byte key (64 hex chars) for AES-256-GCM encryption of camera credentials at rest. Generate with `openssl rand -hex 32` |
 | `CAMERA_CREDENTIALS_KEY_LEGACY` | No | Previous key for decrypting rows written before a key rotation |
