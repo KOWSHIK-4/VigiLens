@@ -305,3 +305,45 @@ def test_health_reports_detector_status():
     keys = set(body["detectors"]["detectors"].keys())
     assert "person_detector" in keys
     assert "vehicle_detector" in keys
+
+
+def test_registered_detectors_honor_configured_inference_limits(monkeypatch):
+    """INFERENCE_TIMEOUT_S / INFERENCE_MAX_RETRIES must reach the detectors.
+
+    Both knobs are documented in README/.env.example but were previously
+    parsed by Settings and then dropped on the floor: the detectors were
+    registered without them and always fell back to the hardcoded defaults.
+    """
+    from app.config import settings
+    from app.detectors.person import PersonDetector
+
+    monkeypatch.setattr(
+        "app.detectors.yolo.YoloDetector._load_model", lambda self: None
+    )
+
+    detector = PersonDetector(
+        inference_timeout_s=settings.inference_timeout_s,
+        max_retries=settings.inference_max_retries,
+    )
+    assert detector._inference_timeout_s == settings.inference_timeout_s
+    assert detector._max_retries == settings.inference_max_retries
+
+    person = detector_service.get("person_detector")
+    vehicle = detector_service.get("vehicle_detector")
+    assert person._inference_timeout_s == settings.inference_timeout_s
+    assert person._max_retries == settings.inference_max_retries
+    assert vehicle._inference_timeout_s == settings.inference_timeout_s
+    assert vehicle._max_retries == settings.inference_max_retries
+
+
+def test_person_detector_defaults_match_yolo_defaults(monkeypatch):
+    """Constructing PersonDetector without knobs keeps the previous defaults."""
+    from app.detectors.person import PersonDetector
+    from app.detectors.yolo import DEFAULT_INFERENCE_TIMEOUT_S, DEFAULT_MAX_RETRIES
+
+    monkeypatch.setattr(
+        "app.detectors.yolo.YoloDetector._load_model", lambda self: None
+    )
+    detector = PersonDetector()
+    assert detector._inference_timeout_s == DEFAULT_INFERENCE_TIMEOUT_S
+    assert detector._max_retries == DEFAULT_MAX_RETRIES

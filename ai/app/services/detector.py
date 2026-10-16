@@ -7,6 +7,7 @@ from typing import List
 import cv2
 import numpy as np
 
+from app.config import settings
 from app.detectors.base import BaseDetector, Detection
 from app.detectors.yolo import InferenceError
 
@@ -184,12 +185,19 @@ detector_service = DetectorService()
 from app.detectors import PersonDetector  # noqa: E402
 from app.detectors.yolo import YoloDetector  # noqa: E402
 
-detector_service.register(PersonDetector())
+detector_service.register(
+    PersonDetector(
+        inference_timeout_s=settings.inference_timeout_s,
+        max_retries=settings.inference_max_retries,
+    ),
+)
 # Vehicle detection uses the same YOLO COCO model, filtered to
 # motorized road vehicles (car=2, motorcycle=3, bus=5, truck=7).
 detector_service.register(
     YoloDetector(
         detector_name="vehicle_detector",
         class_filter=[2, 3, 5, 7],
+        inference_timeout_s=settings.inference_timeout_s,
+        max_retries=settings.inference_max_retries,
     )
 )
