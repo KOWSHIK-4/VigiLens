@@ -37,8 +37,11 @@ VigiLens is an open-source security monitoring platform that detects safety and 
 git clone https://github.com/KOWSHIK-4/VigiLens.git
 cd VigiLens
 
-# Copy environment variables
+# Copy environment variables (Linux/macOS)
 cp .env.example .env
+
+# Windows PowerShell equivalent:
+# Copy-Item .env.example .env
 
 # Compose runs the services with NODE_ENV=production, which refuses the
 # example placeholders. Replace them with real values before first boot:
