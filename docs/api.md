@@ -98,7 +98,9 @@ seeded with 36 permissions across 13 categories and 4 roles: `super_admin`
 (full access), `admin` (manage users, cameras, models and settings),
 `operator` (monitor cameras, detections and alerts) and `viewer` (read-only).
 Custom roles can be created and assigned. Accounts with status `disabled`
-cannot log in. Seed accounts (password `admin123`):
+cannot log in. The seeded password `admin123` is for local demos only: change it
+immediately and never reuse it in a publicly reachable or production deployment.
+Seed accounts (password `admin123`):
 `super@vigilens.io`, `admin@vigilens.io`, `operator@vigilens.io`,
 `viewer@vigilens.io`, `disabled@vigilens.io`.
 
