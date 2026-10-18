@@ -121,3 +121,8 @@ Honest list of what VigiLens does and does not do in its current form.
 - Snapshot thumbnails are served from the backend media root; the
   `npm run prune:media` tool (and its settings-backed retention/quotas) keeps
   those files bounded.
+- The AI service also caps its generated output directory at 500 files. A
+  detection record can outlive its local thumbnail, so an old thumbnail may
+  return `404` even while the detection remains visible in history. Treat the
+  database record as the event history, not a guarantee that every image is
+  retained indefinitely.
