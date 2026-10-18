@@ -8,6 +8,12 @@ Status of every VigiLens capability against the three-tier rubric:
 - **MODEL NOT AVAILABLE** — the code path exists and the UI/API surface is
   present, but no trained model is shipped; it will refuse (not fabricate) work.
 
+This document describes the repository implementation and its recorded test
+coverage. `IMPLEMENTED` does not by itself certify a particular deployment:
+production readiness still depends on valid environment secrets, reachable
+services, persistent storage, and a successful smoke test against that target.
+See `docs/deployment.md` and `docs/limitations.md` before deploying.
+
 ## Platform
 
 | Capability | Status | Notes |
