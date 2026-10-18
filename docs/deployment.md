@@ -61,6 +61,14 @@ serverless platform — that address can never resolve there.
 
 ## Docker Compose (Recommended)
 
+On Linux/macOS, copy the template with `cp`. In Windows PowerShell, use `Copy-Item`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then edit `.env` and replace the required example secrets before starting the stack:
+
 ```bash
 cp .env.example .env
 
