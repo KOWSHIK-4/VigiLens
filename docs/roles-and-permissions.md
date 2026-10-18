@@ -40,6 +40,17 @@ every role uniformly.
 `requirePermission` check. Roles are mutable — an administrator can edit a
 role's permission set from the Roles page, and custom roles can be created.
 
+### Least-privilege guidance
+
+- Use `viewer` for people who only need to inspect monitoring data and reports.
+- Use `operator` for staff who actively monitor cameras and respond to detections
+  or alerts but do not administer users or system settings.
+- Reserve `admin` for trusted maintainers who need to manage users, cameras,
+  models, and settings; keep `super_admin` for tightly controlled break-glass use.
+- Review custom-role permissions whenever responsibilities change, and verify
+  access through the backend as well as the UI; hiding a UI action is not an
+  authorization boundary.
+
 ## Permission Catalog
 
 | Key                        | Category      | Description                                              |
