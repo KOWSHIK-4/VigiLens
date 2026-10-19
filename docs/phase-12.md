@@ -535,3 +535,17 @@ still returns 500 because the secret is absent.
   inference.
 
 **PRODUCTION SMOKE TEST BLOCKED**
+
+
+## Repeatable deployment smoke test
+
+After a deployment is available, record the target and timestamp, then verify the following against that target:
+
+- The public frontend responds over the intended protocol.
+- Login succeeds with a provisioned test account, and a denied account remains denied.
+- Protected API requests require a valid session and the expected permissions.
+- Camera health and stream endpoints reflect a real reachable source rather than a seeded placeholder.
+- A known test frame can be processed and the resulting detection can be retrieved from the application.
+- Logs contain no secrets, and health checks remain stable after a service restart.
+
+Mark a check as blocked when the target service or account is unavailable; do not report an unrun check as passing. This checklist does not override the deployment status recorded above.
