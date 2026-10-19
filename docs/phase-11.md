@@ -110,3 +110,17 @@ See `api.md` for the synchronized endpoint reference and `deployment.md` for
 proxy and environment configuration.
 
 PRODUCTION CERTIFICATION COMPLETE
+
+
+## Operator checklist for secret rotation
+
+For a planned secret rotation, use an explicit maintenance procedure:
+
+1. Identify every service that consumes the secret and the environment in which it is configured.
+2. Back up required encrypted data and confirm whether the old key is needed for decryption during migration.
+3. Generate the replacement with a cryptographically secure tool; do not use a sample value from documentation.
+4. Update the secret store/environment, then restart or redeploy the dependent services in a controlled order.
+5. Verify health checks, authentication, and the workflows that depend on the secret.
+6. Remove the old secret only after confirming that no remaining data or service needs it.
+
+Never paste production secrets into commits, issue reports, or screenshots.
