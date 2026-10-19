@@ -117,3 +117,16 @@ window are all proven end to end.
 
 See `api.md` for the synchronized endpoint reference, and `deployment.md`
 for proxy and environment configuration.
+
+
+## Maintainer regression checks
+
+When changing role or permission behavior, include regression coverage for both sides of each permission boundary:
+
+- An authorized role can perform the intended operation.
+- A role without that permission is denied by the backend, even if it calls the endpoint directly.
+- Organization-scoped access cannot read or mutate another organization's resources.
+- Realtime events and list/detail endpoints enforce equivalent tenant boundaries.
+- Tests use isolated test data and do not rely on a developer's local database state.
+
+Treat frontend visibility as usability only; server-side authorization remains the enforcement boundary.
