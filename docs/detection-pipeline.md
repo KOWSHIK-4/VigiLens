@@ -126,3 +126,17 @@ Every number exposed by the engine is measured at runtime:
 - Model test (`POST /models/:id/test`) performs a real inference probe and
   reports measured latency; when the AI backend is unreachable it states so
   and reports `inferenceTimeMs: null` instead of an invented value.
+
+
+## Troubleshooting a missing detection
+
+When a frame produces no visible detection, check the stages in order rather than assuming the model is broken:
+
+1. Confirm the camera is producing fresh frames.
+2. Confirm the selected detector is available and its model weights loaded successfully.
+3. Inspect inference statistics and errors before interpreting a zero-detection result.
+4. Use a known test clip with a clearly visible supported class and verify the confidence threshold.
+5. Confirm the inference result reaches the backend ingestion endpoint and that persistence succeeds.
+6. Check alert cooldown and filtering rules separately; a persisted detection does not necessarily create a new alert on every frame.
+
+A valid inference with zero matching objects is a legitimate result. Do not fabricate detections or force an online status to make the UI appear healthy.
