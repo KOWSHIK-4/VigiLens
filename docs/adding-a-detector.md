@@ -64,3 +64,15 @@ The default model (`yolo11n.pt`) is committed to the repository at
 detectors, place the weights file where the AI service can load it (the
 detector's `model_name` path) or mount it into the container. The detector
 stays `ARCHITECTURE READY` until valid weights are present.
+
+
+## Pre-merge checklist
+
+Before registering a detector, verify all of the following:
+
+- Its identifier is stable, unique, and matches the backend registry entry.
+- Configuration rejects invalid thresholds instead of silently accepting them.
+- Missing model weights produce an explicit unavailable/error state; they must not be reported as a successful inference.
+- Tests cover both a valid configuration and at least one invalid or unavailable configuration.
+- The detector is exercised through the same service/API path used by the application, not only by calling the model class directly.
+- Any new weights or sample assets are intentional repository artifacts; never commit credentials or generated runtime output.
