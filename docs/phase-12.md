@@ -549,3 +549,7 @@ After a deployment is available, record the target and timestamp, then verify th
 - Logs contain no secrets, and health checks remain stable after a service restart.
 
 Mark a check as blocked when the target service or account is unavailable; do not report an unrun check as passing. This checklist does not override the deployment status recorded above.
+
+## Post-deployment observation window
+
+After smoke tests pass, observe the release for a defined period and compare error rate, response latency, camera frame freshness, inference failures, and alert volume against the pre-release baseline. Check that logs and metrics do not expose secrets or unnecessary personal data. Record anomalies with timestamps and deployment version, and keep the rollback decision owner available during the window. A successful one-time smoke test is evidence for basic functionality, not proof of sustained production reliability.
