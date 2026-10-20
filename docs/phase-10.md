@@ -130,3 +130,7 @@ When changing role or permission behavior, include regression coverage for both 
 - Tests use isolated test data and do not rely on a developer's local database state.
 
 Treat frontend visibility as usability only; server-side authorization remains the enforcement boundary.
+
+## Audit-log verification scenarios
+
+For security-sensitive changes, test that successful and denied actions are both represented where the audit policy requires them. Verify actor, action, target, timestamp, and outcome are useful for investigation without copying passwords, session tokens, camera credentials, or secret values into the log. Confirm tenant-scoped users cannot query another tenant's audit events, and that audit-write failures follow the documented failure policy rather than silently appearing as successful logging.
