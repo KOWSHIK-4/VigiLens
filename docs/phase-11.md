@@ -124,3 +124,7 @@ For a planned secret rotation, use an explicit maintenance procedure:
 6. Remove the old secret only after confirming that no remaining data or service needs it.
 
 Never paste production secrets into commits, issue reports, or screenshots.
+
+## Rollback readiness
+
+Before a production release, identify the previous known-good image/version and the exact rollback command or deployment procedure. Check whether database migrations are backward-compatible with that version and take a verified backup before any irreversible migration. Define a small set of rollback triggers (for example, failed health checks, authentication failures, or sustained inference errors), assign an operator, and verify the rollback path in a non-production environment. A rollback is not complete until health checks and a critical user workflow pass.
