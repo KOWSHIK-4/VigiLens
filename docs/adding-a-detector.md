@@ -76,3 +76,7 @@ Before registering a detector, verify all of the following:
 - Tests cover both a valid configuration and at least one invalid or unavailable configuration.
 - The detector is exercised through the same service/API path used by the application, not only by calling the model class directly.
 - Any new weights or sample assets are intentional repository artifacts; never commit credentials or generated runtime output.
+
+## Confidence calibration notes
+
+Confidence thresholds should be chosen from representative validation clips, not from a single successful demo. Record the model/version, test-set composition, threshold, false-positive examples, and missed detections when tuning. Re-run the same clips after changing weights or preprocessing so comparisons remain meaningful. A threshold that improves one camera angle may reduce recall in another, so document known lighting, distance, and occlusion limits.
