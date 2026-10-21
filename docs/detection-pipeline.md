@@ -148,3 +148,7 @@ For stream incidents, distinguish a live transport from fresh image content. Tra
 ## Inference failure recovery checks
 
 Exercise the pipeline with the AI service unavailable, a malformed inference response, and a slow response. The backend should expose a clear failure state, keep request timeouts bounded, and avoid persisting an error as a valid detection. After the service recovers, confirm new frames are processed normally and that the health view reflects recovery without requiring fabricated results or a manual database edit.
+
+## Trace one detection end to end
+
+When debugging a reported detection, follow one event using its available correlation or event identifier across frame receipt, inference, backend ingestion, persistence, and alert evaluation. Record timestamps and outcomes at each stage, while avoiding raw credentials or unnecessary image data in logs. If a stage has no trace evidence, mark that step unverified rather than assuming the event passed through it.
