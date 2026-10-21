@@ -557,3 +557,7 @@ After smoke tests pass, observe the release for a defined period and compare err
 ## Release evidence record
 
 For each release, record the deployed version or image digest, environment, deployment time, smoke-test results, known blocked checks, and the person responsible for follow-up. Link relevant logs or dashboards only where access is controlled and sensitive values are redacted. Separate verified results from assumptions, and keep unresolved issues visible rather than marking the release fully validated by default.
+
+## Incident handoff checklist
+
+When handing an unresolved deployment issue to another operator, include the affected environment, release identifier, first observed timestamp, impact, reproduction steps, relevant redacted logs, and checks already completed. State what remains unknown and who owns the next action. Do not include passwords, API keys, camera credentials, or private footage in the handoff record.
