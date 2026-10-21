@@ -84,3 +84,7 @@ Confidence thresholds should be chosen from representative validation clips, not
 ## Dataset review before evaluation
 
 Before relying on a validation result, record where the clips came from, which supported classes they cover, and whether the set includes difficult conditions such as low light, partial occlusion, and distant subjects. Keep training and validation examples separate, remove duplicate or near-duplicate frames where practical, and avoid including private footage without authorization. Document the limits of the sample so a small test set is not presented as proof of general accuracy.
+
+## Periodic detector drift review
+
+Re-check detector behavior when camera placement, lighting, scene layout, or model weights change. Compare a representative sample against the previous baseline, note changes in false positives and missed detections, and record the model version and evaluation date. Investigate meaningful changes before raising thresholds or replacing weights; a change in scene conditions can look like model drift without being a model defect.
