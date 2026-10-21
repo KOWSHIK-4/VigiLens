@@ -553,3 +553,7 @@ Mark a check as blocked when the target service or account is unavailable; do no
 ## Post-deployment observation window
 
 After smoke tests pass, observe the release for a defined period and compare error rate, response latency, camera frame freshness, inference failures, and alert volume against the pre-release baseline. Check that logs and metrics do not expose secrets or unnecessary personal data. Record anomalies with timestamps and deployment version, and keep the rollback decision owner available during the window. A successful one-time smoke test is evidence for basic functionality, not proof of sustained production reliability.
+
+## Release evidence record
+
+For each release, record the deployed version or image digest, environment, deployment time, smoke-test results, known blocked checks, and the person responsible for follow-up. Link relevant logs or dashboards only where access is controlled and sensitive values are redacted. Separate verified results from assumptions, and keep unresolved issues visible rather than marking the release fully validated by default.
