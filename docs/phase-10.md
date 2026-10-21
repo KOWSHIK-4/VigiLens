@@ -134,3 +134,7 @@ Treat frontend visibility as usability only; server-side authorization remains t
 ## Audit-log verification scenarios
 
 For security-sensitive changes, test that successful and denied actions are both represented where the audit policy requires them. Verify actor, action, target, timestamp, and outcome are useful for investigation without copying passwords, session tokens, camera credentials, or secret values into the log. Confirm tenant-scoped users cannot query another tenant's audit events, and that audit-write failures follow the documented failure policy rather than silently appearing as successful logging.
+
+## Tenant isolation negative tests
+
+For every tenant-owned resource, include a test that authenticates as a user from a different tenant and attempts to list, read, update, and delete the resource where those operations exist. Verify both direct object identifiers and collection filters are scoped server-side. Use distinct fixtures per tenant, and assert that realtime subscriptions do not leak events across the same boundary.
