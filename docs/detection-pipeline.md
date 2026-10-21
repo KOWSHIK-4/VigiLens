@@ -144,3 +144,7 @@ A valid inference with zero matching objects is a legitimate result. Do not fabr
 ## Frame freshness and backpressure
 
 For stream incidents, distinguish a live transport from fresh image content. Track the timestamp of the most recently received frame and surface stale-frame age separately from camera connectivity. If inference falls behind, prefer a bounded queue and an explicit dropped-frame counter over unbounded buffering. Validate these signals with a deliberately paused source and a slow test detector; recovery should restore fresh frames without fabricating successful inference results.
+
+## Inference failure recovery checks
+
+Exercise the pipeline with the AI service unavailable, a malformed inference response, and a slow response. The backend should expose a clear failure state, keep request timeouts bounded, and avoid persisting an error as a valid detection. After the service recovers, confirm new frames are processed normally and that the health view reflects recovery without requiring fabricated results or a manual database edit.
