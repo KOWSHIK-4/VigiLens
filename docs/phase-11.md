@@ -132,3 +132,7 @@ Before a production release, identify the previous known-good image/version and 
 ## Backup restore rehearsal
 
 A backup is useful only if it can be restored. Periodically restore a recent backup into an isolated environment, verify database integrity and required application records, and run a small set of read-only workflows. Record the backup timestamp, restore duration, missing dependencies, and any data-loss window. Never perform a rehearsal against the live production database or place restored secrets in shared logs.
+
+## Environment configuration review
+
+Before deployment, compare required variables with the example environment file and confirm each service receives only the settings it needs. Validate required values at startup and fail clearly when a critical secret or URL is missing; never replace it with a production default. Check that local environment files remain ignored by Git and that diagnostic output does not print secret values.
