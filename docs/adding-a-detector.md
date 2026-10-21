@@ -80,3 +80,7 @@ Before registering a detector, verify all of the following:
 ## Confidence calibration notes
 
 Confidence thresholds should be chosen from representative validation clips, not from a single successful demo. Record the model/version, test-set composition, threshold, false-positive examples, and missed detections when tuning. Re-run the same clips after changing weights or preprocessing so comparisons remain meaningful. A threshold that improves one camera angle may reduce recall in another, so document known lighting, distance, and occlusion limits.
+
+## Dataset review before evaluation
+
+Before relying on a validation result, record where the clips came from, which supported classes they cover, and whether the set includes difficult conditions such as low light, partial occlusion, and distant subjects. Keep training and validation examples separate, remove duplicate or near-duplicate frames where practical, and avoid including private footage without authorization. Document the limits of the sample so a small test set is not presented as proof of general accuracy.
