@@ -561,3 +561,7 @@ For each release, record the deployed version or image digest, environment, depl
 ## Incident handoff checklist
 
 When handing an unresolved deployment issue to another operator, include the affected environment, release identifier, first observed timestamp, impact, reproduction steps, relevant redacted logs, and checks already completed. State what remains unknown and who owns the next action. Do not include passwords, API keys, camera credentials, or private footage in the handoff record.
+
+## Release rollback decision criteria
+
+Before a release, define the symptoms that require rollback, such as sustained health-check failures, elevated error rates, missing detection persistence, or authorization regressions. Identify who can make the decision, the last known-good release, and any database compatibility constraints. After rollback, verify core health and one representative end-to-end workflow, then record the outcome and remaining impact. A successful deployment command alone is not evidence that the release is healthy.
