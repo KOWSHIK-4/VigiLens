@@ -88,3 +88,7 @@ Before relying on a validation result, record where the clips came from, which s
 ## Periodic detector drift review
 
 Re-check detector behavior when camera placement, lighting, scene layout, or model weights change. Compare a representative sample against the previous baseline, note changes in false positives and missed detections, and record the model version and evaluation date. Investigate meaningful changes before raising thresholds or replacing weights; a change in scene conditions can look like model drift without being a model defect.
+
+## Detector release acceptance criteria
+
+Before promoting a detector or changing its weights, record the model identifier, input size, confidence threshold, and evaluation dataset version. Review representative true positives, false positives, and missed events, including difficult lighting and occlusion cases. Confirm the service starts with the intended model and that a failed model load produces a visible health/error state instead of silently reporting empty detections. Keep the previous known-good artifact available for rollback.
