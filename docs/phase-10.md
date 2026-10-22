@@ -142,3 +142,7 @@ For every tenant-owned resource, include a test that authenticates as a user fro
 ## Permission change review
 
 Before changing a permission, identify the API routes, background jobs, realtime channels, and UI actions that depend on it. Add tests for the intended role and at least one role that must be denied, including tenant boundaries where applicable. Review whether existing seeded roles or migrations need updates, and verify the server enforces access independently of frontend visibility.
+
+## Account lifecycle authorization checks
+
+Test authorization after an account is disabled, a role is changed, or a session expires. Verify protected API requests and realtime connections stop receiving privileges that were revoked, according to the application's session design. Check that password reset or account recovery flows do not grant elevated roles, and ensure administrative actions are auditable. Use disposable test accounts and avoid testing destructive lifecycle changes on real users.
