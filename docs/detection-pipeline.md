@@ -152,3 +152,7 @@ Exercise the pipeline with the AI service unavailable, a malformed inference res
 ## Trace one detection end to end
 
 When debugging a reported detection, follow one event using its available correlation or event identifier across frame receipt, inference, backend ingestion, persistence, and alert evaluation. Record timestamps and outcomes at each stage, while avoiding raw credentials or unnecessary image data in logs. If a stage has no trace evidence, mark that step unverified rather than assuming the event passed through it.
+
+## Duplicate event handling
+
+Exercise the pipeline with a repeated frame or retry of the same event where the implementation supports retries. Decide which identifier defines a duplicate and verify that retries do not create misleading duplicate alerts or corrupt event ordering. Do not deduplicate solely by timestamp if separate events can legitimately occur close together. Document whether the system guarantees at-most-once, at-least-once, or best-effort processing; do not imply stronger guarantees than the code provides.
