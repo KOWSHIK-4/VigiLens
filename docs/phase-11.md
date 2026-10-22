@@ -136,3 +136,7 @@ A backup is useful only if it can be restored. Periodically restore a recent bac
 ## Environment configuration review
 
 Before deployment, compare required variables with the example environment file and confirm each service receives only the settings it needs. Validate required values at startup and fail clearly when a critical secret or URL is missing; never replace it with a production default. Check that local environment files remain ignored by Git and that diagnostic output does not print secret values.
+
+## Database migration recovery checks
+
+For a migration that changes persistent data, review whether it is safe to retry and what happens if the process stops partway through. Test the migration against a disposable copy of representative data, verify expected constraints and indexes afterward, and keep a restorable backup before applying it to a valuable environment. Prefer a forward-fix plan for migrations that cannot be safely reversed, and document the exact recovery decision rather than assuming every migration is reversible.
