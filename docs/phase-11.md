@@ -140,3 +140,7 @@ Before deployment, compare required variables with the example environment file 
 ## Database migration recovery checks
 
 For a migration that changes persistent data, review whether it is safe to retry and what happens if the process stops partway through. Test the migration against a disposable copy of representative data, verify expected constraints and indexes afterward, and keep a restorable backup before applying it to a valuable environment. Prefer a forward-fix plan for migrations that cannot be safely reversed, and document the exact recovery decision rather than assuming every migration is reversible.
+
+## Backup retention verification
+
+Confirm the configured backup schedule and retention policy match the environment's recovery needs. Verify that old backups expire as intended and that retained copies are protected from ordinary application credentials. Periodically test restoring a selected backup into an isolated environment and record the restore result, data timestamp, and gaps found. A successful backup job alone does not prove that the backup is complete or restorable.
