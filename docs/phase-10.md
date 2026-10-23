@@ -146,3 +146,7 @@ Before changing a permission, identify the API routes, background jobs, realtime
 ## Account lifecycle authorization checks
 
 Test authorization after an account is disabled, a role is changed, or a session expires. Verify protected API requests and realtime connections stop receiving privileges that were revoked, according to the application's session design. Check that password reset or account recovery flows do not grant elevated roles, and ensure administrative actions are auditable. Use disposable test accounts and avoid testing destructive lifecycle changes on real users.
+
+## Security audit log review
+
+Verify that sensitive actions such as role changes, account disablement, and configuration updates produce an audit record with a timestamp, actor, action, and outcome where supported. Confirm logs do not include passwords, tokens, camera credentials, or unnecessary personal data. Restrict access to audit records and test that ordinary users cannot alter them through application endpoints. Document any actions that currently lack audit coverage instead of assuming they are logged.
