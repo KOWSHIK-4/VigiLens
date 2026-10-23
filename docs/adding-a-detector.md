@@ -96,3 +96,7 @@ Before promoting a detector or changing its weights, record the model identifier
 ## Detector privacy review
 
 Before evaluating a new detector, confirm the sample footage is authorized for the intended use and access is limited to people who need it. Prefer representative, minimized samples over collecting extra footage. Document whether images or derived metadata are retained, where they are stored, and when they should be deleted. Avoid putting identifiable frames into issue reports or logs unless there is a clear approved need.
+
+## Detector configuration reproducibility
+
+For each evaluation or release, record the model artifact/version, preprocessing settings, input dimensions, confidence threshold, and relevant runtime dependencies. Keep configuration examples free of secrets and avoid relying on undocumented local defaults. When comparing two runs, change one major variable at a time and note the dataset and environment used so the result can be reproduced. Treat an undocumented configuration as an uncertainty, not as a validated default.
