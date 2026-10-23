@@ -565,3 +565,7 @@ When handing an unresolved deployment issue to another operator, include the aff
 ## Release rollback decision criteria
 
 Before a release, define the symptoms that require rollback, such as sustained health-check failures, elevated error rates, missing detection persistence, or authorization regressions. Identify who can make the decision, the last known-good release, and any database compatibility constraints. After rollback, verify core health and one representative end-to-end workflow, then record the outcome and remaining impact. A successful deployment command alone is not evidence that the release is healthy.
+
+## Camera outage recovery checklist
+
+For a disconnected or stalled camera, record when the last fresh frame was received and distinguish a camera/network outage from an inference-service failure. After connectivity returns, verify that fresh frames resume, timestamps advance, and detections are associated with current frames rather than stale buffered data. Check that health indicators recover and that the system does not create a burst of misleading alerts from old frames. Keep the incident evidence redacted and record any unresolved camera-specific limitations.
