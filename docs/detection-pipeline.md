@@ -156,3 +156,7 @@ When debugging a reported detection, follow one event using its available correl
 ## Duplicate event handling
 
 Exercise the pipeline with a repeated frame or retry of the same event where the implementation supports retries. Decide which identifier defines a duplicate and verify that retries do not create misleading duplicate alerts or corrupt event ordering. Do not deduplicate solely by timestamp if separate events can legitimately occur close together. Document whether the system guarantees at-most-once, at-least-once, or best-effort processing; do not imply stronger guarantees than the code provides.
+
+## Inference latency measurement
+
+Measure latency across a representative run rather than relying on a single successful frame. Record the model/version, input resolution, device, sample size, and whether timings include preprocessing and postprocessing. Report a percentile such as p95 alongside the median, and note dropped or timed-out frames. Compare measurements under the same conditions before treating a change as a regression; do not infer production capacity from a short local run alone.
