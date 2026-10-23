@@ -569,3 +569,7 @@ Before a release, define the symptoms that require rollback, such as sustained h
 ## Camera outage recovery checklist
 
 For a disconnected or stalled camera, record when the last fresh frame was received and distinguish a camera/network outage from an inference-service failure. After connectivity returns, verify that fresh frames resume, timestamps advance, and detections are associated with current frames rather than stale buffered data. Check that health indicators recover and that the system does not create a burst of misleading alerts from old frames. Keep the incident evidence redacted and record any unresolved camera-specific limitations.
+
+## Alert delivery verification
+
+Use a controlled test event to verify the alert lifecycle from detection through rule evaluation, persistence, and any configured notification channel. Record timestamps and correlation identifiers where available, and check the user-visible status when delivery fails or is delayed. Confirm retries do not produce an uncontrolled burst of duplicate notifications. If an external channel is not configured in the test environment, mark that portion unverified rather than treating the alert record alone as proof of delivery.
