@@ -150,3 +150,7 @@ Test authorization after an account is disabled, a role is changed, or a session
 ## Security audit log review
 
 Verify that sensitive actions such as role changes, account disablement, and configuration updates produce an audit record with a timestamp, actor, action, and outcome where supported. Confirm logs do not include passwords, tokens, camera credentials, or unnecessary personal data. Restrict access to audit records and test that ordinary users cannot alter them through application endpoints. Document any actions that currently lack audit coverage instead of assuming they are logged.
+
+## API rate limit verification
+
+Identify endpoints that are expensive or sensitive, such as authentication, camera operations, and inference submission. In a controlled test environment, verify configured limits return a clear response when exceeded and that ordinary requests recover after the window resets. Confirm limits are applied on the server and cannot be bypassed by changing frontend controls. Document which routes are covered and any distributed-deployment caveats; do not claim protection for endpoints that have not been checked.
