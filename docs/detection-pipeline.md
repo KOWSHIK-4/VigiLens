@@ -160,3 +160,7 @@ Exercise the pipeline with a repeated frame or retry of the same event where the
 ## Inference latency measurement
 
 Measure latency across a representative run rather than relying on a single successful frame. Record the model/version, input resolution, device, sample size, and whether timings include preprocessing and postprocessing. Report a percentile such as p95 alongside the median, and note dropped or timed-out frames. Compare measurements under the same conditions before treating a change as a regression; do not infer production capacity from a short local run alone.
+
+## Stale frame rejection verification
+
+Test how the pipeline behaves when frames arrive late, out of order, or stop arriving while the camera connection remains open. Verify freshness is determined from meaningful capture/receipt timestamps and that stale input is not presented as a current detection. Check how clock skew and missing timestamps are handled, and document the actual behavior. A connected socket or HTTP stream alone does not prove that fresh frames are flowing.
