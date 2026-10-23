@@ -92,3 +92,7 @@ Re-check detector behavior when camera placement, lighting, scene layout, or mod
 ## Detector release acceptance criteria
 
 Before promoting a detector or changing its weights, record the model identifier, input size, confidence threshold, and evaluation dataset version. Review representative true positives, false positives, and missed events, including difficult lighting and occlusion cases. Confirm the service starts with the intended model and that a failed model load produces a visible health/error state instead of silently reporting empty detections. Keep the previous known-good artifact available for rollback.
+
+## Detector privacy review
+
+Before evaluating a new detector, confirm the sample footage is authorized for the intended use and access is limited to people who need it. Prefer representative, minimized samples over collecting extra footage. Document whether images or derived metadata are retained, where they are stored, and when they should be deleted. Avoid putting identifiable frames into issue reports or logs unless there is a clear approved need.
