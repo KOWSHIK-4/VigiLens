@@ -144,3 +144,7 @@ For a migration that changes persistent data, review whether it is safe to retry
 ## Backup retention verification
 
 Confirm the configured backup schedule and retention policy match the environment's recovery needs. Verify that old backups expire as intended and that retained copies are protected from ordinary application credentials. Periodically test restoring a selected backup into an isolated environment and record the restore result, data timestamp, and gaps found. A successful backup job alone does not prove that the backup is complete or restorable.
+
+## Deployment readiness configuration checks
+
+Before release, validate required environment variables, service URLs, database connectivity, storage paths, and health-check configuration in the target environment. Confirm development-only settings and demo credentials are not enabled unintentionally. Check that logs and health endpoints reveal operational status without exposing secret values. Record each check as passed, failed, or not run so missing evidence is not mistaken for a successful readiness review.
