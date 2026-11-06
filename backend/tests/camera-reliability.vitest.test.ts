@@ -87,4 +87,20 @@ describe("summarizeCameraReliability", () => {
     expect(summary.totalChecks).toBe(1);
     expect(summary.healthyChecks).toBe(1);
   });
+
+  it("includes checks exactly on both rolling-window boundaries", () => {
+    const windowMs = 10 * 60_000;
+    const summary = summarizeCameraReliability(
+      [
+        row({ checkedAt: new Date(BASE.getTime() - windowMs), responseTime: 0 }),
+        row({ checkedAt: BASE, responseTime: 20 }),
+      ],
+      windowMs,
+      BASE,
+    );
+    expect(summary.totalChecks).toBe(2);
+    expect(summary.healthyChecks).toBe(2);
+    expect(summary.avgResponseTimeMs).toBe(10);
+    expect(summary.lastCheckedAt).toBe(BASE.toISOString());
+  });
 });
