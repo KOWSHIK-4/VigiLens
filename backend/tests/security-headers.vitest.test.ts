@@ -82,4 +82,11 @@ describe("parseCorsOrigins", () => {
       parseCorsOrigins("https://a.example.com, http://localhost:5173 ,https://b.example.com", fallback),
     ).toEqual(["https://a.example.com", "http://localhost:5173", "https://b.example.com"]);
   });
+
+  it("drops empty entries while preserving the order of valid origins", () => {
+    expect(parseCorsOrigins(",https://a.example.com,, ,https://b.example.com,", fallback)).toEqual([
+      "https://a.example.com",
+      "https://b.example.com",
+    ]);
+  });
 });
