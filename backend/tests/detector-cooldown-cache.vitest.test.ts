@@ -67,4 +67,17 @@ describe("detectorCooldownCache", () => {
 
     await expect(cache.resolve("person", 25_000)).resolves.toBe(25_000);
   });
+
+  it("evicts the oldest entry when the configured capacity is reached", async () => {
+    const load = vi.fn(async (key: string) => key.length * 1_000);
+    const cache = createDetectorCooldownCache({ maxEntries: 2, loadCooldownMs: load });
+
+    await cache.resolve("a", 10);
+    await cache.resolve("bb", 10);
+    await cache.resolve("ccc", 10);
+
+    expect(cache.size).toBe(2);
+    await cache.resolve("a", 10);
+    expect(load).toHaveBeenCalledTimes(4);
+  });
 });
