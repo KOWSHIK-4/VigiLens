@@ -24,21 +24,18 @@ describe("Security headers configuration", () => {
     expect(directives.frameAncestors).toEqual(["'none'"]);
     expect(directives.objectSrc).toEqual(["'none'"]);
   });
-
   it("configures HSTS with subdomains and preload for TLS deployments", () => {
     const hsts = securityOptions.hsts ?? {};
     expect(hsts.includeSubDomains).toBe(true);
     expect(hsts.preload).toBe(true);
     expect(typeof hsts.maxAge).toBe("number");
   });
-
   it("restricts referrer and browser feature policies", () => {
     expect(securityOptions.referrerPolicy).toEqual({ policy: "no-referrer" });
     expect(permissionsPolicyHeader).toContain("geolocation=()");
     expect(permissionsPolicyHeader).toContain("microphone=()");
     expect(permissionsPolicyHeader).toContain("payment=()");
   });
-
   it("denies framing and keeps xss filters legacy-disabled", () => {
     expect(securityOptions.frameguard).toEqual({ action: "deny" });
     expect(securityOptions.xssFilter).toBe(false);
@@ -51,7 +48,6 @@ describe("cacheControlNoStore", () => {
     expect(headers["cache-control"]).toContain("no-store");
     expect(headers["cache-control"]).toContain("max-age=0");
   });
-
   it("adds legacy cache-busting headers and continues the chain", () => {
     let advanced = false;
     const headers: Record<string, string> = {};
@@ -76,17 +72,21 @@ describe("parseCorsOrigins", () => {
     expect(parseCorsOrigins(undefined, fallback)).toEqual(fallback);
     expect(parseCorsOrigins("   ", fallback)).toEqual(fallback);
   });
-
   it("parses a comma-separated allowlist and trims entries", () => {
     expect(
       parseCorsOrigins("https://a.example.com, http://localhost:5173 ,https://b.example.com", fallback),
     ).toEqual(["https://a.example.com", "http://localhost:5173", "https://b.example.com"]);
   });
-
   it("drops empty entries while preserving the order of valid origins", () => {
     expect(parseCorsOrigins(",https://a.example.com,, ,https://b.example.com,", fallback)).toEqual([
       "https://a.example.com",
       "https://b.example.com",
+    ]);
+  });
+  it("returns the provided fallback unchanged in value and order", () => {
+    expect(parseCorsOrigins("", fallback)).toEqual([
+      "https://vigilens.vercel.app",
+      "http://localhost:5173",
     ]);
   });
 });
