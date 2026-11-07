@@ -9,13 +9,13 @@ const BASE = new Date("2026-09-18T12:00:00.000Z");
 function row(
   overrides: Partial<CameraFleetReliabilityRow> = {},
 ): CameraFleetReliabilityRow {
-  const base: CameraFleetReliabilityRow = {
+  return {
     cameraId: "cam-1",
     status: "online",
     responseTime: 40,
     checkedAt: BASE,
+    ...overrides,
   };
-  return { ...base, ...overrides };
 }
 
 describe("summarizeCameraReliability", () => {
@@ -34,14 +34,13 @@ describe("summarizeCameraReliability", () => {
   });
 
   it("computes availability as the share of healthy checks inside the window", () => {
-    const now = BASE;
     const summary = summarizeCameraReliability(
       [
         row({ status: "online", responseTime: 30, checkedAt: BASE }),
         row({ status: "offline", responseTime: null, checkedAt: new Date(BASE.getTime() - 2 * 60_000) }),
       ],
       10 * 60_000,
-      now,
+      BASE,
     );
     expect(summary.healthyChecks).toBe(1);
     expect(summary.totalChecks).toBe(2);
@@ -102,5 +101,20 @@ describe("summarizeCameraReliability", () => {
     expect(summary.healthyChecks).toBe(2);
     expect(summary.avgResponseTimeMs).toBe(10);
     expect(summary.lastCheckedAt).toBe(BASE.toISOString());
+  });
+
+  it("finds the latest health check even when input rows are unordered", () => {
+    const latest = new Date(BASE.getTime() - 30_000);
+    const summary = summarizeCameraReliability(
+      [
+        row({ status: "online", checkedAt: latest }),
+        row({ status: "offline", checkedAt: new Date(BASE.getTime() - 5 * 60_000) }),
+        row({ status: "offline", checkedAt: new Date(BASE.getTime() - 2 * 60_000) }),
+      ],
+      10 * 60_000,
+      BASE,
+    );
+    expect(summary.lastStatus).toBe("online");
+    expect(summary.lastCheckedAt).toBe(latest.toISOString());
   });
 });
