@@ -172,3 +172,24 @@ describe("correlationMessageSuffix", () => {
     expect(correlationMessageSuffix(undefined)).toBe("");
   });
 });
+
+describe("summarizeCorrelation metadata aggregation", () => {
+  it("deduplicates track ids and labels while preserving chronological detection ids", () => {
+    const summary = summarizeCorrelation(
+      [
+        signal({ id: "d3", timestamp: new Date("2026-01-01T00:00:20.000Z"), trackId: "track-2", label: "Person" }),
+        signal({ id: "d1", timestamp: new Date("2026-01-01T00:00:10.000Z"), trackId: "track-1", label: "Person" }),
+        signal({ id: "d2", timestamp: new Date("2026-01-01T00:00:15.000Z"), trackId: "track-1", label: "person" }),
+      ],
+      WINDOW,
+      "engine",
+    );
+
+    expect(summary.count).toBe(3);
+    expect(summary.relatedDetectionIds).toEqual(["d2", "d3"]);
+    expect(summary.trackIds).toEqual(["track-1", "track-2"]);
+    expect(summary.labels).toEqual(["Person", "person"]);
+    expect(summary.firstSeenAt).toBe("2026-01-01T00:00:10.000Z");
+    expect(summary.lastSeenAt).toBe("2026-01-01T00:00:20.000Z");
+  });
+});
