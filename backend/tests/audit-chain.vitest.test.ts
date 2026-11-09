@@ -67,3 +67,24 @@ describe("audit chain", () => {
     expect(computeAuditHash(row)).toBe(computeAuditHash(sampleRow({ metadata: {} })));
   });
 });
+
+
+describe("nested audit metadata canonicalization", () => {
+  it("keeps hashes stable when nested object keys are reordered", () => {
+    const left = sampleRow({
+      metadata: { actor: { id: "u-1", role: "operator" }, changes: [{ key: "status", value: "active" }] },
+    });
+    const right = sampleRow({
+      metadata: { changes: [{ key: "status", value: "active" }], actor: { role: "operator", id: "u-1" } },
+    });
+
+    expect(computeAuditHash(left)).toBe(computeAuditHash(right));
+  });
+
+  it("changes the hash when a nested metadata value changes", () => {
+    const original = sampleRow({ metadata: { camera: { id: "cam-1", enabled: true } } });
+    const modified = sampleRow({ metadata: { camera: { id: "cam-1", enabled: false } } });
+
+    expect(computeAuditHash(modified)).not.toBe(computeAuditHash(original));
+  });
+});
