@@ -206,3 +206,36 @@ describe("retention_pruned audit integration", () => {
     await prisma.auditLog.deleteMany({ where: { action: "retention_pruned" } });
   });
 });
+
+describe("RetentionScheduler concurrency", () => {
+  it("does not start a second prune while the current pass is still running", async () => {
+    const clock = { ms: 0 };
+    let finishPrune: ((report: PruneReport) => void) | undefined;
+    const runPrune = vi.fn(
+      () => new Promise<PruneReport>((resolve) => {
+        finishPrune = resolve;
+      }),
+    );
+    const scheduler = new RetentionScheduler({
+      tickMs: 50,
+      enabledReader: async () => true,
+      intervalDaysReader: async () => 1,
+      runPrune,
+      recordRun: async () => undefined,
+      now: () => clock.ms,
+    });
+
+    scheduler.start();
+    await scheduler.runDue(); // Prime the first-run cadence.
+    clock.ms = DAY_MS;
+
+    const firstRun = scheduler.runDue();
+    await Promise.resolve();
+    await scheduler.runDue();
+
+    expect(runPrune).toHaveBeenCalledTimes(1);
+    finishPrune?.(fakeReport());
+    await firstRun;
+    scheduler.stop();
+  });
+});
