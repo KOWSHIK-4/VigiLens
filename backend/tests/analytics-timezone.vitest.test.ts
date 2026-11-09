@@ -66,3 +66,19 @@ describe("analyticsQuerySchema timezone validation", () => {
     expect(analyticsQuerySchema.safeParse({}).success).toBe(true);
   });
 });
+
+describe("analytics range cache key normalization", () => {
+  it("normalizes equivalent explicit timestamps to the same cache key", () => {
+    const iso = rangeKeyFor({ from: "2026-08-01T00:00:00.000Z", to: "2026-08-02T00:00:00.000Z" });
+    const offset = rangeKeyFor({ from: "2026-08-01T05:30:00+05:30", to: "2026-08-02T05:30:00+05:30" });
+
+    expect(offset).toBe(iso);
+  });
+
+  it("keeps different explicit range bounds isolated", () => {
+    const first = rangeKeyFor({ from: "2026-08-01T00:00:00.000Z", to: "2026-08-02T00:00:00.000Z" });
+    const second = rangeKeyFor({ from: "2026-08-02T00:00:00.000Z", to: "2026-08-03T00:00:00.000Z" });
+
+    expect(first).not.toBe(second);
+  });
+});
