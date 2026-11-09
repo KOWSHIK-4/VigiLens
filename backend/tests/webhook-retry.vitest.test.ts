@@ -219,3 +219,31 @@ describe("WebhookRetryScheduler", () => {
     expect(scheduler.getStatus().deadLetters).toBe(1);
   });
 });
+
+describe("decideRetry deadline handling", () => {
+  it("does not schedule a retry before the receiver grace deadline", () => {
+    const decision = decideRetry({
+      attempt: 1,
+      ok: false,
+      nowMs: 10_000,
+      deadlineMs: 90_000,
+      config: { ...DEFAULT_RETRY_POLICY, baseDelayMs: 30_000 },
+    });
+
+    expect(decision.retry).toBe(true);
+    expect(decision.nextRetryAtMs).toBe(100_000);
+    expect(decision.nextAttempt).toBe(2);
+  });
+
+  it("uses the normal backoff when it exceeds the grace deadline", () => {
+    const decision = decideRetry({
+      attempt: 1,
+      ok: false,
+      nowMs: 10_000,
+      deadlineMs: 5_000,
+      config: { ...DEFAULT_RETRY_POLICY, baseDelayMs: 30_000 },
+    });
+
+    expect(decision.nextRetryAtMs).toBe(40_000);
+  });
+});
