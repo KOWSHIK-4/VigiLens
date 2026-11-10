@@ -247,3 +247,21 @@ describe("decideRetry deadline handling", () => {
     expect(decision.nextRetryAtMs).toBe(40_000);
   });
 });
+
+
+describe("retry policy input boundaries", () => {
+  it("returns no delay for non-finite or non-positive retry attempts", () => {
+    expect(retryDelayFor(Number.NaN)).toBe(0);
+    expect(retryDelayFor(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(retryDelayFor(-3)).toBe(0);
+  });
+
+  it("clamps jitter ratios outside the unit interval", () => {
+    expect(jitterAround(1_000, 0.2, -5)).toBe(800);
+    expect(jitterAround(1_000, 0.2, 5)).toBe(1_200);
+  });
+
+  it("never returns a negative delay for negative jitter input", () => {
+    expect(jitterAround(1_000, -1, 0)).toBe(1_000);
+  });
+});
