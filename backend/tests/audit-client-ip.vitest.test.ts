@@ -81,3 +81,24 @@ describe("clientInfo", () => {
     expect(clientInfo(req).userAgent).toBe("");
   });
 });
+
+
+describe("IPv6 client address attribution", () => {
+  it("preserves a proxy-resolved IPv6 address", () => {
+    const req = makeReq({
+      ip: "2001:db8::42",
+      headers: { "x-forwarded-for": "2001:db8::99" },
+      socket: { remoteAddress: "::1" },
+    });
+    expect(clientIp(req)).toBe("2001:db8::42");
+  });
+
+  it("falls back to an IPv6 socket address when proxy resolution is absent", () => {
+    const req = makeReq({
+      ip: undefined,
+      headers: {},
+      socket: { remoteAddress: "2001:db8::7" },
+    });
+    expect(clientIp(req)).toBe("2001:db8::7");
+  });
+});
