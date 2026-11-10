@@ -240,3 +240,17 @@ describe("parseCadenceDays (settings values are stored as select strings)", () =
     expect(parseCadenceDays(null)).toBe(1);
   });
 });
+
+describe("report schedule boundary inputs", () => {
+  it("falls back to daily cadence for non-finite values", () => {
+    expect(parseCadenceDays(Number.NaN)).toBe(1);
+    expect(parseCadenceDays(Number.POSITIVE_INFINITY)).toBe(1);
+    expect(parseCadenceDays(-Infinity)).toBe(1);
+  });
+
+  it("clamps fractional cadence values to a supported interval", () => {
+    expect(parseCadenceDays(6.9)).toBe(1);
+    expect(parseCadenceDays(7.5)).toBe(7);
+    expect(parseCadenceDays(30.1)).toBe(30);
+  });
+});
