@@ -166,3 +166,18 @@ describe("camera capture paths enforce the guard", () => {
     expect(healthLogs).toEqual([expect.objectContaining({ status: "online" })]);
   });
 });
+
+describe("IPv4-mapped IPv6 camera source protection", () => {
+  it("blocks mapped loopback and link-local metadata addresses", () => {
+    for (const source of [
+      "http://[::ffff:7f00:1]/admin",
+      "rtsp://[::ffff:a9fe:a9fe]:554/live",
+    ]) {
+      expect(assertCameraSourceAllowed(source).allowed, source).toBe(false);
+    }
+  });
+
+  it("continues to permit mapped private camera addresses", () => {
+    expect(assertCameraSourceAllowed("rtsp://[::ffff:c0a8:164]:554/live").allowed).toBe(true);
+  });
+});
