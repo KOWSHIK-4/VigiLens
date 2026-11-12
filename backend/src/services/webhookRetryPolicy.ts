@@ -66,9 +66,12 @@ export function jitterAround(
   jitter: number = DEFAULT_RETRY_POLICY.jitter,
   ratio = 0.5,
 ): number {
-  if (jitter <= 0 || delay <= 0) return delay;
-  const spread = Math.min(1, Math.max(0, jitter)) * delay;
-  const offset = (ratio - 0.5) * 2 * spread;
+  if (!Number.isFinite(delay) || delay <= 0) return 0;
+  if (!Number.isFinite(jitter) || jitter <= 0) return delay;
+  const boundedJitter = Math.min(1, Math.max(0, jitter));
+  const boundedRatio = Number.isFinite(ratio) ? Math.min(1, Math.max(0, ratio)) : 0.5;
+  const spread = boundedJitter * delay;
+  const offset = (boundedRatio - 0.5) * 2 * spread;
   return Math.max(0, Math.round(delay + offset));
 }
 
