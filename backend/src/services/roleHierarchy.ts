@@ -22,7 +22,7 @@ export function roleRank(role: string): number {
 }
 
 export function isSystemRole(role: string): boolean {
-  return role in SYSTEM_ROLE_RANK;
+  return Object.prototype.hasOwnProperty.call(SYSTEM_ROLE_RANK, role);
 }
 
 export interface GrantDecision {
