@@ -35,3 +35,10 @@ describe("built-in role hierarchy", () => {
     });
   });
 });
+
+
+  it("does not treat inherited object property names as system roles", () => {
+    expect(isSystemRole("toString")).toBe(false);
+    expect(isSystemRole("constructor")).toBe(false);
+    expect(isSystemRole("__proto__")).toBe(false);
+  });
