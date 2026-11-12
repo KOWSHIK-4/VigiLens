@@ -165,7 +165,7 @@ export function startOfDayInTz(date: Date, tz: string): Date {
 
 /** Instant one millisecond before the start of the next local day in `tz`. */
 export function endOfDayInTz(date: Date, tz: string): Date {
-  return new Date(startOfDayInTz(date, tz).getTime() + 86400000 - 1);
+  const start = startOfDayInTz(date, tz);\n  const nextDay = new Date(start.getTime() + 36 * 60 * 60 * 1000);\n  return new Date(startOfDayInTz(nextDay, tz).getTime() - 1);
 }
 
 function getDateRange(days: number, tz?: string): { from: Date; to: Date } {
