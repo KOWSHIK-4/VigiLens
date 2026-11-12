@@ -82,3 +82,20 @@ describe("analytics range cache key normalization", () => {
     expect(first).not.toBe(second);
   });
 });
+
+
+  it("uses a 23-hour local day when daylight saving time starts", () => {
+    const instant = new Date("2026-03-08T16:00:00.000Z");
+    const start = startOfDayInTz(instant, "America/New_York");
+    const end = endOfDayInTz(instant, "America/New_York");
+    expect(start.toISOString()).toBe("2026-03-08T05:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-03-09T03:59:59.999Z");
+  });
+
+  it("uses a 25-hour local day when daylight saving time ends", () => {
+    const instant = new Date("2026-11-01T16:00:00.000Z");
+    const start = startOfDayInTz(instant, "America/New_York");
+    const end = endOfDayInTz(instant, "America/New_York");
+    expect(start.toISOString()).toBe("2026-11-01T04:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-11-02T04:59:59.999Z");
+  });
