@@ -70,14 +70,17 @@ export async function sendCsvStream(
   maxRows: number = MAX_EXPORT_ROWS,
 ): Promise<void> {
   try {
+    const rowLimit = Number.isFinite(maxRows)
+      ? Math.max(0, Math.min(MAX_EXPORT_ROWS, Math.floor(maxRows)))
+      : MAX_EXPORT_ROWS;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.write(csvHeaderLine(headers));
     let written = 0;
     for await (const row of rows) {
       if (res.writableEnded || res.destroyed) return;
-      if (written >= maxRows) {
-        logger.warn("CSV export truncated at row cap", { maxRows });
-        res.write(`# Export truncated at the first ${maxRows} rows\n`);
+      if (written >= rowLimit) {
+        logger.warn("CSV export truncated at row cap", { maxRows: rowLimit });
+        res.write(`# Export truncated at the first ${rowLimit} rows\n`);
         res.end();
         return;
       }

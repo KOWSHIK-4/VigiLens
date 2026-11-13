@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { csvHeaderLine, csvLine, sendCsvStream } from "../src/utils/csvStream";
+import { csvHeaderLine, csvLine, sendCsvStream, MAX_EXPORT_ROWS } from "../src/utils/csvStream";
 
 function makeResponse(blockAfterWrites = Infinity) {
   const listeners: Array<{ event: string; cb: () => void }> = [];
@@ -105,6 +105,23 @@ describe("sendCsvStream", () => {
     })());
     expect(res.chunks.join("")).toBe('"H"\n"first"\n');
   });
+  it("treats a negative row limit as zero and clamps oversized limits", async () => {
+    const empty = makeResponse();
+    await sendCsvStream(empty, ["H"], rows([["a"]]), -2);
+    expect(empty.chunks.join("")).toBe('"H"\n# Export truncated at the first 0 rows\n');
+
+    const capped = makeResponse();
+    await sendCsvStream(capped, ["H"], rows([["a"], ["b"]]), MAX_EXPORT_ROWS + 10);
+    expect(capped.chunks.join("")).toBe('"H"\n"a"\n"b"\n');
+  });
+
+  it("uses the default safety cap for a non-finite row limit", async () => {
+    const res = makeResponse();
+    await sendCsvStream(res, ["H"], rows([["a"]]), Number.NaN);
+    expect(res.chunks.join("")).toBe('"H"\n"a"\n');
+    expect(res.writableEnded).toBe(true);
+  });
+
   it("emits a header and cleanly ends when the async row source is empty", async () => {
     const res = makeResponse();
     await sendCsvStream(res, ["ID", "Name"], rows([]));
