@@ -60,6 +60,21 @@ describe("summarizeCameraReliability", () => {
     expect(summary.avgResponseTimeMs).toBe(40);
   });
 
+  it("ignores negative and non-finite response-time samples", () => {
+    const summary = summarizeCameraReliability(
+      [
+        row({ responseTime: 30, checkedAt: BASE }),
+        row({ responseTime: -10, checkedAt: new Date(BASE.getTime() - 1_000) }),
+        row({ responseTime: Number.NaN, checkedAt: new Date(BASE.getTime() - 2_000) }),
+        row({ responseTime: Number.POSITIVE_INFINITY, checkedAt: new Date(BASE.getTime() - 3_000) }),
+      ],
+      10 * 60_000,
+      BASE,
+    );
+    expect(summary.totalChecks).toBe(4);
+    expect(summary.avgResponseTimeMs).toBe(30);
+  });
+
   it("reports the most recent status and timestamp in the window", () => {
     const summary = summarizeCameraReliability(
       [

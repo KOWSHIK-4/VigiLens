@@ -50,7 +50,9 @@ export function summarizeCameraReliability(
   const availabilityPct =
     totalChecks === 0 ? null : (healthyChecks / totalChecks) * 100;
 
-  const completed = inWindow.filter((r) => r.responseTime != null);
+  const completed = inWindow.filter(
+    (r) => r.responseTime != null && Number.isFinite(r.responseTime) && r.responseTime >= 0,
+  );
   const avgResponseTimeMs =
     completed.length === 0
       ? null
