@@ -122,7 +122,7 @@ function roundScore(value: number): number {
  * the default tier weight keeps the score fully deterministic.
  */
 export function computeRiskScore(context: RiskContext): RiskScore {
-  const confidenceConf = safeFinite(context.maxConfidence, 0);
+  const confidenceConf = clamp(safeFinite(context.maxConfidence, 0), 0, 1);
   const detectionCount = safeCount(context.detectionCount);
   const correlatedEventCount = safeCount(context.correlatedEventCount);
   const crossCameraSequenceCount = safeCount(context.crossCameraSequenceCount);

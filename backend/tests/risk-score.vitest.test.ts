@@ -120,6 +120,17 @@ describe("computeRiskScore", () => {
     expect(critical.riskScore - none.riskScore).toBe(10);
   });
 
+  it("clamps confidence before calculating both score and explanation", () => {
+    const above = computeRiskScore({ ...emptyContext(), maxConfidence: 4 });
+    const atOne = computeRiskScore({ ...emptyContext(), maxConfidence: 1 });
+    const below = computeRiskScore({ ...emptyContext(), maxConfidence: -2 });
+    const atZero = computeRiskScore({ ...emptyContext(), maxConfidence: 0 });
+    expect(above).toEqual(atOne);
+    expect(below).toEqual(atZero);
+    expect(above.factors.find((f) => f.name === "detection_confidence")?.reason).toContain("100%");
+    expect(below.factors.find((f) => f.name === "detection_confidence")?.reason).toContain("0%");
+  });
+
   it("handles adversarial input without throwing", () => {
     const score = computeRiskScore({
       ...emptyContext(),
