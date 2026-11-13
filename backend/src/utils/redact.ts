@@ -78,7 +78,7 @@ export function redactSecrets(value: unknown, seen?: WeakSet<object>): unknown {
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     const child = record[key];
-    if (SENSITIVE_KEY_PATTERN.test(key) && typeof child === "string") {
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
       record[key] = REDACTED;
       continue;
     }
