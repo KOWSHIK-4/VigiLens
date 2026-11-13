@@ -39,6 +39,9 @@ describe("reportSchedulerPolicy (pure)", () => {
   });
 
   it("clamps cadences to the supported set and derives the report type", () => {
+    expect(clampCadence(Number.NaN)).toBe(1);
+    expect(clampCadence(Number.POSITIVE_INFINITY)).toBe(1);
+    expect(clampCadence(Number.NEGATIVE_INFINITY)).toBe(1);
     expect(clampCadence(-5)).toBe(1);
     expect(clampCadence(1)).toBe(1);
     expect(clampCadence(7)).toBe(7);

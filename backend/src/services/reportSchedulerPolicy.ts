@@ -93,6 +93,7 @@ export function nextScheduledAt(nowMs: number, config: ReportScheduleConfig): nu
 }
 
 export function clampCadence(value: number): 1 | 7 | 30 {
+  if (!Number.isFinite(value)) return 1;
   if (value >= 30) return 30;
   if (value >= 7) return 7;
   return 1;
