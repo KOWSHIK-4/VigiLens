@@ -39,7 +39,11 @@ export function summarizeCameraReliability(
 ): CameraReliability {
   const windowStart = new Date(now.getTime() - windowMs);
   const inWindow = rows.filter(
-    (r) => r.checkedAt >= windowStart && r.checkedAt <= now,
+    (r) =>
+      r.checkedAt instanceof Date &&
+      Number.isFinite(r.checkedAt.getTime()) &&
+      r.checkedAt >= windowStart &&
+      r.checkedAt <= now,
   );
 
   const totalChecks = inWindow.length;
