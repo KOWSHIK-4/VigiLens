@@ -62,6 +62,9 @@ export function redactSecrets(value: unknown, seen?: WeakSet<object>): unknown {
   if (value instanceof Error) {
     value.message = redactString(value.message);
     if (value.stack) value.stack = redactString(value.stack);
+    if ("cause" in value && value.cause !== undefined) {
+      (value as Error & { cause?: unknown }).cause = redactSecrets(value.cause, visited);
+    }
     return value;
   }
 
