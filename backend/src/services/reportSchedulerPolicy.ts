@@ -39,6 +39,7 @@ export const DAY_MS = 86_400_000;
 
 /** Parses "HH:MM" into [hour, minute], returning null for malformed input. */
 export function parseDigestTime(value: string): [number, number] | null {
+  if (typeof value !== "string") return null;
   const match = /^([0-9]{1,2}):([0-9]{2})$/.exec(value.trim());
   if (!match) return null;
   const hour = Number(match[1]);
