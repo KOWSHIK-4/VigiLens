@@ -79,7 +79,14 @@ export class WebhookRetryQueue {
     this.defaultDeliver = deliver;
     this.deliver = deliver;
     this.config = config;
-    this.limits = { ...DEFAULT_LIMITS, ...limits };
+    this.limits = {
+      maxPending: Number.isFinite(limits.maxPending)
+        ? Math.max(1, Math.floor(limits.maxPending!))
+        : DEFAULT_LIMITS.maxPending,
+      maxDeadLetters: Number.isFinite(limits.maxDeadLetters)
+        ? Math.max(1, Math.floor(limits.maxDeadLetters!))
+        : DEFAULT_LIMITS.maxDeadLetters,
+    };
   }
 
   /** Swaps the active delivery implementation (e.g. wiring the real HTTP client). */
