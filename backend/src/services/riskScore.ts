@@ -105,7 +105,7 @@ export function classTierWeight(tier: RiskContext["detectorClassRiskTier"]): num
 }
 
 function safeFinite(value: number, fallback: number): number {
-  return Number.isFinite(value) ? value : fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function safeCount(value: number): number {
