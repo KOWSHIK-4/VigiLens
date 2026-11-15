@@ -129,13 +129,13 @@ def resolve_video_path(source: str, media_root: str | None = None) -> str:
 def usb_device_index(source: str) -> int | None:
     """Extract a webcam device index from a url like ``/dev/video0`` or ``0``."""
     stripped = source.strip()
-    if stripped.isdigit():
+    if stripped.isascii() and stripped.isdigit():
         return int(stripped)
     marker = "video"
     idx = stripped.rfind(marker)
     if idx != -1:
         suffix = stripped[idx + len(marker):]
-        if suffix.isdigit():
+        if suffix.isascii() and suffix.isdigit():
             return int(suffix)
     return None
 

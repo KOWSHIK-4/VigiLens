@@ -85,7 +85,7 @@ def resolve_webcam_device(device: str) -> int | str:
     value = (device or "0").strip()
     if not value:
         return 0
-    if value.isdigit():
+    if value.isascii() and value.isdigit():
         return int(value)
     index = usb_device_index(value)
     if index is not None:

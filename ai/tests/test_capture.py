@@ -45,6 +45,10 @@ def test_usb_device_index_parsing():
     assert capture_service.usb_device_index("/dev/video0") == 0
     assert capture_service.usb_device_index("/dev/video7") == 7
     assert capture_service.usb_device_index("not-a-device") is None
+    # Non-ASCII digits (e.g. U+00B2) are digits but cannot be parsed by int();
+    # treat them as unparseable instead of raising ValueError.
+    assert capture_service.usb_device_index("\u00b2") is None
+    assert capture_service.usb_device_index("/dev/video\u00b2") is None
 
 
 def test_resolve_video_path(tmp_path):

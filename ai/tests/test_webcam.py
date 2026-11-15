@@ -37,6 +37,7 @@ def test_resolve_webcam_device():
     assert resolve_webcam_device("/dev/video7") == 7
     assert resolve_webcam_device("") == 0
     assert resolve_webcam_device("not-a-device") == "not-a-device"
+    assert resolve_webcam_device("\u00b2") == "\u00b2"
 
 
 def test_stream_stats_are_isolated_per_stream():
