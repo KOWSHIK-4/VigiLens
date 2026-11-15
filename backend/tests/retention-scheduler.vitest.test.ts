@@ -230,7 +230,7 @@ describe("RetentionScheduler concurrency", () => {
     clock.ms = DAY_MS;
 
     const firstRun = scheduler.runDue();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(runPrune).toHaveBeenCalledTimes(1));
     await scheduler.runDue();
 
     expect(runPrune).toHaveBeenCalledTimes(1);
