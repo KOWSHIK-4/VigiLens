@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -35,4 +36,7 @@ async def get_output_file(filename: str) -> FileResponse:
     if path.parent != output_dir or not path.is_file():
         raise HTTPException(status_code=404, detail="Snapshot not found")
 
-    return FileResponse(path, media_type="image/jpeg")
+    # OUTPUT_DIR also holds processed video clips, so the type has to follow
+    # the file instead of being hard-coded for snapshots.
+    media_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+    return FileResponse(path, media_type=media_type)

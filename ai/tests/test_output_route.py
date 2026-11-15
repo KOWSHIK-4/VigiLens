@@ -23,6 +23,13 @@ def test_serves_a_staged_snapshot(tmp_path, monkeypatch):
     assert response.content == b"\xff\xd8fakejpeg"
 
 
+def test_processed_clip_uses_its_real_media_type(tmp_path, monkeypatch):
+    _stage_snapshot(tmp_path, monkeypatch, name="processed_clip_abc.mp4", content=b"\x00\x00\x00\x18ftypmp42")
+    response = client.get("/internal/output/processed_clip_abc.mp4")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+
+
 def test_missing_snapshot_returns_404(tmp_path, monkeypatch):
     snap_dir = tmp_path / "output"
     snap_dir.mkdir()
