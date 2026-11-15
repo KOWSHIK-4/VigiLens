@@ -27,3 +27,15 @@ def test_redaction_masks_password_but_preserves_username_and_host():
 
     assert redact_source(source) == "rtsp://operator:***@camera.example:554/live"
     assert "private-password" not in redact_source(source)
+
+
+def test_redaction_strips_passwords_containing_at_signs():
+    source = "rtsp://operator:p@ss@camera.example:554/live"
+    assert redact_source(source) == "rtsp://operator:***@camera.example:554/live"
+    assert "p@ss" not in redact_source(source)
+
+
+def test_redaction_strips_passwords_containing_spaces():
+    source = "rtsp://operator:pa ss@camera.example:554/live"
+    assert redact_source(source) == "rtsp://operator:***@camera.example:554/live"
+    assert "pa ss" not in redact_source(source)

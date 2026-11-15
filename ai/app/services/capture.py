@@ -18,7 +18,7 @@ monitoring scheduler does not keep re-processing the first frame forever.
 import logging
 import re
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlsplit, urlunparse, urlunsplit
 
 import cv2
 
@@ -42,8 +42,26 @@ def redact_source(source: str) -> str:
     Feed URLs carry the merged username/password in their userinfo, so any
     error message or log line that embeds the source would otherwise publish
     the camera password to wherever logs are shipped.
+
+    Parsing the URL (rather than matching an ``@``-delimited pattern) matters:
+    passwords may themselves contain ``@`` or spaces, and a regex stops at the
+    first delimiter and leaves the tail of the secret in the output.
     """
-    return _USERINFO_RE.sub(r"\1***\2", source)
+    try:
+        parts = urlsplit(source)
+        if parts.password is None:
+            return source
+        host = parts.hostname or ""
+        if ":" in host:
+            host = f"[{host}]"
+        netloc = f"{parts.username or ''}:***@{host}"
+        if parts.port is not None:
+            netloc += f":{parts.port}"
+        return urlunsplit(parts._replace(netloc=netloc))
+    except ValueError:
+        # Unparsable userinfo (e.g. a malformed port) still gets a best-effort
+        # pass so a secret is never returned verbatim.
+        return _USERINFO_RE.sub(r"\1***\2", source)
 
 
 class CaptureError(Exception):
