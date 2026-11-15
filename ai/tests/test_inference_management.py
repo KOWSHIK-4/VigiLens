@@ -139,6 +139,29 @@ def test_gives_up_after_exhausting_retries(monkeypatch):
     assert detector.status.consecutive_failures == 2
 
 
+def test_zero_retry_limit_still_makes_one_attempt(monkeypatch):
+    """A configured retry limit of zero must not disable inference entirely."""
+    counter = {"attempts": 0}
+    detector = YoloDetector.__new__(YoloDetector)
+    detector._detector_name = "test_detector"
+    detector._class_filter = None
+    detector._class_names = {0: "person"}
+    detector._conf_threshold = 0.5
+    detector._inference_timeout_s = 5.0
+    detector._max_retries = 0
+    detector._infer_lock = __import__("threading").Lock()
+    detector._model = _CountingFakeModel(counter, failure_count=0)
+    detector._model_name = "fake.pt"
+    detector._status = DetectorStatus(name="test_detector", model_loaded=True)
+
+    monkeypatch.setattr("app.detectors.yolo.time.sleep", lambda s: None)
+
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    detections = detector.detect(image)
+    assert counter["attempts"] == 1
+    assert len(detections) == 1
+
+
 def test_model_unavailable_rejected_before_inference():
     """A detector without a loaded model raises model_unavailable."""
     detector = YoloDetector.__new__(YoloDetector)

@@ -372,7 +372,8 @@ class YoloDetector(BaseDetector):
             )
 
         last_exc: InferenceError | None = None
-        for attempt in range(1, self._max_retries + 1):
+        max_attempts = max(1, self._max_retries)
+        for attempt in range(1, max_attempts + 1):
             started = time.monotonic()
             try:
                 detections = self._run_inference(image, conf, processor)
@@ -395,7 +396,7 @@ class YoloDetector(BaseDetector):
                         self._detector_name, exc,
                     )
                     break
-                if attempt < self._max_retries:
+                if attempt < max_attempts:
                     backoff = RETRY_BACKOFF_BASE_S * (2 ** (attempt - 1))
                     logger.warning(
                         "Inference attempt %d/%d failed for %s (%s), retrying in %.1fs",
@@ -406,7 +407,7 @@ class YoloDetector(BaseDetector):
                 else:
                     logger.error(
                         "Inference failed after %d attempts for %s: %s",
-                        self._max_retries, self._detector_name, exc,
+                        max_attempts, self._detector_name, exc,
                     )
         assert last_exc is not None
         raise last_exc
