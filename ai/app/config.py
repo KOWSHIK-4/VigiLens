@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import re
 import sys
@@ -55,23 +56,97 @@ def is_production_environment() -> bool:
     return value.strip().lower() == "production"
 
 
+def _env_int(name: str, default: int, minimum: int | None = None) -> int:
+    """Read an integer setting, falling back to ``default`` when unusable.
+
+    The environment is operator-supplied: a typo must not take the whole
+    service down with an unhandled ValueError while the module is imported,
+    and a value outside the range the setting needs must not quietly drop
+    the bound it exists to impose.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        logger.warning("%s=%r is not a number; using %s", name, raw, default)
+        return default
+    if minimum is not None and value < minimum:
+        logger.warning(
+            "%s=%r is below the minimum of %s; using %s", name, raw, minimum, default
+        )
+        return default
+    return value
+
+
+def _env_float(
+    name: str,
+    default: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    """Read a float setting, falling back to ``default`` when unusable.
+
+    ``float`` parses "nan" and "inf" without complaint, and neither is a
+    usable threshold or timeout: a NaN confidence floor compares false
+    against every score and admits everything.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        logger.warning("%s=%r is not a number; using %s", name, raw, default)
+        return default
+    if not math.isfinite(value):
+        logger.warning("%s=%r is not finite; using %s", name, raw, default)
+        return default
+    if minimum is not None and value < minimum:
+        logger.warning(
+            "%s=%r is below the minimum of %s; using %s", name, raw, minimum, default
+        )
+        return default
+    if maximum is not None and value > maximum:
+        logger.warning(
+            "%s=%r is above the maximum of %s; using %s", name, raw, maximum, default
+        )
+        return default
+    return value
+
+
 class Settings:
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
-    confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
-    backend_url: str = os.getenv("BACKEND_URL", "http://localhost:4000")
-    # Shared secret for machine-to-machine ingestion. Must match the backend
-    # INTERNAL_API_KEY so webcam detections pass the X-Internal-Key guard.
-    backend_internal_key: str = os.getenv(
-        "BACKEND_INTERNAL_KEY", _INSECURE_KEY,
-    )
-    media_root: str = os.getenv("MEDIA_ROOT", "/data/vigilens/media")
-    capture_open_timeout_ms: int = int(os.getenv("CAPTURE_OPEN_TIMEOUT_MS", "5000"))
-    # Maximum seconds a single inference call may take before being aborted.
-    inference_timeout_s: float = float(os.getenv("INFERENCE_TIMEOUT_S", "30"))
-    # Number of inference retries on transient failure before giving up.
-    inference_max_retries: int = int(os.getenv("INFERENCE_MAX_RETRIES", "2"))
+    log_level: str
+    confidence_threshold: float
+    backend_url: str
+    backend_internal_key: str
+    media_root: str
+    capture_open_timeout_ms: int
+    inference_timeout_s: float
+    inference_max_retries: int
 
     def __init__(self) -> None:
+        self.log_level = os.getenv("LOG_LEVEL", "INFO")
+        self.confidence_threshold = _env_float(
+            "CONFIDENCE_THRESHOLD", 0.5, minimum=0.0, maximum=1.0
+        )
+        self.backend_url = os.getenv("BACKEND_URL", "http://localhost:4000")
+        # Shared secret for machine-to-machine ingestion. Must match the backend
+        # INTERNAL_API_KEY so webcam detections pass the X-Internal-Key guard.
+        self.backend_internal_key = os.getenv("BACKEND_INTERNAL_KEY", _INSECURE_KEY)
+        self.media_root = os.getenv("MEDIA_ROOT", "/data/vigilens/media")
+        # A negative timeout would read as "no timeout" and drop the bound
+        # that keeps a dead camera from blocking the caller for the OS-level
+        # TCP timeout, so only 0 (explicitly disabled) and up are accepted.
+        self.capture_open_timeout_ms = _env_int(
+            "CAPTURE_OPEN_TIMEOUT_MS", 5000, minimum=0
+        )
+        # Maximum seconds a single inference call may take before being aborted.
+        self.inference_timeout_s = _env_float("INFERENCE_TIMEOUT_S", 30.0, minimum=0.1)
+        # Number of inference retries on transient failure before giving up.
+        self.inference_max_retries = _env_int("INFERENCE_MAX_RETRIES", 2, minimum=0)
+
         if is_production_environment() and is_insecure_internal_key(self.backend_internal_key):
             logger.critical(
                 "FATAL: BACKEND_INTERNAL_KEY is missing, a placeholder, or too "
