@@ -18,7 +18,7 @@ monitoring scheduler does not keep re-processing the first frame forever.
 import logging
 import re
 from pathlib import Path
-from urllib.parse import urlparse, urlsplit, urlunparse, urlunsplit
+from urllib.parse import quote, urlparse, urlsplit, urlunparse, urlunsplit
 
 import cv2
 
@@ -81,6 +81,14 @@ def merge_source_credentials(
 
     If the source URL already contains userinfo it is left untouched (legacy
     deployments or operators who embed creds directly in the URL).
+
+    The credentials are percent-encoded on the way in. A password holding a
+    character that is structural in a URL (``/``, ``?``, ``#``, ``@``, a
+    space) splits the URL apart when it is pasted in raw: the host is lost
+    and the tail of the secret ends up in the path, so the camera open goes
+    somewhere else entirely and the password leaks into the request line.
+    FFmpeg decodes the userinfo before it authenticates, so the encoded form
+    is exactly what OpenCV needs.
     """
     if not camera_user or not camera_pass:
         return source
@@ -88,7 +96,7 @@ def merge_source_credentials(
         parsed = urlparse(source)
         if parsed.username or parsed.password:
             return source  # Already present -- do not double-encode.
-        userinfo = f"{camera_user}:{camera_pass}"
+        userinfo = f"{quote(camera_user, safe='')}:{quote(camera_pass, safe='')}"
         netloc = f"{userinfo}@{parsed.hostname or ''}"
         if parsed.port:
             netloc += f":{parsed.port}"
