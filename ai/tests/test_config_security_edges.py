@@ -34,4 +34,10 @@ def test_accepts_sufficiently_long_non_placeholder_keys(value):
 
 
 def test_key_validation_ignores_surrounding_whitespace():
-    assert is_insecure_internal_key("  " + "x" * 32 + "  ") is False
+    # The key must not itself look like a placeholder, otherwise this case
+    # asserts two different rules at once (the placeholder rule wins).
+    assert is_insecure_internal_key("  " + "a" * 32 + "  ") is False
+
+
+def test_key_validation_rejects_whitespace_padded_placeholder():
+    assert is_insecure_internal_key("  change_me_in_production_" + "a" * 32 + "  ") is True
