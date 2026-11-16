@@ -53,6 +53,37 @@ def test_malformed_json_response_falls_back(monkeypatch):
     assert resolve_camera_source(CAMERA_ID) is None
 
 
+def test_non_object_response_body_falls_back(monkeypatch):
+    # A body that is not a JSON object has no "data" member to read.
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda *args, **kwargs: Response(["unexpected"]),
+    )
+
+    assert resolve_camera_source(CAMERA_ID) is None
+
+
+def test_non_object_data_payload_falls_back(monkeypatch):
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda *args, **kwargs: Response({"data": ["not", "an", "object"]}),
+    )
+
+    assert resolve_camera_source(CAMERA_ID) is None
+
+
+def test_data_payload_without_a_source_falls_back(monkeypatch):
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda *args, **kwargs: Response({"data": {"cameraType": "rtsp"}}),
+    )
+
+    assert resolve_camera_source(CAMERA_ID) is None
+
+
 def test_lookup_sends_internal_key_header_when_configured(monkeypatch):
     captured = {}
 

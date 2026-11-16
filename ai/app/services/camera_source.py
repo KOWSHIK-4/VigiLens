@@ -50,7 +50,8 @@ def resolve_camera_source(camera_id: str) -> Optional[ResolvedSource]:
     """Look up the configured source for ``camera_id`` via the backend.
 
     Returns ``None`` when the id is not a camera uuid, the camera no longer
-    exists, or the backend cannot be reached -- in every one of those cases
+    exists, the backend cannot be reached, or the backend answers with a
+    payload that does not describe a camera -- in every one of those cases
     the caller should fall back rather than fail the request.
     """
     if not settings.backend_url or not _looks_like_camera_id(camera_id):
@@ -70,7 +71,11 @@ def resolve_camera_source(camera_id: str) -> Optional[ResolvedSource]:
                 camera_id,
             )
             return None
-        payload = response.json().get("data") or {}
+        body = response.json()
+        payload = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(payload, dict):
+            logger.info("Camera %s has no usable stream source", camera_id)
+            return None
         source = payload.get("url")
         camera_type = payload.get("cameraType")
         if not source or camera_type not in ("usb", "rtsp", "ip", "video_file"):
