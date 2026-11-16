@@ -156,6 +156,21 @@ def test_webcam_stats_enforced_in_production_even_with_default_key(monkeypatch):
     assert response.status_code == 401
 
 
+def test_webcam_stats_enforced_in_production_regardless_of_env_case(monkeypatch):
+    # NODE_ENV=Production names the same deployment mode as production and
+    # must not quietly leave the boundary open.
+    monkeypatch.delenv("AI_REQUIRE_AUTH", raising=False)
+    monkeypatch.delenv("AI_STATS_REQUIRE_AUTH", raising=False)
+    monkeypatch.setenv("NODE_ENV", "Production")
+    monkeypatch.setattr(
+        "app.routes.detection.settings.backend_internal_key", DEFAULT_INTERNAL_KEY
+    )
+    stream_stats.clear()
+
+    response = client.get("/detect/webcam/stats")
+    assert response.status_code == 401
+
+
 def test_webcam_stats_open_for_default_key_in_development(monkeypatch):
     # Dev convenience is preserved: no flags and the bundled default key
     # keep the endpoint open for local frontends.

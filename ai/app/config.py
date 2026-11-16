@@ -41,6 +41,20 @@ def is_insecure_internal_key(value: str | None) -> bool:
     return bool(_PLACEHOLDER_PATTERN.search(trimmed))
 
 
+def is_production_environment() -> bool:
+    """True when the service is running in a production environment.
+
+    The environment name is matched case-insensitively and with surrounding
+    whitespace ignored: ``NODE_ENV=Production`` names the same deployment
+    mode as ``production``. Comparing the raw string used to let a
+    differently-cased value skip both the production fail-fast and the
+    internal-key guard, so a deployment that plainly asked for production
+    ran unprotected.
+    """
+    value = os.getenv("NODE_ENV") or os.getenv("ENVIRONMENT") or "development"
+    return value.strip().lower() == "production"
+
+
 class Settings:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
@@ -58,8 +72,7 @@ class Settings:
     inference_max_retries: int = int(os.getenv("INFERENCE_MAX_RETRIES", "2"))
 
     def __init__(self) -> None:
-        node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
-        if node_env == "production" and is_insecure_internal_key(self.backend_internal_key):
+        if is_production_environment() and is_insecure_internal_key(self.backend_internal_key):
             logger.critical(
                 "FATAL: BACKEND_INTERNAL_KEY is missing, a placeholder, or too "
                 "short in production. Set a unique value of at least 32 "

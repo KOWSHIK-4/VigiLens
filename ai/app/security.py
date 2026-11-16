@@ -12,7 +12,7 @@ import os
 
 from fastapi import HTTPException, Request
 
-from app.config import DEFAULT_INTERNAL_KEY, settings
+from app.config import DEFAULT_INTERNAL_KEY, is_production_environment, settings
 
 #: Canonical environment flag that forces the internal-key guard even in a
 #: development build still using the bundled default secret.
@@ -51,10 +51,10 @@ def verify_internal_key(request: Request) -> None:
     required = settings.backend_internal_key
     if not required:
         return
-    node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
+    production = is_production_environment()
     explicit_require = _explicit_auth_required()
     using_default_key = required == DEFAULT_INTERNAL_KEY
-    if node_env != "production" and using_default_key and not explicit_require:
+    if not production and using_default_key and not explicit_require:
         return
     provided = request.headers.get("x-internal-key", "")
     if not hmac.compare_digest(provided.encode(), required.encode()):
