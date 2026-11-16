@@ -40,12 +40,26 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 _MAX_OUTPUT_FILES = 500
 
 
+def _output_mtime(path: Path) -> float:
+    """Best-effort modification time for a file in the output directory.
+
+    A file can vanish between the directory listing and the stat: the live
+    stream writes snapshots while the pruner walks the directory. The stat
+    failure must not abort the whole sweep -- the cap exists to bound disk
+    usage, so skipping it lets the directory grow without limit.
+    """
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def _prune_output_dir() -> None:
     """Remove oldest files in OUTPUT_DIR when the count exceeds the cap."""
     try:
         if not OUTPUT_DIR.exists():
             return
-        files = sorted(OUTPUT_DIR.iterdir(), key=lambda f: f.stat().st_mtime)
+        files = sorted(OUTPUT_DIR.iterdir(), key=_output_mtime)
         if len(files) <= _MAX_OUTPUT_FILES:
             return
         for stale in files[: len(files) - _MAX_OUTPUT_FILES]:
