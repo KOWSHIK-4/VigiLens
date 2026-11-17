@@ -38,11 +38,25 @@ class StreamStatsRegistry:
         camera_id: Optional[str] = None,
         detector: Optional[str] = None,
     ) -> dict[str, Any]:
+        """Return stats for one stream, or the most recent live stream.
+
+        Passing only one half of the key is not a wildcard: answering a
+        camera-scoped poll with whichever stream happened to update last
+        reports another camera's numbers. Callers must pass both components
+        or neither.
+        """
         now = time.monotonic()
         with self._lock:
-            if camera_id is not None and detector is not None:
+            if camera_id is not None or detector is not None:
+                if camera_id is None or detector is None:
+                    return {}
                 entry = self._stats.get((camera_id, detector))
-                if entry is None or now - entry[1] > self._ttl_seconds:
+                if entry is None:
+                    return {}
+                if now - entry[1] > self._ttl_seconds:
+                    del self._stats[(camera_id, detector)]
+                    if self._most_recent == (camera_id, detector):
+                        self._most_recent = None
                     return {}
                 return dict(entry[0])
             self._prune(now)

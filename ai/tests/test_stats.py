@@ -49,3 +49,16 @@ def test_live_entry_still_served_within_ttl():
     registry.update("cam-1", "person", {"fps": 20.0})
     assert registry.get("cam-1", "person") == {"fps": 20.0}
     assert registry.get() == {"fps": 20.0}
+
+
+def test_partial_key_does_not_fall_back_to_another_stream():
+    # A camera-only or detector-only poll used to return whichever stream
+    # updated last, which reports another camera's live numbers.
+    registry = StreamStatsRegistry(ttl_seconds=30)
+    registry.update("cam-1", "person", {"fps": 1.0})
+    registry.update("cam-2", "vehicle", {"fps": 2.0})
+
+    assert registry.get("cam-1") == {}
+    assert registry.get("person") == {}
+    assert registry.get("cam-1", "vehicle") == {}
+    assert registry.get("cam-2", "vehicle") == {"fps": 2.0}
