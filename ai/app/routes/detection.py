@@ -238,7 +238,10 @@ async def detect_image(
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
     processor: str | None = _processor_hint(),
 ):
-    if not file.content_type or not file.content_type.startswith("image/"):
+    # MIME types are case-insensitive (RFC 2045): IMAGE/JPEG names the same
+    # type as image/jpeg and must not be rejected by the upload gate.
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     try:
@@ -325,7 +328,8 @@ async def detect_video(
     confidence: float = Query(0.5, ge=0.01, le=1.0, description="Confidence floor (0..1)"),
     processor: str | None = _processor_hint(),
 ):
-    if not file.content_type or not file.content_type.startswith("video/"):
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
 
     # OUTPUT_DIR is gitignored and may not exist on a fresh checkout: stage the

@@ -306,6 +306,26 @@ def test_detect_image_rejects_empty_file():
     assert response.status_code == 400
 
 
+def test_detect_image_accepts_a_case_insensitive_mime_type():
+    # MIME types are case-insensitive. The empty-file check proves the upload
+    # passed the type gate instead of being rejected as "not an image".
+    response = client.post(
+        "/detect/image",
+        files={"file": ("img.jpg", b"", "IMAGE/JPEG")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is empty"
+
+
+def test_detect_video_accepts_a_case_insensitive_mime_type():
+    response = client.post(
+        "/detect/video",
+        files={"file": ("clip.mp4", b"", "VIDEO/MP4")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded video file is empty"
+
+
 def test_detect_image_rejects_undecodable_image(monkeypatch):
     """Corrupt image bytes must fail with a clear 400, not a 500."""
     response = client.post(
