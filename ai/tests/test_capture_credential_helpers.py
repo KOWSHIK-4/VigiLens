@@ -12,6 +12,24 @@ def test_merge_credentials_leaves_source_unchanged_when_incomplete():
     assert merge_source_credentials(source, None, "secret") == source
 
 
+def test_merge_credentials_leaves_local_sources_untouched():
+    # A USB index or video path has no authority component; attaching
+    # userinfo would turn it into "//user:pass@/0" and stop it resolving.
+    for source in ("0", "video0", "/dev/video0", "/media/clip.mp4", "clip.mp4"):
+        assert merge_source_credentials(source, "operator", "secret") == source
+
+
+def test_merge_credentials_still_rewrites_network_sources():
+    merged = merge_source_credentials(
+        "rtsp://camera.example/live", "operator", "secret"
+    )
+
+    parts = urlsplit(merged)
+    assert parts.hostname == "camera.example"
+    assert unquote(parts.username) == "operator"
+    assert unquote(parts.password) == "secret"
+
+
 def test_merge_credentials_does_not_duplicate_existing_userinfo():
     source = "rtsp://existing:credential@camera.example/live"
 

@@ -82,6 +82,12 @@ def merge_source_credentials(
     If the source URL already contains userinfo it is left untouched (legacy
     deployments or operators who embed creds directly in the URL).
 
+    Only network sources are rewritten. A USB device node or a video-file path
+    has no authority component to attach userinfo to, so urlunparse turns
+    ``"0"`` into ``"//user:pass@/0"`` and the local source stops resolving.
+    Merge headers are network-feed credentials; a local source is returned
+    untouched.
+
     The credentials are percent-encoded on the way in. A password holding a
     character that is structural in a URL (``/``, ``?``, ``#``, ``@``, a
     space) splits the URL apart when it is pasted in raw: the host is lost
@@ -91,6 +97,8 @@ def merge_source_credentials(
     is exactly what OpenCV needs.
     """
     if not camera_user or not camera_pass:
+        return source
+    if not has_network_scheme(source):
         return source
     try:
         parsed = urlparse(source)
