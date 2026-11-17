@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
+from app.config import is_production_environment, settings
 from app.routes.health import router as health_router
 from app.routes.detection import router as detection_router
 from app.routes.capture import router as capture_router
@@ -56,8 +56,7 @@ _app_origin = os.getenv("CORS_ORIGIN", "").strip()
 if _app_origin and _app_origin not in _cors_origins:
     _cors_origins.append(_app_origin)
 
-_node_env = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
-_is_production = _node_env == "production"
+_is_production = is_production_environment()
 
 # A wildcard origin combined with credentials is both rejected by browsers and
 # defeats the point of CORS. In production it is always removed; the service
