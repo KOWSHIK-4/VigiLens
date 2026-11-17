@@ -33,7 +33,35 @@ logger = logging.getLogger(__name__)
 SUPPORTED_CAMERA_TYPES = ("usb", "rtsp", "ip", "video_file")
 
 # Userinfo pattern for redacting credentials from error messages / logs.
-_USERINFO_RE = re.compile(r"(://[^:/\s@]+:)[^@/\s]+(@)")
+# The password group is greedy so a password containing ``@`` is consumed up
+# to the real delimiter instead of leaving its tail in the output.
+_USERINFO_RE = re.compile(r"(://[^:/\s@]+:)([^/\s]+)(@)")
+
+# A URL embedded in a larger message (an exception string, a log line).
+_URL_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]*")
+
+
+def _redact_parts(parts) -> str:
+    """Rebuild a parsed URL with its password replaced by ``***``."""
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    netloc = f"{parts.username or ''}:***@{host}"
+    if parts.port is not None:
+        netloc += f":{parts.port}"
+    return urlunsplit(parts._replace(netloc=netloc))
+
+
+def _redact_url_token(token: str) -> str:
+    try:
+        parts = urlsplit(token)
+        if parts.password is None:
+            return token
+        return _redact_parts(parts)
+    except ValueError:
+        # Unparsable userinfo (e.g. a malformed port) still gets a
+        # best-effort pass so a secret is never returned verbatim.
+        return _USERINFO_RE.sub(r"\1***\3", token)
 
 
 def redact_source(source: str) -> str:
@@ -46,22 +74,23 @@ def redact_source(source: str) -> str:
     Parsing the URL (rather than matching an ``@``-delimited pattern) matters:
     passwords may themselves contain ``@`` or spaces, and a regex stops at the
     first delimiter and leaves the tail of the secret in the output.
+
+    The input is not always a bare URL: it may be an exception message such as
+    ``Cannot open camera source 'rtsp://u:p@host'``. Parsing that as a single
+    URL finds no password (the scheme belongs to the prose), so any URL-shaped
+    token inside the text is redacted individually as well.
     """
+    if not source:
+        return source
     try:
         parts = urlsplit(source)
-        if parts.password is None:
-            return source
-        host = parts.hostname or ""
-        if ":" in host:
-            host = f"[{host}]"
-        netloc = f"{parts.username or ''}:***@{host}"
-        if parts.port is not None:
-            netloc += f":{parts.port}"
-        return urlunsplit(parts._replace(netloc=netloc))
+        if parts.password is not None:
+            return _redact_parts(parts)
     except ValueError:
-        # Unparsable userinfo (e.g. a malformed port) still gets a best-effort
-        # pass so a secret is never returned verbatim.
-        return _USERINFO_RE.sub(r"\1***\2", source)
+        # Not a single parseable URL; the token scan below handles embedded
+        # sources and the best-effort fallback.
+        pass
+    return _URL_TOKEN_RE.sub(lambda match: _redact_url_token(match.group(0)), source)
 
 
 class CaptureError(Exception):

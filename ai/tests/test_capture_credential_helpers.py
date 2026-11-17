@@ -96,3 +96,47 @@ def test_redaction_strips_passwords_containing_spaces():
     source = "rtsp://operator:pa ss@camera.example:554/live"
     assert redact_source(source) == "rtsp://operator:***@camera.example:554/live"
     assert "pa ss" not in redact_source(source)
+
+
+def test_redaction_masks_a_source_embedded_in_an_error_message():
+    message = (
+        "Cannot open camera source "
+        "'rtsp://operator:private-password@camera.example:554/live' (rtsp)"
+    )
+
+    redacted = redact_source(message)
+
+    assert "private-password" not in redacted
+    assert "rtsp://operator:***@camera.example:554/live" in redacted
+
+
+def test_redaction_masks_every_embedded_source():
+    message = (
+        "first rtsp://one:secret-one@one.example/live then "
+        "http://two:secret-two@two.example/snapshot.jpg"
+    )
+
+    redacted = redact_source(message)
+
+    assert "secret-one" not in redacted
+    assert "secret-two" not in redacted
+    assert "rtsp://one:***@one.example/live" in redacted
+    assert "http://two:***@two.example/snapshot.jpg" in redacted
+
+
+def test_redaction_leaves_unrelated_text_and_plain_urls_untouched():
+    for value in (
+        "Camera unavailable",
+        "see https://example.com/@alice for details",
+    ):
+        assert redact_source(value) == value
+
+
+def test_redaction_masks_at_signs_in_an_embedded_password():
+    message = "capture failed for rtsp://operator:p@ss@camera.example/live"
+
+    redacted = redact_source(message)
+
+    assert "p@ss" not in redacted
+    assert "ss@camera.example" not in redacted
+    assert "rtsp://operator:***@camera.example/live" in redacted
