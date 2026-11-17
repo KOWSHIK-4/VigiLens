@@ -12,8 +12,14 @@
  * claims to be an exhaustive DLP filter.
  */
 
-/** `scheme://user:pass@` inside a string (DSN or stream URLs). */
-const USERINFO_PATTERN = /(:\/\/[^:/\s@]+:)([^@/\s]+)(@)/g;
+/**
+ * `scheme://user:pass@` inside a string (DSN or stream URLs).
+ *
+ * The password group is greedy and may itself contain `@`. Stopping at the
+ * first `@` split `rtsp://u:p@ss@host` into a redacted prefix plus `ss@host`,
+ * leaving the tail of the real password in logs and API error messages.
+ */
+const USERINFO_PATTERN = /(:\/\/[^:/\s@]+:)([^/\s]+)(@)/g;
 
 /** `user@` with no explicit password (rtsp://user@host). */
 const USER_ONLY_PATTERN = /(\w+:\/\/)([^/@\s]+@)/gi;

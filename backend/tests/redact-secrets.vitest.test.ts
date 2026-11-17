@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { redactSecrets, REDACTED } from "../src/utils/redact";
+import { redactSecrets, redactString, REDACTED } from "../src/utils/redact";
+
+describe("redactString URL userinfo", () => {
+  it("masks a password containing an at-sign without leaking its tail", () => {
+    const redacted = redactString("rtsp://operator:p@ss@camera.example:554/live");
+
+    expect(redacted).toBe("rtsp://***@camera.example:554/live");
+    expect(redacted).not.toContain("p@ss");
+    expect(redacted).not.toContain("ss@camera");
+  });
+
+  it("masks an embedded source inside an error message", () => {
+    const redacted = redactString(
+      "AI capture failed for source 'rtsp://operator:p@ss@camera.example/live': 502",
+    );
+
+    expect(redacted).not.toContain("p@ss");
+    expect(redacted).toContain("'rtsp://***@camera.example/live'");
+  });
+
+  it("leaves an at-sign in a path alone", () => {
+    const value = "https://example.com/@alice";
+
+    expect(redactString(value)).toBe(value);
+  });
+});
 
 describe("redactSecrets sensitive object properties", () => {
   it("masks nested objects and arrays stored under sensitive keys", () => {
