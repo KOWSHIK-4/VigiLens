@@ -42,11 +42,20 @@ _URL_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]*")
 
 
 def _redact_parts(parts) -> str:
-    """Rebuild a parsed URL with its password replaced by ``***``."""
+    """Rebuild a parsed URL with its userinfo replaced by ``***``.
+
+    A password keeps the username visible (``user:***``) because that is the
+    shape operators recognise in a feed URL. A username without a password
+    carries no password marker to preserve, so the whole userinfo is masked;
+    leaving it in place would publish half of a shared credential.
+    """
     host = parts.hostname or ""
     if ":" in host:
         host = f"[{host}]"
-    netloc = f"{parts.username or ''}:***@{host}"
+    if parts.password is not None:
+        netloc = f"{parts.username or ''}:***@{host}"
+    else:
+        netloc = f"***@{host}"
     if parts.port is not None:
         netloc += f":{parts.port}"
     return urlunsplit(parts._replace(netloc=netloc))
@@ -55,7 +64,7 @@ def _redact_parts(parts) -> str:
 def _redact_url_token(token: str) -> str:
     try:
         parts = urlsplit(token)
-        if parts.password is None:
+        if parts.username is None and parts.password is None:
             return token
         return _redact_parts(parts)
     except ValueError:
@@ -84,7 +93,7 @@ def redact_source(source: str) -> str:
         return source
     try:
         parts = urlsplit(source)
-        if parts.password is not None:
+        if parts.username is not None or parts.password is not None:
             return _redact_parts(parts)
     except ValueError:
         # Not a single parseable URL; the token scan below handles embedded

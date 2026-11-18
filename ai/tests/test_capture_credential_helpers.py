@@ -98,6 +98,24 @@ def test_redaction_strips_passwords_containing_spaces():
     assert "pa ss" not in redact_source(source)
 
 
+def test_redaction_masks_a_username_without_a_password():
+    # A shared device account is still a credential even when the URL has no
+    # password component; leaving the username in place leaks half of it.
+    source = "rtsp://operator@camera.example:554/live"
+
+    assert redact_source(source) == "rtsp://***@camera.example:554/live"
+    assert "operator" not in redact_source(source)
+
+
+def test_redaction_masks_username_only_sources_embedded_in_messages():
+    message = "Cannot open camera source 'rtsp://operator@camera.example/live' (rtsp)"
+
+    redacted = redact_source(message)
+
+    assert "operator" not in redacted
+    assert "rtsp://***@camera.example/live" in redacted
+
+
 def test_redaction_masks_a_source_embedded_in_an_error_message():
     message = (
         "Cannot open camera source "
