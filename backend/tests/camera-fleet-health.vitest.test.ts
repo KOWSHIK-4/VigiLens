@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  cameraScopeWhere,
   clampWindow,
   FLEET_HEALTH_DEFAULT_WINDOW_MS,
   FLEET_HEALTH_MAX_WINDOW_MS,
@@ -112,6 +113,21 @@ describe("summarizeFleetHealth", () => {
       CHECKS,
     );
     expect(summary.onlineSharePct).toBe(50);
+  });
+});
+
+describe("cameraScopeWhere", () => {
+  it("merges organization and team scope into one camera filter", () => {
+    expect(cameraScopeWhere("org-1", "team-1")).toEqual({
+      organizationId: "org-1",
+      teamId: "team-1",
+    });
+  });
+
+  it("omits absent scopes instead of emitting undefined predicates", () => {
+    expect(cameraScopeWhere()).toEqual({});
+    expect(cameraScopeWhere("org-1")).toEqual({ organizationId: "org-1" });
+    expect(cameraScopeWhere(undefined, "team-1")).toEqual({ teamId: "team-1" });
   });
 });
 

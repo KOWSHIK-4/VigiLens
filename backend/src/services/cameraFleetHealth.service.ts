@@ -120,24 +120,37 @@ export function summarizeFleetHealth(
   };
 }
 
+/** Tenant predicate shared by the camera query and its health-log relation. */
+export function cameraScopeWhere(
+  organizationId?: string,
+  teamScopeId?: string,
+): { organizationId?: string; teamId?: string } {
+  return {
+    ...(organizationId ? { organizationId } : {}),
+    ...(teamScopeId ? { teamId: teamScopeId } : {}),
+  };
+}
+
 async function loadFleetHealth(
   windowMs: number,
   organizationId?: string,
   teamScopeId?: string,
 ): Promise<CameraFleetHealth[]> {
   const from = new Date(Date.now() - windowMs);
+  // Both scopes belong in one `camera` filter: spreading them as separate
+  // `camera` keys let the team predicate overwrite the organization predicate.
+  const cameraScope = cameraScopeWhere(organizationId, teamScopeId);
 
   const [cameras, healthLogs] = await Promise.all([
     prisma.camera.findMany({
       select: { id: true, name: true, location: true, status: true },
-      where: { ...(organizationId ? { organizationId } : {}), ...(teamScopeId ? { teamId: teamScopeId } : {}) },
+      where: cameraScope,
       orderBy: { name: "asc" },
     }),
     prisma.cameraHealthLog.findMany({
       where: {
         checkedAt: { gte: from },
-        ...(organizationId ? { camera: { organizationId } } : {}),
-        ...(teamScopeId ? { camera: { teamId: teamScopeId } } : {}),
+        ...(Object.keys(cameraScope).length > 0 ? { camera: cameraScope } : {}),
       },
       select: {
         cameraId: true,
