@@ -29,7 +29,7 @@ LEGACY_AUTH_FLAGS = ("AI_STATS_REQUIRE_AUTH",)
 def _explicit_auth_required() -> bool:
     """True when any documented auth flag forces the guard on."""
     return any(
-        os.getenv(flag, "").lower() in ("1", "true")
+        os.getenv(flag, "").strip().lower() in ("1", "true")
         for flag in (AUTH_REQUIRE_FLAG, *LEGACY_AUTH_FLAGS)
     )
 
