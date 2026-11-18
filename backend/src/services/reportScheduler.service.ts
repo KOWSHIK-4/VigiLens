@@ -216,34 +216,41 @@ export class ReportScheduler {
     this.runType = null;
     try {
       for (const org of orgs) {
-        const config = await this.configReader(org.id).catch(() => ({ ...DEFAULT_REPORT_SCHEDULE_CONFIG }));
-        this.lastConfig = config;
+        // One tenant's failure must not abort the rest of the pass: a bad
+        // report must not cost every later organization its scheduled run.
+        try {
+          const config = await this.configReader(org.id).catch(() => ({ ...DEFAULT_REPORT_SCHEDULE_CONFIG }));
+          this.lastConfig = config;
 
-        const lastRunOn = this.lastRunByOrg.has(org.id)
-          ? new Date(this.lastRunByOrg.get(org.id) as string).getTime()
-          : 0;
-        const decision = decideSchedule(nowMs, config, lastRunOn);
-        if (decision.nextRunAt !== null) {
-          const next = new Date(decision.nextRunAt).getTime();
-          if (this.nextRunAt === null || next < new Date(this.nextRunAt).getTime()) {
-            this.nextRunAt = new Date(next).toISOString();
+          const lastRunOn = this.lastRunByOrg.has(org.id)
+            ? new Date(this.lastRunByOrg.get(org.id) as string).getTime()
+            : 0;
+          const decision = decideSchedule(nowMs, config, lastRunOn);
+          if (decision.nextRunAt !== null) {
+            const next = new Date(decision.nextRunAt).getTime();
+            if (this.nextRunAt === null || next < new Date(this.nextRunAt).getTime()) {
+              this.nextRunAt = new Date(next).toISOString();
+            }
           }
-        }
-        if (!decision.shouldRun || !decision.type) continue;
-        this.runType = decision.type;
+          if (!decision.shouldRun || !decision.type) continue;
+          this.runType = decision.type;
 
-        const dateRange = dateRangeFor(nowMs, decision.type);
-        await this.generateReport({
-          title: defaultReportTitle(nowMs, decision.type),
-          type: decision.type,
-          generatedBy: "system",
-          dateRange,
-          organizationId: org.id,
-        });
-        await this.recordRun(decision.type);
-        this.lastRunByOrg.set(org.id, new Date(nowMs).toISOString());
-        firedAt.push(nowMs);
-        logger.info("Scheduled report generated", { organizationId: org.id, type: decision.type, dateRange });
+          const dateRange = dateRangeFor(nowMs, decision.type);
+          await this.generateReport({
+            title: defaultReportTitle(nowMs, decision.type),
+            type: decision.type,
+            generatedBy: "system",
+            dateRange,
+            organizationId: org.id,
+          });
+          await this.recordRun(decision.type);
+          this.lastRunByOrg.set(org.id, new Date(nowMs).toISOString());
+          firedAt.push(nowMs);
+          logger.info("Scheduled report generated", { organizationId: org.id, type: decision.type, dateRange });
+        } catch (err) {
+          this.lastError = err instanceof Error ? err.message : String(err);
+          logger.warn("Scheduled report generation failed", { organizationId: org.id, error: this.lastError });
+        }
       }
 
       if (firedAt.length > 0) {

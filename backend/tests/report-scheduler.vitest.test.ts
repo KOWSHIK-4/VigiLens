@@ -223,6 +223,36 @@ describe("ReportScheduler (injectable dependencies)", () => {
     expect(generated.mock.calls[0][0].organizationId).toBe("org-a");
     scheduler.stop();
   });
+
+  it("keeps generating for later organizations after one fails", async () => {
+    const clock = new Date("2026-09-19T06:05:00Z").getTime();
+    const generated = vi.fn(async (input: { organizationId: string }) => {
+      if (input.organizationId === "org-a") throw new Error("render failed");
+      return { id: "rep-b" };
+    });
+    const { ReportScheduler } = await import("../src/services/reportScheduler.service");
+    const scheduler = new ReportScheduler({
+      tickMs: 1,
+      configReader: async () => ({ ...enabledDaily }),
+      organizationsProvider: async () => [{ id: "org-a" }, { id: "org-b" }],
+      generateReport: generated,
+      recordRun: async () => undefined,
+      now: () => clock,
+    });
+    scheduler.start();
+    await scheduler.tick();
+
+    // Both tenants were attempted; the failure is reported but not fatal.
+    expect(generated.mock.calls.map(([input]) => input.organizationId)).toEqual([
+      "org-a",
+      "org-b",
+    ]);
+    const status = scheduler.getStatus();
+    expect(status.lastError).toBe("render failed");
+    expect(status.runCount).toBe(1);
+    expect(status.lastRunAt).toBe(new Date(clock).toISOString());
+    scheduler.stop();
+  });
 });
 
 describe("parseCadenceDays (settings values are stored as select strings)", () => {
