@@ -210,15 +210,15 @@ function periodDateFilter(params: PeriodParams): { gte?: Date; lte?: Date } | un
   return undefined;
 }
 
-/** Builds the full raw-SQL `WHERE ...` clause for a resolved date filter. */
-function dateWhereSql(filter: { gte?: Date; lte?: Date } | undefined): Prisma.Sql {
-  if (!filter) return Prisma.empty;
+/** Raw-SQL date conditions (no `WHERE`) for a resolved date filter. */
+function dateConditionsSql(filter: { gte?: Date; lte?: Date } | undefined): Prisma.Sql | null {
+  if (!filter) return null;
   if (filter.gte && filter.lte) {
-    return Prisma.sql`WHERE timestamp >= ${filter.gte} AND timestamp <= ${filter.lte}`;
+    return Prisma.sql`timestamp >= ${filter.gte} AND timestamp <= ${filter.lte}`;
   }
-  if (filter.gte) return Prisma.sql`WHERE timestamp >= ${filter.gte}`;
-  if (filter.lte) return Prisma.sql`WHERE timestamp <= ${filter.lte}`;
-  return Prisma.empty;
+  if (filter.gte) return Prisma.sql`timestamp >= ${filter.gte}`;
+  if (filter.lte) return Prisma.sql`timestamp <= ${filter.lte}`;
+  return null;
 }
 
 /** Date filter plus tenant `organization_id` bound into one raw SQL clause. */
@@ -227,20 +227,17 @@ export function dateAndOrgWhereSql(
   organizationId?: string,
   teamId?: string,
 ): Prisma.Sql {
-  let clause = dateWhereSql(filter);
-  if (organizationId) {
-    const orgClause = Prisma.sql`organization_id = ${organizationId}`;
-    clause = filter
-      ? Prisma.sql`${clause} AND ${orgClause}`
-      : Prisma.sql`WHERE ${orgClause}`;
-  }
-  if (teamId) {
-    const teamClause = Prisma.sql`team_id = ${teamId}`;
-    clause = clause
-      ? Prisma.sql`${clause} AND ${teamClause}`
-      : Prisma.sql`WHERE ${teamClause}`;
-  }
-  return clause;
+  const conditions: Prisma.Sql[] = [];
+  const dateConditions = dateConditionsSql(filter);
+  if (dateConditions) conditions.push(dateConditions);
+  if (organizationId) conditions.push(Prisma.sql`organization_id = ${organizationId}`);
+  if (teamId) conditions.push(Prisma.sql`team_id = ${teamId}`);
+  if (conditions.length === 0) return Prisma.empty;
+
+  const joined = conditions.reduce(
+    (acc, condition) => Prisma.sql`${acc} AND ${condition}`,
+  );
+  return Prisma.sql`WHERE ${joined}`;
 }
 
 /** Prisma filter narrowing detections to a team via the denormalized column. */
