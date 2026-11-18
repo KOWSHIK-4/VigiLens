@@ -75,6 +75,33 @@ def test_health_ready_503_when_models_not_loaded(monkeypatch):
     assert client.get("/health/ready").status_code == 503
 
 
+def test_health_ready_503_when_no_detectors_are_registered(monkeypatch):
+    # `all()` over an empty registry is vacuously true, which used to report a
+    # service with zero detectors as ready to process frames.
+    monkeypatch.setattr(
+        detector_service,
+        "status_summary",
+        lambda: {"detector_count": 0, "detectors": {}},
+    )
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ready"] is False
+    assert body["status"] == "degraded"
+
+
+def test_health_reports_degraded_when_no_detectors_are_registered(monkeypatch):
+    monkeypatch.setattr(
+        detector_service,
+        "status_summary",
+        lambda: {"detector_count": 0, "detectors": {}},
+    )
+
+    assert client.get("/health").json()["status"] == "degraded"
+
+
 def test_health_probes_are_open_beyond_internal_key(monkeypatch):
     # Health probes are deliberately unauthenticated so infrastructure can
     # always reach them; the machine-to-machine guard must not apply here.

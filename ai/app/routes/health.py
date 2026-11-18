@@ -13,16 +13,19 @@ START_TIME = time.time()
 def _detector_diagnostics() -> dict:
     """Shared detector state used by the readiness and detail health probes."""
     detector_summary = detector_service.status_summary()
-    all_loaded = all(
+    detectors = detector_summary["detectors"]
+    # An empty registry is not "everything loaded": without at least one
+    # detector the service cannot process any frame, so readiness must say no.
+    all_loaded = bool(detectors) and all(
         info.get("model_loaded", False)
-        for info in detector_summary["detectors"].values()
+        for info in detectors.values()
     )
     any_failures = any(
         info.get("consecutive_failures", 0) > 0
-        for info in detector_summary["detectors"].values()
+        for info in detectors.values()
     )
     return {
-        "detectors": detector_summary["detectors"],
+        "detectors": detectors,
         "detector_count": detector_summary["detector_count"],
         "all_models_loaded": all_loaded,
         "has_failures": any_failures,
