@@ -206,15 +206,16 @@ export class ReportScheduler {
    */
   async tick(): Promise<void> {
     if (!this.running || this.runInFlight) return;
-    const nowMs = this.now();
-    const orgs = await this.organizationsProvider().catch(() => []);
-    const firedAt: number[] = [];
-
+    // Claim the pass before the first await so a slow organizations lookup
+    // cannot let a second tick start concurrently and double-fire reports.
     this.runInFlight = true;
     this.lastError = null;
     this.nextRunAt = null;
     this.runType = null;
     try {
+      const nowMs = this.now();
+      const orgs = await this.organizationsProvider().catch(() => []);
+      const firedAt: number[] = [];
       for (const org of orgs) {
         // One tenant's failure must not abort the rest of the pass: a bad
         // report must not cost every later organization its scheduled run.

@@ -182,6 +182,33 @@ describe("ReportScheduler (injectable dependencies)", () => {
     scheduler.stop();
   });
 
+  it("does not start a second pass while one is waiting on organizations", async () => {
+    const clock = new Date("2026-09-19T06:05:00Z").getTime();
+    const pending: Array<(orgs: Array<{ id: string }>) => void> = [];
+    const organizationsProvider = vi.fn(
+      () => new Promise<Array<{ id: string }>>((resolve) => pending.push(resolve)),
+    );
+    const generated = vi.fn().mockResolvedValue({ id: "rep-1" });
+    const { ReportScheduler } = await import("../src/services/reportScheduler.service");
+    const scheduler = new ReportScheduler({
+      tickMs: 1_000_000,
+      configReader: async () => ({ ...enabledDaily }),
+      organizationsProvider,
+      generateReport: generated,
+      recordRun: async () => undefined,
+      now: () => clock,
+    });
+    scheduler.start();
+
+    const first = scheduler.tick();
+    const second = scheduler.tick();
+    pending.forEach((resolve) => resolve([{ id: "org-1" }]));
+    await Promise.all([first, second]);
+
+    expect(organizationsProvider).toHaveBeenCalledTimes(1);
+    scheduler.stop();
+  });
+
   it("does not fire when scheduling is disabled", async () => {
     const nowMs = new Date("2026-09-19T06:30:00Z").getTime();
     const generated = vi.fn().mockResolvedValue({ id: "none" });
