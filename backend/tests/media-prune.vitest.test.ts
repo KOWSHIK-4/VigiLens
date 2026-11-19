@@ -125,6 +125,29 @@ describe("pruneMedia retention", () => {
     expect(await readdir(path.join(baseDir, SNAPSHOT_SUBDIR))).toEqual(["new.jpg"]);
   });
 
+  it("does not over-delete fresh media after retention has freed space", async () => {
+    await seedFile(SNAPSHOT_SUBDIR, "expired.jpg", 8 * 86400000, "x".repeat(1000));
+    await seedFile(SNAPSHOT_SUBDIR, "fresh-old.jpg", 2 * 86400000, "y".repeat(600));
+    await seedFile(SNAPSHOT_SUBDIR, "fresh-new.jpg", 1 * 86400000, "z".repeat(600));
+
+    // Retention frees the 1000-byte expired file, leaving 1200 bytes, which is
+    // under the 1300-byte quota. Counting the already-deleted file would push
+    // usage to 2200 and wrongly delete both fresh files.
+    const report = await pruneMedia({
+      storageBasePath: baseDir,
+      imageRetentionDays: 7,
+      maxStorageGb: 1300 / (1024 * 1024 * 1024),
+      now: NOW,
+    });
+
+    expect(report.filesRemoved).toBe(1);
+    expect(report.bytesFreed).toBe(1000);
+    expect(await readdir(path.join(baseDir, SNAPSHOT_SUBDIR))).toEqual([
+      "fresh-new.jpg",
+      "fresh-old.jpg",
+    ]);
+  });
+
   it("refuses to run against a filesystem root", async () => {
     await expect(
       pruneMedia({ storageBasePath: path.parse(baseDir).root })

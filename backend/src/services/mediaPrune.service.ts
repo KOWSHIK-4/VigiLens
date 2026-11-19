@@ -219,11 +219,16 @@ export async function pruneMedia(options: PruneOptions = {}): Promise<PruneRepor
 
   let filesRemoved = 0;
   let bytesFreed = 0;
+  // Track media already reclaimed by retention so the quota pass does not
+  // count (and therefore over-delete to compensate for) bytes that are gone.
+  const removedPaths = new Set<string>();
   const removeAll = async (files: MediaFile[], retentionDays: number) => {
     for (const file of files) {
       if (!isExpired(file, retentionDays, now)) continue;
-      bytesFreed += await removeMediaFile(file, dryRun);
+      const reclaimed = await removeMediaFile(file, dryRun);
+      bytesFreed += reclaimed;
       filesRemoved += 1;
+      if (dryRun || reclaimed > 0) removedPaths.add(file.filePath);
     }
   };
   await removeAll(snapshots, imageRetentionDays);
@@ -232,7 +237,9 @@ export async function pruneMedia(options: PruneOptions = {}): Promise<PruneRepor
   // Quota enforcement: drop oldest files across every media sub-directory
   // until usage returns under the soft limit.
   if (maxStorageBytes !== undefined) {
-    const allMedia = [...snapshots, ...recordings].sort((a, b) => a.mtimeMs - b.mtimeMs);
+    const allMedia = [...snapshots, ...recordings]
+      .filter((file) => !removedPaths.has(file.filePath))
+      .sort((a, b) => a.mtimeMs - b.mtimeMs);
     let used = allMedia.reduce((sum, file) => sum + file.sizeBytes, 0);
     for (const file of allMedia) {
       if (used <= maxStorageBytes) break;
