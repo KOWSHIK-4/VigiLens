@@ -367,9 +367,11 @@ export const analyticsService = {
 
     const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId, teamId);
     // When a time zone is requested, bucket calendar days in that zone
-    // instead of the database's server time zone.
-    const dayExpr = params.tz
-      ? Prisma.sql`DATE(timestamp AT TIME ZONE ${params.tz})`
+    // instead of the database's server time zone. Resolve it first so an
+    // invalid zone never reaches PostgreSQL and fails the query.
+    const tz = resolveTimezone(params.tz);
+    const dayExpr = tz
+      ? Prisma.sql`DATE(timestamp AT TIME ZONE ${tz})`
       : Prisma.sql`DATE(timestamp)`;
 
     const rows = await prisma.$queryRaw<
@@ -478,9 +480,11 @@ export const analyticsService = {
 
     const where = dateAndOrgWhereSql(periodDateFilter(params), organizationId, teamId);
     // Hour-of-day distribution in the requested zone (e.g. DST-aware local
-    // time) rather than the database server's time zone.
-    const hourExpr = params.tz
-      ? Prisma.sql`EXTRACT(HOUR FROM timestamp AT TIME ZONE ${params.tz})::int`
+    // time) rather than the database server's time zone. Resolve it first so
+    // an invalid zone never reaches PostgreSQL.
+    const tz = resolveTimezone(params.tz);
+    const hourExpr = tz
+      ? Prisma.sql`EXTRACT(HOUR FROM timestamp AT TIME ZONE ${tz})::int`
       : Prisma.sql`EXTRACT(HOUR FROM timestamp)::int`;
 
     const rows = await prisma.$queryRaw<{ hour: number; count: number }[]>`

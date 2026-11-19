@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   startOfDayInTz,
   endOfDayInTz,
   validTimezone,
   rangeKeyFor,
+  analyticsService,
 } from "../src/services/analytics.service";
+import { prisma } from "../src/config/prisma";
 import { analyticsQuerySchema } from "../src/types";
 
 describe("timezone helpers", () => {
@@ -99,3 +101,33 @@ describe("analytics range cache key normalization", () => {
     expect(start.toISOString()).toBe("2026-11-01T04:00:00.000Z");
     expect(end.toISOString()).toBe("2026-11-02T04:59:59.999Z");
   });
+
+describe("invalid timezone fallback in raw SQL", () => {
+  function serializedQuery(call: unknown[]): string {
+    return JSON.stringify(call, (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    );
+  }
+
+  it("does not bind an invalid zone into the daily bucket expression", async () => {
+    const spy = vi.spyOn(prisma, "$queryRaw").mockResolvedValue([] as never);
+    try {
+      await analyticsService.getDaily({ period: "7", tz: "Not/AZone" });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(serializedQuery(spy.mock.calls[0])).not.toContain("Not/AZone");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("does not bind an invalid zone into the timeline bucket expression", async () => {
+    const spy = vi.spyOn(prisma, "$queryRaw").mockResolvedValue([] as never);
+    try {
+      await analyticsService.getTimeline({ period: "30", tz: "Mars/Olympus" });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(serializedQuery(spy.mock.calls[0])).not.toContain("Mars/Olympus");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
