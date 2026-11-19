@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, rm, readdir, utimes, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pruneMedia, SNAPSHOT_SUBDIR, RECORDINGS_SUBDIR } from "../src/services/mediaPrune.service";
+import { pruneMedia, purgeExpiredDetections, purgeExpiredReports, SNAPSHOT_SUBDIR, RECORDINGS_SUBDIR } from "../src/services/mediaPrune.service";
 import { isSafeStorageBasePath } from "../src/utils/storagePath";
 import { prisma } from "../src/config/prisma";
 
@@ -193,6 +193,69 @@ describe("purgeExpiredDetections", () => {
       await prisma.detection.deleteMany({ where: { cameraId: "prune-fixture-camera" } });
       await prisma.camera.delete({ where: { id: "prune-fixture-camera" } });
     }
+  });
+});
+
+describe("dry-run purge termination", () => {
+  const BATCH_CAMERA_ID = "prune-batch-fixture-camera";
+  const OLD_CUTOFF = new Date(Date.UTC(2000, 0, 2, 0, 0, 0));
+  const OLD_TIMESTAMP = new Date(Date.UTC(2000, 0, 1, 0, 0, 0));
+
+  beforeEach(async () => {
+    await prisma.camera.upsert({
+      where: { id: BATCH_CAMERA_ID },
+      create: {
+        id: BATCH_CAMERA_ID,
+        name: "Prune Batch Fixture",
+        url: "rtsp://prune-batch-cam",
+        cameraType: "rtsp",
+        organizationId: DEFAULT_ORG_ID,
+      },
+      update: {},
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.detection.deleteMany({ where: { cameraId: BATCH_CAMERA_ID } });
+    await prisma.camera.deleteMany({ where: { id: BATCH_CAMERA_ID } });
+    await prisma.report.deleteMany({ where: { generatedBy: "prune-batch-fixture" } });
+  });
+
+  it("counts a full batch of expired detections in a dry run without re-reading it forever", async () => {
+    await prisma.detection.createMany({
+      data: Array.from({ length: 500 }, (_, i) => ({
+        cameraId: BATCH_CAMERA_ID,
+        label: "person",
+        confidence: 0.5,
+        imageUrl: `/snapshot/batch-${i}.jpg`,
+        timestamp: OLD_TIMESTAMP,
+        organizationId: DEFAULT_ORG_ID,
+      })),
+    });
+
+    await expect(purgeExpiredDetections(OLD_CUTOFF, true)).resolves.toBe(500);
+    expect(
+      await prisma.detection.count({ where: { cameraId: BATCH_CAMERA_ID } }),
+    ).toBe(500);
+  });
+
+  it("counts a full batch of expired reports in a dry run without re-reading it forever", async () => {
+    await prisma.report.createMany({
+      data: Array.from({ length: 500 }, (_, i) => ({
+        title: `Batch report ${i}`,
+        type: "daily",
+        generatedBy: "prune-batch-fixture",
+        dateRange: { from: "1999-12-01", to: "1999-12-31" },
+        createdAt: OLD_TIMESTAMP,
+        status: "completed",
+        organizationId: DEFAULT_ORG_ID,
+      })),
+    });
+
+    await expect(purgeExpiredReports(OLD_CUTOFF, true)).resolves.toBe(500);
+    expect(
+      await prisma.report.count({ where: { generatedBy: "prune-batch-fixture" } }),
+    ).toBe(500);
   });
 });
 

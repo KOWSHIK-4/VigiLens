@@ -114,23 +114,26 @@ export async function purgeExpiredDetections(
   cutoff: Date,
   dryRun: boolean
 ): Promise<number> {
+  const where = { timestamp: { lt: cutoff } };
+  // A dry run deletes nothing, so paging would return the same batch forever.
+  // Count in one shot instead of looping.
+  if (dryRun) return prisma.detection.count({ where });
+
   let removed = 0;
   for (;;) {
     const batch = await prisma.detection.findMany({
-      where: { timestamp: { lt: cutoff } },
+      where,
       select: { id: true },
       orderBy: { timestamp: "asc" },
       take: DELETE_BATCH_SIZE,
     });
     if (batch.length === 0) break;
     const ids = batch.map((row) => row.id);
-    if (dryRun) {
-      removed += ids.length;
-    } else {
-      const result = await prisma.detection.deleteMany({ where: { id: { in: ids } } });
-      removed += result.count;
-    }
-    if (batch.length < DELETE_BATCH_SIZE) break;
+    const result = await prisma.detection.deleteMany({ where: { id: { in: ids } } });
+    removed += result.count;
+    // Stop when the batch was partial or when nothing was actually deleted
+    // (e.g. rows vanished concurrently) to guarantee progress.
+    if (batch.length < DELETE_BATCH_SIZE || result.count === 0) break;
   }
   return removed;
 }
@@ -143,23 +146,24 @@ export async function purgeExpiredReports(
   cutoff: Date,
   dryRun: boolean
 ): Promise<number> {
+  const where = { createdAt: { lt: cutoff } };
+  // Same dry-run guard as detections: counting avoids an endless re-read of
+  // an unchanged batch.
+  if (dryRun) return prisma.report.count({ where });
+
   let removed = 0;
   for (;;) {
     const batch = await prisma.report.findMany({
-      where: { createdAt: { lt: cutoff } },
+      where,
       select: { id: true },
       orderBy: { createdAt: "asc" },
       take: DELETE_BATCH_SIZE,
     });
     if (batch.length === 0) break;
     const ids = batch.map((row) => row.id);
-    if (dryRun) {
-      removed += ids.length;
-    } else {
-      const result = await prisma.report.deleteMany({ where: { id: { in: ids } } });
-      removed += result.count;
-    }
-    if (batch.length < DELETE_BATCH_SIZE) break;
+    const result = await prisma.report.deleteMany({ where: { id: { in: ids } } });
+    removed += result.count;
+    if (batch.length < DELETE_BATCH_SIZE || result.count === 0) break;
   }
   return removed;
 }
