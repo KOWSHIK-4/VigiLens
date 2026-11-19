@@ -46,7 +46,9 @@ export function backoffDelayMs(attempt: number, config: BackoffConfig = DEFAULT_
 
 /** Apply configurable percentage jitter around a delay (bounds: ±jitter/2). */
 export function jitterDelay(delay: number, jitter: number = DEFAULT_BACKOFF_CONFIG.jitter): number {
-  if (jitter <= 0 || delay <= 0) return delay;
+  if (!Number.isFinite(delay)) return 0;
+  if (delay <= 0) return delay;
+  if (!Number.isFinite(jitter) || jitter <= 0) return delay;
   const spread = (Math.min(1, Math.max(0, jitter)) / 2) * delay;
   const offset = (pseudoRandom(Math.round(delay)) - 0.5) * 2 * spread;
   return Math.max(0, Math.round(delay + offset));
@@ -89,7 +91,7 @@ export function nextRetryAfter(
   const base = backoffDelayMs(attempt, config);
   const capped = base >= config.maxDelayMs;
   return {
-    delayMs: jitterDelay(base, config.jitter),
+    delayMs: Math.min(jitterDelay(base, config.jitter), config.maxDelayMs),
     attempt: attempt + 1,
     capped,
     giveUp: false,

@@ -63,6 +63,12 @@ describe("jitterDelay", () => {
   it("is deterministic for identical inputs", () => {
     expect(jitterDelay(999, 0.25)).toBe(jitterDelay(999, 0.25));
   });
+
+  it("ignores non-finite jitter and delay values", () => {
+    expect(jitterDelay(1000, Number.NaN)).toBe(1000);
+    expect(jitterDelay(1000, Number.POSITIVE_INFINITY)).toBe(1000);
+    expect(jitterDelay(Number.NaN, 0.25)).toBe(0);
+  });
 });
 
 describe("nextRetryAfter", () => {
@@ -92,6 +98,22 @@ describe("nextRetryAfter", () => {
     expect(result.capped).toBe(true);
     expect(result.giveUp).toBe(false);
     expect(result.delayMs).toBeGreaterThan(0);
+  });
+
+  it("never lets jitter push a retry delay past the ceiling", () => {
+    const config: BackoffConfig = {
+      ...DEFAULT_BACKOFF_CONFIG,
+      baseDelayMs: 1000,
+      maxDelayMs: 1500,
+      factor: 2,
+      jitter: 1,
+      maxAttempts: 10,
+    };
+    for (let attempt = 1; attempt <= config.maxAttempts; attempt += 1) {
+      const result = nextRetryAfter(attempt, false, config);
+      expect(result.giveUp).toBe(false);
+      expect(result.delayMs).toBeLessThanOrEqual(config.maxDelayMs);
+    }
   });
 });
 
