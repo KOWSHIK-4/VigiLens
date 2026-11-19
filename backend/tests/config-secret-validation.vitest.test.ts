@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isInsecureSecretValue, hasWeakDatabasePassword } from "../src/config";
+import {
+  isInsecureSecretValue,
+  hasWeakDatabasePassword,
+  isProductionEnvironment,
+} from "../src/config";
 
 describe("production secret validation", () => {
   it("rejects absent and whitespace-only secrets", () => {
@@ -16,6 +20,21 @@ describe("production secret validation", () => {
   });
   it("trims surrounding whitespace before evaluating length and markers", () => {
     expect(isInsecureSecretValue("  " + "a".repeat(32) + "  ")).toBe(false);
+  });
+});
+
+describe("production environment detection", () => {
+  it("recognizes production regardless of case or surrounding whitespace", () => {
+    expect(isProductionEnvironment("production")).toBe(true);
+    expect(isProductionEnvironment("Production")).toBe(true);
+    expect(isProductionEnvironment("  PRODUCTION  ")).toBe(true);
+  });
+
+  it("does not treat other or missing values as production", () => {
+    expect(isProductionEnvironment(undefined)).toBe(false);
+    expect(isProductionEnvironment("")).toBe(false);
+    expect(isProductionEnvironment("development")).toBe(false);
+    expect(isProductionEnvironment("production-like")).toBe(false);
   });
 });
 

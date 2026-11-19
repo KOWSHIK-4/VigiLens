@@ -57,7 +57,18 @@ export function parseCorsOrigins(raw: string | undefined, fallback: string[]): s
     .filter((origin) => origin.length > 0);
 }
 
-if (process.env.NODE_ENV === "production") {
+/**
+ * True when NODE_ENV declares production. Values arrive from deployment
+ * dashboards and .env files, so compare case-insensitively after trimming to
+ * avoid silently skipping the fail-fast secret validation.
+ */
+export function isProductionEnvironment(
+  value: string | undefined = process.env.NODE_ENV,
+): boolean {
+  return value?.trim().toLowerCase() === "production";
+}
+
+if (isProductionEnvironment()) {
   const failures = insecureProductionSecrets();
 
   if (failures.length > 0) {
